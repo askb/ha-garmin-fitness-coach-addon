@@ -5,6 +5,10 @@ node_modules/
 .next/
 *.log
 
+# Local dev
+.local-data/
+garmincoach/garmin-coach/
+
 # OS files
 .DS_Store
 Thumbs.db

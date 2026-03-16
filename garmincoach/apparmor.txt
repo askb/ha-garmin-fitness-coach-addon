@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MIT
+# AppArmor profile for GarminCoach HA Addon
+# Restricts the addon to only what it needs
+
+#include <tunables/global>
+
+profile garmincoach flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  # Node.js runtime
+  /usr/bin/node ix,
+  /usr/local/bin/node ix,
+  /app/** r,
+  /app/node_modules/.bin/* ix,
+
+  # Python for Garmin sync
+  /usr/bin/python3 ix,
+  /usr/lib/python3*/** r,
+
+  # Data directory (persistent storage)
+  /data/** rwk,
+
+  # Temp files
+  /tmp/** rwk,
+
+  # DNS resolution
+  /etc/resolv.conf r,
+  /etc/hosts r,
+  /etc/nsswitch.conf r,
+
+  # Network access (Garmin API, HA API, Ollama)
+  network inet stream,
+  network inet dgram,
+  network inet6 stream,
+  network inet6 dgram,
+
+  # Proc filesystem (Node.js needs this)
+  /proc/sys/kernel/random/boot_id r,
+  /proc/*/status r,
+  /proc/meminfo r,
+  /proc/cpuinfo r,
+
+  # Deny everything else
+  deny /sys/** w,
+  deny /root/** rw,
+}
