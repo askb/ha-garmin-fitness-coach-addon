@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2025 Anil Belur <askb23@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+[project]
+name = "ha-garmin-fitness-coach-addon"
+version = "0.1.0"
+description = "Home Assistant addon for AI-powered Garmin fitness coaching"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Anil Belur", email = "askb23@gmail.com"}
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio",
+]
+
+[tool.pytest.ini_options]
+addopts = "-qq"
+console_output_style = "count"
+testpaths = ["tests"]
+markers = [
+    "unit: Unit tests",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4"]
+ignore = ["E501"]
