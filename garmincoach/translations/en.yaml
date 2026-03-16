@@ -8,9 +8,13 @@
       "name": "Garmin Password",
       "description": "Your Garmin Connect account password"
     },
+    "ai_backend": {
+      "name": "AI Backend",
+      "description": "AI engine for coaching: 'ha_conversation' uses your HA conversation agent (OpenClaw/Claude), 'ollama' uses local Ollama, 'none' for rules-based only"
+    },
     "ollama_url": {
       "name": "Ollama URL",
-      "description": "URL of your Ollama instance for AI coaching (leave empty to use rules-based fallback)"
+      "description": "URL of your Ollama instance (only used when AI Backend is 'ollama')"
     },
     "sync_interval_minutes": {
       "name": "Sync Interval",

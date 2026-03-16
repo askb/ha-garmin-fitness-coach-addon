@@ -14,10 +14,12 @@ mkdir -p "${LOG_DIR}" "${DATA_DIR}"
 # ─── Read addon configuration ─────────────────────────────────────────────────
 GARMIN_EMAIL=$(bashio::config 'garmin_email')
 GARMIN_PASSWORD=$(bashio::config 'garmin_password')
+AI_BACKEND=$(bashio::config 'ai_backend' || echo "ha_conversation")
 OLLAMA_URL=$(bashio::config 'ollama_url' || echo "")
 SYNC_INTERVAL=$(bashio::config 'sync_interval_minutes' || echo "60")
 
 export GARMIN_EMAIL GARMIN_PASSWORD
+export AI_BACKEND
 export OLLAMA_URL
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gpt-oss:20b}"
 export DATABASE_URL="file:${DB_PATH}"
@@ -25,6 +27,10 @@ export NODE_ENV="production"
 export AUTH_SECRET="ha-addon-local-secret-$(cat /proc/sys/kernel/random/boot_id)"
 export AUTH_DISCORD_ID="unused"
 export AUTH_DISCORD_SECRET="unused"
+
+# HA Supervisor API token (auto-injected by Supervisor for addons with homeassistant_api: true)
+export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN:-}"
+export HA_BASE_URL="http://supervisor/core"
 
 # ─── Initialize database on first run ─────────────────────────────────────────
 if [ ! -f "${DB_PATH}" ]; then
@@ -49,16 +55,35 @@ else
     bashio::log.warning "No Garmin credentials configured — skipping auto-sync"
 fi
 
-# ─── Detect Ollama ────────────────────────────────────────────────────────────
-if [ -n "${OLLAMA_URL}" ]; then
-    if curl -s -o /dev/null -w "%{http_code}" "${OLLAMA_URL}/api/tags" | grep -q "200"; then
-        bashio::log.info "Ollama detected at ${OLLAMA_URL} — AI agents enabled"
-    else
-        bashio::log.warning "Ollama URL set but not reachable — AI agents will use fallback mode"
-    fi
-else
-    bashio::log.info "No Ollama URL configured — AI agents will use rules-based fallback"
-fi
+# ─── Configure AI backend ─────────────────────────────────────────────────────
+case "${AI_BACKEND}" in
+    ha_conversation)
+        if [ -n "${SUPERVISOR_TOKEN}" ]; then
+            bashio::log.info "AI backend: HA Conversation API (OpenClaw/Claude)"
+            bashio::log.info "  Using Supervisor token for HA API access"
+        else
+            bashio::log.warning "AI backend set to ha_conversation but no Supervisor token — falling back to rules-based"
+            export AI_BACKEND="none"
+        fi
+        ;;
+    ollama)
+        if [ -n "${OLLAMA_URL}" ]; then
+            if curl -s -o /dev/null -w "%{http_code}" "${OLLAMA_URL}/api/tags" | grep -q "200"; then
+                bashio::log.info "AI backend: Ollama at ${OLLAMA_URL}"
+            else
+                bashio::log.warning "Ollama not reachable at ${OLLAMA_URL} — falling back to rules-based"
+                export AI_BACKEND="none"
+            fi
+        else
+            bashio::log.warning "AI backend set to ollama but no URL configured — falling back to rules-based"
+            export AI_BACKEND="none"
+        fi
+        ;;
+    none|*)
+        bashio::log.info "AI backend: rules-based (no LLM)"
+        export AI_BACKEND="none"
+        ;;
+esac
 
 # ─── Start Next.js ────────────────────────────────────────────────────────────
 bashio::log.info "Starting GarminCoach..."

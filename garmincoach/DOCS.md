@@ -28,8 +28,17 @@ GarminCoach is an AI-powered sport scientist that analyzes your Garmin health an
 - **Garmin Email**: Your Garmin Connect login email
 - **Garmin Password**: Your Garmin Connect password
 
-### Optional
-- **Ollama URL**: Point to an Ollama instance for AI coaching (e.g., install the Ollama HA addon)
+### AI Backend (Optional)
+Choose how the AI coaching agents work:
+
+| Option | Description |
+|---|---|
+| `ha_conversation` **(default)** | Uses your existing HA conversation agent (OpenClaw, Claude, etc.) — zero extra setup if you already have one |
+| `ollama` | Direct connection to a local Ollama instance — fully private, runs on your hardware |
+| `none` | Rules-based coaching only — no LLM needed, still provides data-driven insights |
+
+### Other Options
+- **Ollama URL**: Only needed if AI Backend is `ollama` (e.g., `http://homeassistant.local:11434`)
 - **Sync Interval**: How often to pull new data from Garmin (default: 60 minutes)
 
 ## Pages
