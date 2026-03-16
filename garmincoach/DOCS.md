@@ -68,5 +68,5 @@ All data processing happens locally on your Home Assistant instance. No data is 
 
 ## Support
 
-- [GitHub Issues](https://github.com/askb/garmincoach-addon/issues)
+- [GitHub Issues](https://github.com/askb/ha-garmin-fitness-coach-addon/issues)
 - [Home Assistant Community Forum](https://community.home-assistant.io/)

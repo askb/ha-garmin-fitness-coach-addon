@@ -47,7 +47,7 @@ Home Assistant Supervisor
 
 ## Development
 
-This addon packages the [GarminCoach](https://github.com/askb/garmin-coach) application for Home Assistant. See the main repo for the full codebase.
+This addon packages the [GarminCoach](https://github.com/askb/ha-garmin-fitness-coach-app) application for Home Assistant. See the main repo for the full codebase.
 
 ## License
 

@@ -9,7 +9,7 @@
   "labels": {
     "org.opencontainers.image.title": "GarminCoach",
     "org.opencontainers.image.description": "AI-powered sport scientist for Garmin athletes",
-    "org.opencontainers.image.source": "https://github.com/askb/garmincoach-addon",
+    "org.opencontainers.image.source": "https://github.com/askb/ha-garmin-fitness-coach-addon",
     "org.opencontainers.image.licenses": "MIT"
   }
 }

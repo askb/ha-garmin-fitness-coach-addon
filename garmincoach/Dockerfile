@@ -10,8 +10,8 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /build
 
-# Copy the app source (CI clones it into garmin-coach/, local dev symlinks it)
-COPY garmin-coach/ ./
+# Copy the app source (CI clones it into ha-garmin-fitness-coach-app/, local dev symlinks it)
+COPY ha-garmin-fitness-coach-app/ ./
 
 # Create minimal .env for build (real values injected at runtime by s6 run script)
 RUN echo 'DATABASE_URL="file:/data/garmincoach.db"' > .env && \

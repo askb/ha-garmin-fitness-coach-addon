@@ -1,0 +1,96 @@
+---
+# SPDX-FileCopyrightText: 2025 Anil Belur <askb23@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Validate'
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  lint-shellcheck:
+    name: 'ShellCheck'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@v4
+
+      - name: 'Run ShellCheck'
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+
+  lint-yaml:
+    name: 'YAML Lint'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@v4
+
+      - name: 'Install yamllint'
+        run: pip install yamllint
+
+      - name: 'Run yamllint'
+        run: yamllint .
+
+  lint-dockerfile:
+    name: 'Dockerfile Lint'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@v4
+
+      - name: 'Lint Dockerfile'
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: garmincoach/Dockerfile
+
+  lint-json:
+    name: 'JSON Lint'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@v4
+
+      - name: 'Validate addon config'
+        run: |
+          python3 -m json.tool garmincoach/config.json > /dev/null
+          python3 -m json.tool garmincoach/build.json > /dev/null
+          python3 -m json.tool repository.json > /dev/null

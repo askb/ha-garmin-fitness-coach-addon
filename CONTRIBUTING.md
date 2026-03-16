@@ -3,7 +3,7 @@
 ## Repository Structure
 
 ```
-garmincoach-addon/              ← This repo (addon wrapper)
+ha-garmin-fitness-coach-addon/  ← This repo (addon wrapper)
 ├── garmincoach/                ← HA addon directory
 │   ├── config.json             ← Addon manifest
 │   ├── Dockerfile              ← Multi-stage build
@@ -20,7 +20,7 @@ garmincoach-addon/              ← This repo (addon wrapper)
 └── .github/workflows/
     └── build.yml               ← CI/CD pipeline
 
-~/git/garmin-coach/             ← App repo (separate)
+~/git/ha-garmin-fitness-coach-app/ ← App repo (separate)
 ├── packages/engine/            ← Sport science compute
 ├── packages/api/               ← tRPC API
 ├── packages/db/                ← Database schema
@@ -31,7 +31,7 @@ garmincoach-addon/              ← This repo (addon wrapper)
 
 ### Prerequisites
 - Docker
-- The [garmin-coach](https://github.com/askb/garmin-coach) app repo at `~/git/garmin-coach`
+- The [ha-garmin-fitness-coach-app](https://github.com/askb/ha-garmin-fitness-coach-app) app repo at `~/git/ha-garmin-fitness-coach-app`
 
 ### Build Locally
 ```bash

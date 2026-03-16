@@ -1,4 +1,7 @@
-# SPDX-License-Identifier: MIT
+---
+# SPDX-FileCopyrightText: 2025 Anil Belur <askb23@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
 name: Build and Publish
 
 on:
@@ -8,41 +11,32 @@ on:
   pull_request:
     branches: [main]
 
+permissions: {}
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
 env:
   GARMIN_COACH_REPO: askb/garmin-coach
   GARMIN_COACH_REF: main
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate addon config
-        run: |
-          python3 -c "
-          import json, sys
-          for f in ['garmincoach/config.json', 'garmincoach/build.json', 'repository.json']:
-              try:
-                  json.load(open(f))
-                  print(f'✓ {f}')
-              except Exception as e:
-                  print(f'✗ {f}: {e}')
-                  sys.exit(1)
-          "
-      - name: Shellcheck s6 scripts
-        uses: ludeeus/action-shellcheck@master
-        with:
-          scandir: garmincoach/rootfs
-
   build:
     name: Build (${{ matrix.arch }})
-    needs: lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 30
     strategy:
       matrix:
         arch: [amd64, aarch64]
     steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v4
 
       - name: Checkout garmin-coach app
@@ -98,8 +92,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    timeout-minutes: 10
     steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v4
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

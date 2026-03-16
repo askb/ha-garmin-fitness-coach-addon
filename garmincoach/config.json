@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "slug": "garmincoach",
   "description": "AI-powered sport scientist — training analysis, coaching, and recovery optimization from your Garmin data",
-  "url": "https://github.com/askb/garmincoach-addon",
+  "url": "https://github.com/askb/ha-garmin-fitness-coach-addon",
   "arch": ["amd64", "aarch64"],
   "homeassistant_api": true,
   "ingress": true,
@@ -38,5 +38,5 @@
     "DATABASE_URL": "file:/data/garmincoach.db",
     "NODE_ENV": "production"
   },
-  "image": "ghcr.io/askb/garmincoach-addon-{arch}"
+  "image": "ghcr.io/askb/ha-garmin-fitness-coach-addon-{arch}"
 }

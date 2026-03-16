@@ -1,0 +1,14 @@
+---
+# SPDX-FileCopyrightText: 2025 Anil Belur <askb23@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+extends: default
+
+rules:
+  empty-lines:
+    max-end: 1
+  comments:
+    min-spaces-from-content: 1
+    level: error
+  line-length:
+    max: 120

@@ -1,0 +1,48 @@
+---
+# SPDX-FileCopyrightText: 2025 Anil Belur <askb23@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+name: '🛠️ Semantic Pull Request'
+
+on:
+  pull_request:
+    types: [opened, reopened, edited, synchronize]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-pull-request:
+    name: "Semantic Pull Request"
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: "Validate pull request title"
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            Fix
+            Feat
+            Chore
+            Docs
+            Style
+            Refactor
+            Perf
+            Test
+            Revert
+            CI
+            Build
+          validateSingleCommit: true
+          validateSingleCommitMatchesPrTitle: true

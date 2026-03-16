@@ -10,8 +10,8 @@
 set -euo pipefail
 
 ADDON_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP_SOURCE="${HOME}/git/garmin-coach"
-IMAGE_NAME="garmincoach-addon-local"
+APP_SOURCE="${HOME}/git/ha-garmin-fitness-coach-app"
+IMAGE_NAME="ha-garmin-fitness-coach-addon-local"
 ARCH="amd64"
 
 RED='\033[0;31m'
@@ -37,9 +37,9 @@ if [ ! -d "${APP_SOURCE}" ]; then
 fi
 
 log "Copying app source from ${APP_SOURCE}..."
-rm -rf "${ADDON_DIR}/garmincoach/garmin-coach"
+rm -rf "${ADDON_DIR}/garmincoach/ha-garmin-fitness-coach-app"
 rsync -a --exclude=node_modules --exclude=.next --exclude=.git \
-    "${APP_SOURCE}/" "${ADDON_DIR}/garmincoach/garmin-coach/"
+    "${APP_SOURCE}/" "${ADDON_DIR}/garmincoach/ha-garmin-fitness-coach-app/"
 ok "App source copied."
 
 # ─── Step 2: Build the Docker image ──────────────────────────────────────────
@@ -58,7 +58,7 @@ docker build \
 ok "Image built: ${IMAGE_NAME}"
 
 # ─── Cleanup build context ───────────────────────────────────────────────────
-rm -rf "${ADDON_DIR}/garmincoach/garmin-coach"
+rm -rf "${ADDON_DIR}/garmincoach/ha-garmin-fitness-coach-app"
 ok "Cleaned up build context."
 
 # ─── Step 3: Optionally run it ────────────────────────────────────────────────
@@ -67,7 +67,7 @@ if [ "${1:-}" = "--run" ]; then
     mkdir -p "${ADDON_DIR}/.local-data"
 
     docker run --rm -it \
-        --name garmincoach-addon-test \
+        --name ha-garmin-fitness-coach-addon-test \
         -p 3100:3000 \
         -v "${ADDON_DIR}/.local-data:/data" \
         -e "SUPERVISOR_TOKEN=" \

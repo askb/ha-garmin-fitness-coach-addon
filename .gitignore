@@ -7,7 +7,7 @@ node_modules/
 
 # Local dev
 .local-data/
-garmincoach/garmin-coach/
+garmincoach/ha-garmin-fitness-coach-app/
 
 # OS files
 .DS_Store
