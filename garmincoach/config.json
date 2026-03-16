@@ -1,0 +1,40 @@
+{
+  "name": "GarminCoach",
+  "version": "0.1.0",
+  "slug": "garmincoach",
+  "description": "AI-powered sport scientist — training analysis, coaching, and recovery optimization from your Garmin data",
+  "url": "https://github.com/askb/garmincoach-addon",
+  "arch": ["amd64", "aarch64"],
+  "homeassistant_api": true,
+  "ingress": true,
+  "ingress_port": 3000,
+  "panel_icon": "mdi:heart-pulse",
+  "panel_title": "GarminCoach",
+  "init": false,
+  "startup": "application",
+  "timeout": 120,
+  "map": ["addon_config:rw", "share:rw"],
+  "ports": {
+    "3000/tcp": null
+  },
+  "ports_description": {
+    "3000/tcp": "Web interface (ingress only, no host port exposed)"
+  },
+  "options": {
+    "garmin_email": "",
+    "garmin_password": "",
+    "ollama_url": "",
+    "sync_interval_minutes": 60
+  },
+  "schema": {
+    "garmin_email": "email",
+    "garmin_password": "password",
+    "ollama_url": "url?",
+    "sync_interval_minutes": "int(5,1440)?"
+  },
+  "environment": {
+    "DATABASE_URL": "file:/data/garmincoach.db",
+    "NODE_ENV": "production"
+  },
+  "image": "ghcr.io/askb/garmincoach-addon-{arch}"
+}

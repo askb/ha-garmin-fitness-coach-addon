@@ -1,0 +1,20 @@
+{
+  "configuration": {
+    "garmin_email": {
+      "name": "Garmin Email",
+      "description": "Your Garmin Connect account email address"
+    },
+    "garmin_password": {
+      "name": "Garmin Password",
+      "description": "Your Garmin Connect account password"
+    },
+    "ollama_url": {
+      "name": "Ollama URL",
+      "description": "URL of your Ollama instance for AI coaching (leave empty to use rules-based fallback)"
+    },
+    "sync_interval_minutes": {
+      "name": "Sync Interval",
+      "description": "How often to sync data from Garmin Connect (in minutes)"
+    }
+  }
+}

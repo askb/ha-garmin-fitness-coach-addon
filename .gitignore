@@ -1,0 +1,10 @@
+# Addon build artifacts
+*.pyc
+__pycache__/
+node_modules/
+.next/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

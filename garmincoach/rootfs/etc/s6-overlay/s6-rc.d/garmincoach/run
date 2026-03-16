@@ -1,0 +1,66 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# SPDX-License-Identifier: MIT
+# ==============================================================================
+# GarminCoach — s6-overlay run script
+# ==============================================================================
+
+declare -r DATA_DIR="/data"
+declare -r DB_PATH="${DATA_DIR}/garmincoach.db"
+declare -r LOG_DIR="/app/logs"
+
+mkdir -p "${LOG_DIR}" "${DATA_DIR}"
+
+# ─── Read addon configuration ─────────────────────────────────────────────────
+GARMIN_EMAIL=$(bashio::config 'garmin_email')
+GARMIN_PASSWORD=$(bashio::config 'garmin_password')
+OLLAMA_URL=$(bashio::config 'ollama_url' || echo "")
+SYNC_INTERVAL=$(bashio::config 'sync_interval_minutes' || echo "60")
+
+export GARMIN_EMAIL GARMIN_PASSWORD
+export OLLAMA_URL
+export OLLAMA_MODEL="${OLLAMA_MODEL:-gpt-oss:20b}"
+export DATABASE_URL="file:${DB_PATH}"
+export NODE_ENV="production"
+export AUTH_SECRET="ha-addon-local-secret-$(cat /proc/sys/kernel/random/boot_id)"
+export AUTH_DISCORD_ID="unused"
+export AUTH_DISCORD_SECRET="unused"
+
+# ─── Initialize database on first run ─────────────────────────────────────────
+if [ ! -f "${DB_PATH}" ]; then
+    bashio::log.info "First run — initializing database..."
+    cd /app && node -e "
+      const { migrate } = require('@acme/db/migrate');
+      migrate().then(() => console.log('Database initialized'));
+    " 2>&1 || bashio::log.warning "DB migration skipped (will auto-create on first request)"
+fi
+
+# ─── Start Garmin sync in background ──────────────────────────────────────────
+if [ -n "${GARMIN_EMAIL}" ] && [ -n "${GARMIN_PASSWORD}" ]; then
+    bashio::log.info "Starting Garmin sync (every ${SYNC_INTERVAL} minutes)..."
+    (
+        while true; do
+            bashio::log.info "Syncing Garmin data..."
+            python3 /app/scripts/garmin-sync.py 2>&1 || bashio::log.warning "Garmin sync failed"
+            sleep "$((SYNC_INTERVAL * 60))"
+        done
+    ) &
+else
+    bashio::log.warning "No Garmin credentials configured — skipping auto-sync"
+fi
+
+# ─── Detect Ollama ────────────────────────────────────────────────────────────
+if [ -n "${OLLAMA_URL}" ]; then
+    if curl -s -o /dev/null -w "%{http_code}" "${OLLAMA_URL}/api/tags" | grep -q "200"; then
+        bashio::log.info "Ollama detected at ${OLLAMA_URL} — AI agents enabled"
+    else
+        bashio::log.warning "Ollama URL set but not reachable — AI agents will use fallback mode"
+    fi
+else
+    bashio::log.info "No Ollama URL configured — AI agents will use rules-based fallback"
+fi
+
+# ─── Start Next.js ────────────────────────────────────────────────────────────
+bashio::log.info "Starting GarminCoach..."
+cd /app/apps/nextjs
+exec node server.js
