@@ -24,14 +24,13 @@
     "garmin_email": "",
     "garmin_password": "",
     "ai_backend": "ha_conversation",
-    "ollama_url": "",
     "sync_interval_minutes": 60
   },
   "schema": {
-    "garmin_email": "email",
-    "garmin_password": "password",
+    "garmin_email": "str?",
+    "garmin_password": "password?",
     "ai_backend": "list(ha_conversation|ollama|none)",
-    "ollama_url": "url?",
+    "ollama_url": "str?",
     "sync_interval_minutes": "int(5,1440)?"
   },
   "environment": {
