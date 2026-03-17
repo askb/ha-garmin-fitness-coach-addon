@@ -24,6 +24,7 @@ TOKEN_FILE = os.path.join(TOKEN_DIR, "session.json")
 
 # Hold pending MFA state (single-user addon, no sessions needed)
 _pending_client_state = None
+_pending_garmin_client = None
 
 
 def _save_tokens(client):
@@ -68,6 +69,7 @@ def login():
             if token1 == "needs_mfa":
                 # token2 is the client_state dict for resume_login()
                 _pending_client_state = token2
+                _pending_garmin_client = client
                 return jsonify(success=False, needsMfa=True,
                                message="MFA code required")
 
@@ -89,9 +91,11 @@ def login():
 def mfa():
     """Complete MFA verification and save token."""
     global _pending_client_state  # noqa: PLW0603
+    global _pending_garmin_client  # noqa: PLW0603
 
     if _pending_client_state is None:
-        return jsonify(success=False, message="No pending MFA session"), 400
+        return jsonify(success=False, message="No pending MFA session. "
+                       "Please re-enter email and password first."), 400
 
     data = request.get_json(silent=True) or {}
     code = data.get("code", "").strip()
@@ -99,20 +103,26 @@ def mfa():
         return jsonify(success=False, message="MFA code is required"), 400
 
     try:
-        import garth
-        garth.client.resume_login(_pending_client_state, code)
+        from garth import sso as garth_sso
 
-        # Create a Garmin client with the authenticated garth session
-        email = os.environ.get("GARMIN_EMAIL", "")
-        client = Garmin(email)
-        client.garth = garth.client
-        _save_tokens(client)
+        # Use garth.sso.resume_login directly with the saved client state
+        oauth1, oauth2 = garth_sso.resume_login(_pending_client_state, code)
+
+        # Attach tokens to the garmin client's garth instance
+        _pending_garmin_client.garth.oauth1_token = oauth1
+        _pending_garmin_client.garth.oauth2_token = oauth2
+        _save_tokens(_pending_garmin_client)
+
         _pending_client_state = None
+        _pending_garmin_client = None
         return jsonify(success=True)
 
     except Exception as exc:
         _pending_client_state = None
-        return jsonify(success=False, message=str(exc)), 401
+        _pending_garmin_client = None
+        return jsonify(success=False,
+                       message=f"MFA failed: {exc}. "
+                       "Session may have expired — try logging in again quickly."), 401
 
 
 @app.route("/auth/status", methods=["GET"])
