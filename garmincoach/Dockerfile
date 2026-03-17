@@ -60,7 +60,11 @@ COPY --from=builder /build/apps/nextjs/.next/static ./apps/nextjs/.next/static
 COPY --from=builder /build/apps/nextjs/public ./apps/nextjs/public
 
 # Copy addon rootfs (s6 service, sync script, AI backend lib)
-COPY rootfs/ /
+COPY rootfs /
+
+# Ensure s6-overlay init and run scripts are executable
+RUN chmod +x /init 2>/dev/null || true \
+    && find /etc/s6-overlay -name "run" -exec chmod +x {} \;
 
 # Data directory (persisted via HA addon config mapping)
 RUN mkdir -p /data /data/garmin-tokens /app/logs
