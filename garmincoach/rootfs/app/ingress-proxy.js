@@ -62,6 +62,10 @@ const server = http.createServer((clientReq, clientRes) => {
     const ct = proxyRes.headers["content-type"] || "";
     const isHtml = ct.includes("text/html");
 
+    console.log(
+      `[ingress-proxy] ${clientReq.method} ${clientReq.url} → ${proxyRes.statusCode} (${ct.split(";")[0]}) ingress=${ingressPath ? "yes" : "no"}`,
+    );
+
     if (isHtml && ingressPath) {
       // Buffer HTML response and rewrite paths
       const chunks = [];
