@@ -64,9 +64,13 @@ COPY --from=builder /build/apps/nextjs/.next/standalone ./
 COPY --from=builder /build/apps/nextjs/.next/static ./apps/nextjs/.next/static
 COPY --from=builder /build/apps/nextjs/public ./apps/nextjs/public
 
-# Copy DB package for schema management (drizzle-kit push at runtime)
-COPY --from=builder /build/packages/db /app/packages/db
-RUN cd /app/packages/db && npm install drizzle-kit drizzle-orm pg
+# Copy DB schema files for drizzle-kit push at runtime (skip pnpm catalog package.json)
+COPY --from=builder /build/packages/db/src /app/packages/db/src
+COPY --from=builder /build/packages/db/drizzle.config.ts /app/packages/db/drizzle.config.ts
+COPY --from=builder /build/packages/db/tsconfig.json /app/packages/db/tsconfig.json
+RUN cd /app/packages/db && \
+    echo '{"name":"db-push","private":true}' > package.json && \
+    npm install drizzle-kit drizzle-orm pg typescript @types/pg
 
 # Copy addon rootfs (s6 service, sync script, AI backend lib)
 COPY rootfs /
