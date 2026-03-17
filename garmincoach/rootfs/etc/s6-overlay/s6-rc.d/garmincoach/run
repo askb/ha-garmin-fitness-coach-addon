@@ -99,6 +99,25 @@ esac
 # ─── Start Next.js ────────────────────────────────────────────────────────────
 bashio::log.info "Starting GarminCoach..."
 cd /app/apps/nextjs
-export HOSTNAME="0.0.0.0"
+
+# Start Next.js on internal port (not exposed to ingress)
+export HOSTNAME="127.0.0.1"
+export PORT="3001"
+node server.js &
+NEXT_PID=$!
+
+# Wait for Next.js to be ready
+bashio::log.info "Waiting for Next.js..."
+for i in $(seq 1 30); do
+    if curl -s -o /dev/null http://127.0.0.1:3001/; then
+        break
+    fi
+    sleep 1
+done
+
+# Start ingress proxy on port 3000 (HA ingress connects here)
+# Rewrites HTML asset paths to work behind /api/hassio_ingress/<token>/
+bashio::log.info "Starting ingress proxy..."
 export PORT="3000"
-exec node server.js
+export NEXT_INTERNAL_PORT="3001"
+exec node /app/ingress-proxy.js
