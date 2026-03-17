@@ -19,6 +19,7 @@ RUN git clone --depth=1 --branch="${APP_REF}" \
 
 # Create minimal .env for build (real values injected at runtime by s6 run script)
 RUN echo 'DATABASE_URL="file:/data/garmincoach.db"' > .env && \
+    echo 'POSTGRES_URL="postgresql://build:build@localhost:5432/build"' >> .env && \
     echo 'AUTH_SECRET="build-placeholder"' >> .env && \
     echo 'AUTH_DISCORD_ID="build-placeholder"' >> .env && \
     echo 'AUTH_DISCORD_SECRET="build-placeholder"' >> .env && \
@@ -31,9 +32,6 @@ RUN pnpm install --frozen-lockfile
 # Enable standalone output for minimal container
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @acme/nextjs build
-
-# Build the engine package (needed at runtime for computations)
-RUN pnpm --filter @acme/engine build
 
 # ──────────────────────────────────────────────
 # Stage 2: Production runtime on HA base image
@@ -56,14 +54,10 @@ RUN pip3 install --break-system-packages garminconnect
 
 WORKDIR /app
 
-# Copy built Next.js standalone app
+# Copy built Next.js standalone app (includes all bundled dependencies)
 COPY --from=builder /build/apps/nextjs/.next/standalone ./
 COPY --from=builder /build/apps/nextjs/.next/static ./apps/nextjs/.next/static
 COPY --from=builder /build/apps/nextjs/public ./apps/nextjs/public
-
-# Copy engine package (for sport science computations in tRPC routes)
-COPY --from=builder /build/packages/engine/dist ./packages/engine/dist
-COPY --from=builder /build/packages/engine/package.json ./packages/engine/
 
 # Copy addon rootfs (s6 service, sync script, AI backend lib)
 COPY rootfs/ /
