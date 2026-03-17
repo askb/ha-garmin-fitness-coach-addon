@@ -68,29 +68,45 @@ const server = http.createServer((clientReq, clientRes) => {
   const proxyReq = http.request(proxyOpts, (proxyRes) => {
     const ct = proxyRes.headers["content-type"] || "";
     const isHtml = ct.includes("text/html");
+    const isJs = ct.includes("javascript");
+    // Turbopack runtime JS has `let t="/_next/"` — the base path for ALL
+    // dynamic chunk loading. Must rewrite it so chunks load through ingress.
+    const isTurbopack =
+      isJs && forwardPath.includes("turbopack");
+    // CSS files may contain url(/_next/static/media/...) for fonts
+    const isCss = ct.includes("text/css");
+    const needsRewrite = ingressPath && (isHtml || isTurbopack || isCss);
 
     console.log(
       `[ingress-proxy] ${clientReq.method} ${clientReq.url} → fwd:${forwardPath} → ${proxyRes.statusCode} (${ct.split(";")[0]})`,
     );
 
-    if (isHtml && ingressPath) {
-      // Buffer HTML response and rewrite paths
+    if (needsRewrite) {
+      // Buffer response and rewrite paths
       const chunks = [];
       proxyRes.on("data", (c) => chunks.push(c));
       proxyRes.on("end", () => {
-        let html = Buffer.concat(chunks).toString("utf-8");
-        html = rewriteHtml(html, ingressPath);
+        let body = Buffer.concat(chunks).toString("utf-8");
+
+        if (isHtml) {
+          body = rewriteHtml(body, ingressPath);
+        } else {
+          // Turbopack runtime & CSS: rewrite /_next/ base paths
+          // Turbopack: let t="/_next/" → let t="/api/hassio_ingress/TOKEN/_next/"
+          // CSS: url(/_next/static/media/...) → url(/api/hassio_ingress/TOKEN/_next/...)
+          body = body.replaceAll("/_next/", `${ingressPath}/_next/`);
+        }
 
         const resHeaders = { ...proxyRes.headers };
         delete resHeaders["content-length"];
         delete resHeaders["transfer-encoding"];
-        resHeaders["content-length"] = Buffer.byteLength(html);
+        resHeaders["content-length"] = Buffer.byteLength(body);
 
         clientRes.writeHead(proxyRes.statusCode, resHeaders);
-        clientRes.end(html);
+        clientRes.end(body);
       });
     } else {
-      // Pass through non-HTML responses unchanged
+      // Pass through non-rewritten responses unchanged
       clientRes.writeHead(proxyRes.statusCode, proxyRes.headers);
       proxyRes.pipe(clientRes);
     }
