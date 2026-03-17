@@ -16,21 +16,25 @@ const NEXT_PORT = parseInt(process.env.NEXT_INTERNAL_PORT || "3001", 10);
 const LISTEN_PORT = parseInt(process.env.PORT || "3000", 10);
 
 function rewriteHtml(html, ingressPath) {
-  // Rewrite absolute asset paths
-  html = html.replaceAll("/_next/", ingressPath + "/_next/");
+  // SURGICAL REWRITE: Only modify src/href/action in HTML tag attributes.
+  // Do NOT use replaceAll("/_next/", ...) — that corrupts inline <script>
+  // content containing React hydration data and RSC payloads, breaking
+  // React hydration entirely (no useEffect, no interactivity).
 
-  // Rewrite absolute href/src/action attributes
-  // Use regex to avoid rewriting protocol-relative URLs (//) and data URIs
-  html = html.replaceAll('href="/', 'href="' + ingressPath + "/");
-  html = html.replaceAll("href='/", "href='" + ingressPath + "/");
-  html = html.replaceAll('src="/', 'src="' + ingressPath + "/");
-  html = html.replaceAll("src='/", "src='" + ingressPath + "/");
-  html = html.replaceAll('action="/', 'action="' + ingressPath + "/");
+  // Rewrite src="/_next/..." and href="/_next/..." in HTML tags
+  html = html.replace(
+    /((?:src|href)=["'])(\/_next\/)/g,
+    `$1${ingressPath}/_next/`,
+  );
 
-  // Fix doubled protocol-relative URLs (href="//..." → was rewritten incorrectly)
+  // Rewrite other absolute src/href/action attributes (e.g., <link href="/favicon.ico">)
+  // but skip protocol-relative URLs (//) and already-prefixed paths
   const escaped = ingressPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const doubledProto = new RegExp(`(href=["']|src=["'])${escaped}//`, "g");
-  html = html.replace(doubledProto, "$1//");
+  const attrRegex = new RegExp(
+    `((?:src|href|action)=["'])(/)(?!/|${escaped.slice(1)})`,
+    "g",
+  );
+  html = html.replace(attrRegex, `$1${ingressPath}/`);
 
   // Inject ingress path into a meta tag so client JS can read it
   html = html.replace(
