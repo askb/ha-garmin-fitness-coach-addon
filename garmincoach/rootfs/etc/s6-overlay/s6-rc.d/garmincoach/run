@@ -23,6 +23,7 @@ export AI_BACKEND
 export OLLAMA_URL
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gpt-oss:20b}"
 export DATABASE_URL="file:${DB_PATH}"
+export POSTGRES_URL="file:${DB_PATH}"
 export NODE_ENV="production"
 export AUTH_SECRET="ha-addon-local-secret-$(cat /proc/sys/kernel/random/boot_id)"
 export AUTH_DISCORD_ID="unused"
