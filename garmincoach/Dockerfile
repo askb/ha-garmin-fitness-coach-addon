@@ -12,8 +12,10 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /build
 
 # Clone the app source from GitHub
+# ADD fetches latest commit ref — Docker busts cache when it changes
 ARG APP_REPO=askb/ha-garmin-fitness-coach-app
 ARG APP_REF=main
+ADD "https://api.github.com/repos/${APP_REPO}/git/refs/heads/${APP_REF}" /tmp/cachebust.json
 RUN git clone --depth=1 --branch="${APP_REF}" \
       "https://github.com/${APP_REPO}.git" .
 
