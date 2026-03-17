@@ -1,0 +1,9 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# SPDX-License-Identifier: MIT
+# ==============================================================================
+# Garmin Auth Server — s6-overlay run script
+# ==============================================================================
+
+bashio::log.info "Starting Garmin auth server on 127.0.0.1:8099..."
+exec python3 /app/scripts/garmin-auth-server.py

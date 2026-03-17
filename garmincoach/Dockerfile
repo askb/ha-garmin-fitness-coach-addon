@@ -50,7 +50,7 @@ RUN apk add --no-cache \
     tzdata
 
 # Install garminconnect Python package for direct Garmin API sync
-RUN pip3 install --break-system-packages garminconnect
+RUN pip3 install --break-system-packages garminconnect flask
 
 WORKDIR /app
 
