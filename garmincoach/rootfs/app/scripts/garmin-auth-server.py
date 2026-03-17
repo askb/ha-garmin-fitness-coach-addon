@@ -22,14 +22,33 @@ app = Flask(__name__)
 TOKEN_DIR = "/data/garmin-tokens"
 TOKEN_FILE = os.path.join(TOKEN_DIR, "session.json")
 
-# Hold a pending client during MFA flow (single-user addon, no sessions needed)
-_pending_client = None
+# Hold pending MFA state (single-user addon, no sessions needed)
+_pending_client_state = None
+
+
+def _save_tokens(client):
+    """Save garth tokens to disk in native directory format."""
+    os.makedirs(TOKEN_DIR, exist_ok=True)
+    client.garth.dump(TOKEN_DIR)
+
+
+def _load_client():
+    """Load a Garmin client from saved tokens. Returns None on failure."""
+    if not os.path.exists(TOKEN_DIR):
+        return None
+    try:
+        email = os.environ.get("GARMIN_EMAIL", "")
+        client = Garmin(email or "check")
+        client.login(tokenstore=TOKEN_DIR)
+        return client
+    except Exception:
+        return None
 
 
 @app.route("/auth/login", methods=["POST"])
 def login():
     """Attempt Garmin Connect login. Returns MFA prompt if required."""
-    global _pending_client  # noqa: PLW0603
+    global _pending_client_state  # noqa: PLW0603
 
     data = request.get_json(silent=True) or {}
     email = data.get("email", "").strip()
@@ -39,31 +58,39 @@ def login():
         return jsonify(success=False, message="Email and password are required"), 400
 
     try:
-        client = Garmin(email, password)
-        client.login()
+        client = Garmin(email, password, return_on_mfa=True)
+        result = client.login()
 
-        # Login succeeded without MFA — persist token
-        os.makedirs(TOKEN_DIR, exist_ok=True)
-        with open(TOKEN_FILE, "w") as f:
-            json.dump(client.garth.dumps(), f)
+        # return_on_mfa=True: login() returns ("needs_mfa", client_state)
+        # when MFA is required, or (oauth1, oauth2) on success
+        if isinstance(result, tuple) and len(result) == 2:
+            token1, token2 = result
+            if token1 == "needs_mfa":
+                # token2 is the client_state dict for resume_login()
+                _pending_client_state = token2
+                return jsonify(success=False, needsMfa=True,
+                               message="MFA code required")
 
-        _pending_client = None
+        # Login succeeded — persist token as directory (garth native format)
+        _save_tokens(client)
+        _pending_client_state = None
         return jsonify(success=True, needsMfa=False)
 
     except Exception as exc:
         msg = str(exc).lower()
         if "mfa" in msg or "verification" in msg or "two-factor" in msg:
-            _pending_client = client
-            return jsonify(success=False, needsMfa=True, message="MFA code required")
-        return jsonify(success=False, needsMfa=False, message=str(exc)), 401
+            return jsonify(success=False, needsMfa=True,
+                           message="MFA code required")
+        return jsonify(success=False, needsMfa=False,
+                       message=f"Login failed: {exc}"), 401
 
 
 @app.route("/auth/mfa", methods=["POST"])
 def mfa():
     """Complete MFA verification and save token."""
-    global _pending_client  # noqa: PLW0603
+    global _pending_client_state  # noqa: PLW0603
 
-    if _pending_client is None:
+    if _pending_client_state is None:
         return jsonify(success=False, message="No pending MFA session"), 400
 
     data = request.get_json(silent=True) or {}
@@ -72,40 +99,37 @@ def mfa():
         return jsonify(success=False, message="MFA code is required"), 400
 
     try:
-        _pending_client.login(mfa_code=code)
+        import garth
+        garth.client.resume_login(_pending_client_state, code)
 
-        os.makedirs(TOKEN_DIR, exist_ok=True)
-        with open(TOKEN_FILE, "w") as f:
-            json.dump(_pending_client.garth.dumps(), f)
-
-        _pending_client = None
+        # Create a Garmin client with the authenticated garth session
+        email = os.environ.get("GARMIN_EMAIL", "")
+        client = Garmin(email)
+        client.garth = garth.client
+        _save_tokens(client)
+        _pending_client_state = None
         return jsonify(success=True)
 
     except Exception as exc:
-        _pending_client = None
+        _pending_client_state = None
         return jsonify(success=False, message=str(exc)), 401
 
 
 @app.route("/auth/status", methods=["GET"])
 def status():
     """Check whether a valid Garmin session token exists."""
-    if not os.path.exists(TOKEN_FILE):
+    client = _load_client()
+    if client is None:
         return jsonify(connected=False, email="", lastSync="")
 
     try:
-        stat = os.stat(TOKEN_FILE)
-        last_modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
-
-        with open(TOKEN_FILE) as f:
-            token_data = json.load(f)
-
-        # Validate token by creating a client and checking login
         email = os.environ.get("GARMIN_EMAIL", "")
-        client = Garmin(email or "check", "")
-        client.login(tokenstore=token_data)
-
+        # Check for last sync time from token dir modification
+        stat = os.stat(TOKEN_DIR)
+        last_modified = datetime.fromtimestamp(
+            stat.st_mtime, tz=timezone.utc
+        ).isoformat()
         return jsonify(connected=True, email=email, lastSync=last_modified)
-
     except Exception:
         return jsonify(connected=False, email="", lastSync="")
 
@@ -114,8 +138,9 @@ def status():
 def logout():
     """Remove stored Garmin session token."""
     try:
-        if os.path.exists(TOKEN_FILE):
-            os.remove(TOKEN_FILE)
+        import shutil
+        if os.path.exists(TOKEN_DIR):
+            shutil.rmtree(TOKEN_DIR)
         return jsonify(success=True)
     except Exception as exc:
         return jsonify(success=False, message=str(exc)), 500
