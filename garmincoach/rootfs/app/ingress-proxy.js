@@ -15,33 +15,6 @@ const http = require("http");
 const NEXT_PORT = parseInt(process.env.NEXT_INTERNAL_PORT || "3001", 10);
 const LISTEN_PORT = parseInt(process.env.PORT || "3000", 10);
 
-function rewriteHtml(html, ingressPath) {
-  // Rewrite ALL occurrences of /_next/ — this includes both HTML attributes
-  // AND inline RSC/hydration data. React's RSC payload references module paths
-  // like "/_next/static/chunks/xxx.js" and these MUST match the actual URLs.
-  // If HTML <script src> has the ingress prefix but RSC data doesn't → mismatch
-  // → hydration fails silently.
-  html = html.replaceAll("/_next/", ingressPath + "/_next/");
-
-  // Rewrite href/src/action attributes for non-_next absolute paths
-  // Use regex to only match HTML attributes, NOT inline script/JSON content
-  // This handles <a href="/settings">, <link href="/favicon.ico">, etc.
-  const escaped = ingressPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const attrRegex = new RegExp(
-    `((?:src|href|action)=["'])(/)(?!/|${escaped.slice(1)}|_next/)`,
-    "g",
-  );
-  html = html.replace(attrRegex, `$1${ingressPath}/`);
-
-  // Inject ingress path into a meta tag so client JS can read it
-  html = html.replace(
-    "<head>",
-    `<head><meta name="ingress-path" content="${ingressPath}">`,
-  );
-
-  return html;
-}
-
 const server = http.createServer((clientReq, clientRes) => {
   const ingressPath = clientReq.headers["x-ingress-path"] || "";
 
@@ -68,33 +41,56 @@ const server = http.createServer((clientReq, clientRes) => {
   const proxyReq = http.request(proxyOpts, (proxyRes) => {
     const ct = proxyRes.headers["content-type"] || "";
     const isHtml = ct.includes("text/html");
-    const isJs = ct.includes("javascript");
-    // Turbopack runtime JS has `let t="/_next/"` — the base path for ALL
-    // dynamic chunk loading. Must rewrite it so chunks load through ingress.
-    const isTurbopack =
-      isJs && forwardPath.includes("turbopack");
-    // CSS files may contain url(/_next/static/media/...) for fonts
-    const isCss = ct.includes("text/css");
-    const needsRewrite = ingressPath && (isHtml || isTurbopack || isCss);
+
+    // Rewrite /_next/ in ALL text-based responses, not just HTML.
+    // Next.js emits /_next/ references in many response types:
+    //   - HTML: <script src>, <link href>, RSC inline data
+    //   - JS: turbopack runtime base path, dynamic import paths
+    //   - CSS: @font-face url() references
+    //   - RSC flight responses (text/x-component): module references
+    //   - text/plain: fallback content-type for some Next.js responses
+    // Rewriting only HTML leaves JS/CSS/RSC with raw /_next/ paths that
+    // bypass ingress → 404 → React hydration fails.
+    const isText =
+      ct.includes("text/") ||
+      ct.includes("javascript") ||
+      ct.includes("json") ||
+      ct.includes("x-component");
+    const needsRewrite = ingressPath && isText;
 
     console.log(
-      `[ingress-proxy] ${clientReq.method} ${clientReq.url} → fwd:${forwardPath} → ${proxyRes.statusCode} (${ct.split(";")[0]})`,
+      `[ingress-proxy] ${clientReq.method} ${clientReq.url} → fwd:${forwardPath} → ${proxyRes.statusCode} (${ct.split(";")[0]}${needsRewrite ? " REWRITE" : ""})`,
     );
 
     if (needsRewrite) {
-      // Buffer response and rewrite paths
+      // Buffer response and rewrite /_next/ paths
       const chunks = [];
       proxyRes.on("data", (c) => chunks.push(c));
       proxyRes.on("end", () => {
         let body = Buffer.concat(chunks).toString("utf-8");
 
+        // Core rewrite: prefix all /_next/ with ingress path.
+        // Safe because /_next/ is a unique Next.js prefix that only appears
+        // in URL references. The proxy always receives raw content from
+        // Next.js (never already-rewritten content), so no double-prefix risk.
+        body = body.replaceAll("/_next/", ingressPath + "/_next/");
+
         if (isHtml) {
-          body = rewriteHtml(body, ingressPath);
-        } else {
-          // Turbopack runtime & CSS: rewrite /_next/ base paths
-          // Turbopack: let t="/_next/" → let t="/api/hassio_ingress/TOKEN/_next/"
-          // CSS: url(/_next/static/media/...) → url(/api/hassio_ingress/TOKEN/_next/...)
-          body = body.replaceAll("/_next/", `${ingressPath}/_next/`);
+          // HTML-specific: rewrite href/src/action attributes for non-_next
+          // absolute paths. Uses regex to only match HTML attributes, NOT
+          // inline script/JSON content (avoids corrupting RSC payloads).
+          const escaped = ingressPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const attrRegex = new RegExp(
+            `((?:src|href|action)=["'])(/)(?!/|${escaped.slice(1)}|_next/)`,
+            "g",
+          );
+          body = body.replace(attrRegex, `$1${ingressPath}/`);
+
+          // Inject ingress path into a meta tag so client JS can read it
+          body = body.replace(
+            "<head>",
+            `<head><meta name="ingress-path" content="${ingressPath}">`,
+          );
         }
 
         const resHeaders = { ...proxyRes.headers };
@@ -106,7 +102,7 @@ const server = http.createServer((clientReq, clientRes) => {
         clientRes.end(body);
       });
     } else {
-      // Pass through non-rewritten responses unchanged
+      // Pass through binary/non-text responses unchanged (images, fonts, etc.)
       clientRes.writeHead(proxyRes.statusCode, proxyRes.headers);
       proxyRes.pipe(clientRes);
     }
