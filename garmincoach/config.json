@@ -35,6 +35,7 @@
   },
   "environment": {
     "DATABASE_URL": "file:/data/garmincoach.db",
+    "POSTGRES_URL": "file:/data/garmincoach.db",
     "NODE_ENV": "production"
   }
 }
