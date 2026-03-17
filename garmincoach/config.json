@@ -37,6 +37,5 @@
   "environment": {
     "DATABASE_URL": "file:/data/garmincoach.db",
     "NODE_ENV": "production"
-  },
-  "image": "ghcr.io/askb/ha-garmin-fitness-coach-addon-{arch}"
+  }
 }
