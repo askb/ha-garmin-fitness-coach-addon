@@ -6,12 +6,16 @@ ARG BUILD_ARCH
 # ──────────────────────────────────────────────
 FROM node:22-alpine AS builder
 
+RUN apk add --no-cache git
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /build
 
-# Copy the app source (CI clones it into ha-garmin-fitness-coach-app/, local dev symlinks it)
-COPY ha-garmin-fitness-coach-app/ ./
+# Clone the app source from GitHub
+ARG APP_REPO=askb/ha-garmin-fitness-coach-app
+ARG APP_REF=main
+RUN git clone --depth=1 --branch="${APP_REF}" \
+      "https://github.com/${APP_REPO}.git" .
 
 # Create minimal .env for build (real values injected at runtime by s6 run script)
 RUN echo 'DATABASE_URL="file:/data/garmincoach.db"' > .env && \
