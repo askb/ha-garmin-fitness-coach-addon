@@ -16,22 +16,19 @@ const NEXT_PORT = parseInt(process.env.NEXT_INTERNAL_PORT || "3001", 10);
 const LISTEN_PORT = parseInt(process.env.PORT || "3000", 10);
 
 function rewriteHtml(html, ingressPath) {
-  // SURGICAL REWRITE: Only modify src/href/action in HTML tag attributes.
-  // Do NOT use replaceAll("/_next/", ...) — that corrupts inline <script>
-  // content containing React hydration data and RSC payloads, breaking
-  // React hydration entirely (no useEffect, no interactivity).
+  // Rewrite ALL occurrences of /_next/ — this includes both HTML attributes
+  // AND inline RSC/hydration data. React's RSC payload references module paths
+  // like "/_next/static/chunks/xxx.js" and these MUST match the actual URLs.
+  // If HTML <script src> has the ingress prefix but RSC data doesn't → mismatch
+  // → hydration fails silently.
+  html = html.replaceAll("/_next/", ingressPath + "/_next/");
 
-  // Rewrite src="/_next/..." and href="/_next/..." in HTML tags
-  html = html.replace(
-    /((?:src|href)=["'])(\/_next\/)/g,
-    `$1${ingressPath}/_next/`,
-  );
-
-  // Rewrite other absolute src/href/action attributes (e.g., <link href="/favicon.ico">)
-  // but skip protocol-relative URLs (//) and already-prefixed paths
+  // Rewrite href/src/action attributes for non-_next absolute paths
+  // Use regex to only match HTML attributes, NOT inline script/JSON content
+  // This handles <a href="/settings">, <link href="/favicon.ico">, etc.
   const escaped = ingressPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const attrRegex = new RegExp(
-    `((?:src|href|action)=["'])(/)(?!/|${escaped.slice(1)})`,
+    `((?:src|href|action)=["'])(/)(?!/|${escaped.slice(1)}|_next/)`,
     "g",
   );
   html = html.replace(attrRegex, `$1${ingressPath}/`);
