@@ -70,7 +70,7 @@ COPY --from=builder /build/packages/db/drizzle.config.ts /app/packages/db/drizzl
 COPY --from=builder /build/packages/db/tsconfig.json /app/packages/db/tsconfig.json
 RUN cd /app/packages/db && \
     echo '{"name":"db-push","private":true}' > package.json && \
-    npm install drizzle-kit drizzle-orm pg typescript @types/pg
+    npm install drizzle-kit drizzle-orm drizzle-zod pg zod typescript @types/pg
 
 # Copy addon rootfs (s6 service, sync script, AI backend lib)
 COPY rootfs /
