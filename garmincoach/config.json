@@ -8,18 +8,13 @@
   "homeassistant_api": true,
   "ingress": true,
   "ingress_port": 3000,
+  "ingress_entry": "/",
   "panel_icon": "mdi:heart-pulse",
   "panel_title": "GarminCoach",
   "init": false,
   "startup": "application",
   "timeout": 120,
   "map": ["addon_config:rw", "share:rw"],
-  "ports": {
-    "3000/tcp": null
-  },
-  "ports_description": {
-    "3000/tcp": "Web interface (ingress only, no host port exposed)"
-  },
   "options": {
     "garmin_email": "",
     "garmin_password": "",
