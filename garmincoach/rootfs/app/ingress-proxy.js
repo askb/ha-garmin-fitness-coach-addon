@@ -44,6 +44,12 @@ function rewriteHtml(html, ingressPath) {
 const server = http.createServer((clientReq, clientRes) => {
   const ingressPath = clientReq.headers["x-ingress-path"] || "";
 
+  // Strip ingress prefix from incoming URL before forwarding to Next.js
+  let forwardPath = clientReq.url;
+  if (ingressPath && forwardPath.startsWith(ingressPath)) {
+    forwardPath = forwardPath.substring(ingressPath.length) || "/";
+  }
+
   // Strip accept-encoding so Next.js returns uncompressed HTML
   const headers = { ...clientReq.headers };
   if (ingressPath) {
@@ -53,7 +59,7 @@ const server = http.createServer((clientReq, clientRes) => {
   const proxyOpts = {
     hostname: "127.0.0.1",
     port: NEXT_PORT,
-    path: clientReq.url,
+    path: forwardPath,
     method: clientReq.method,
     headers: headers,
   };
@@ -63,7 +69,7 @@ const server = http.createServer((clientReq, clientRes) => {
     const isHtml = ct.includes("text/html");
 
     console.log(
-      `[ingress-proxy] ${clientReq.method} ${clientReq.url} → ${proxyRes.statusCode} (${ct.split(";")[0]}) ingress=${ingressPath ? "yes" : "no"}`,
+      `[ingress-proxy] ${clientReq.method} ${clientReq.url} → fwd:${forwardPath} → ${proxyRes.statusCode} (${ct.split(";")[0]})`,
     );
 
     if (isHtml && ingressPath) {
