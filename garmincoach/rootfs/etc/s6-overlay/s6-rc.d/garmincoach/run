@@ -6,7 +6,6 @@
 # ==============================================================================
 
 declare -r DATA_DIR="/data"
-declare -r DB_PATH="${DATA_DIR}/garmincoach.db"
 declare -r LOG_DIR="/app/logs"
 
 mkdir -p "${LOG_DIR}" "${DATA_DIR}"
@@ -22,8 +21,8 @@ export GARMIN_EMAIL GARMIN_PASSWORD
 export AI_BACKEND
 export OLLAMA_URL
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gpt-oss:20b}"
-export DATABASE_URL="file:${DB_PATH}"
-export POSTGRES_URL="file:${DB_PATH}"
+export DATABASE_URL="postgresql://postgres@127.0.0.1:5432/garmincoach"
+export POSTGRES_URL="postgresql://postgres@127.0.0.1:5432/garmincoach"
 export DEV_BYPASS_AUTH="true"
 export NODE_ENV="production"
 export AUTH_SECRET="ha-addon-local-secret-$(cat /proc/sys/kernel/random/boot_id)"
@@ -34,14 +33,24 @@ export AUTH_DISCORD_SECRET="unused"
 export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN:-}"
 export HA_BASE_URL="http://supervisor/core"
 
-# ─── Initialize database on first run ─────────────────────────────────────────
-if [ ! -f "${DB_PATH}" ]; then
-    bashio::log.info "First run — initializing database..."
-    cd /app && node -e "
-      const { migrate } = require('@acme/db/migrate');
-      migrate().then(() => console.log('Database initialized'));
-    " 2>&1 || bashio::log.warning "DB migration skipped (will auto-create on first request)"
+# ─── Wait for PostgreSQL and initialize database ─────────────────────────────
+bashio::log.info "Waiting for PostgreSQL..."
+for i in $(seq 1 30); do
+    if pg_isready -h 127.0.0.1 -p 5432 -q; then
+        break
+    fi
+    sleep 1
+done
+
+# Create database if it doesn't exist
+if ! psql -h 127.0.0.1 -U postgres -lqt | cut -d \| -f 1 | grep -qw garmincoach; then
+    bashio::log.info "Creating garmincoach database..."
+    createdb -h 127.0.0.1 -U postgres garmincoach
 fi
+
+# Push schema to database (creates tables if missing)
+bashio::log.info "Pushing database schema..."
+cd /app/packages/db && POSTGRES_URL="${POSTGRES_URL}" npx drizzle-kit push --force 2>&1 || bashio::log.warning "Schema push had warnings"
 
 # ─── Start Garmin sync in background ──────────────────────────────────────────
 if [ -n "${GARMIN_EMAIL}" ] && [ -n "${GARMIN_PASSWORD}" ]; then

@@ -20,7 +20,7 @@ RUN git clone --depth=1 --branch="${APP_REF}" \
       "https://github.com/${APP_REPO}.git" .
 
 # Create minimal .env for build (real values injected at runtime by s6 run script)
-RUN echo 'DATABASE_URL="file:/data/garmincoach.db"' > .env && \
+RUN echo 'DATABASE_URL="postgresql://build:build@localhost:5432/build"' > .env && \
     echo 'POSTGRES_URL="postgresql://build:build@localhost:5432/build"' >> .env && \
     echo 'AUTH_SECRET="build-placeholder"' >> .env && \
     echo 'AUTH_DISCORD_ID="build-placeholder"' >> .env && \
@@ -40,16 +40,19 @@ RUN pnpm --filter @acme/nextjs build
 # ──────────────────────────────────────────────
 FROM ${BUILD_FROM}
 
-# Install Node.js, Python (for Garmin sync), SQLite
+# Install Node.js, Python (for Garmin sync), PostgreSQL
 RUN apk add --no-cache \
     nodejs=~22 \
     npm \
     python3 \
     py3-pip \
-    sqlite \
-    sqlite-dev \
+    postgresql16 \
+    postgresql16-client \
     curl \
     tzdata
+
+# Create PostgreSQL data directory
+RUN mkdir -p /data/postgresql && chown -R postgres:postgres /data/postgresql
 
 # Install garminconnect Python package for direct Garmin API sync
 RUN pip3 install --break-system-packages garminconnect flask
@@ -60,6 +63,10 @@ WORKDIR /app
 COPY --from=builder /build/apps/nextjs/.next/standalone ./
 COPY --from=builder /build/apps/nextjs/.next/static ./apps/nextjs/.next/static
 COPY --from=builder /build/apps/nextjs/public ./apps/nextjs/public
+
+# Copy DB package for schema management (drizzle-kit push at runtime)
+COPY --from=builder /build/packages/db /app/packages/db
+RUN cd /app/packages/db && npm install drizzle-kit drizzle-orm pg
 
 # Copy addon rootfs (s6 service, sync script, AI backend lib)
 COPY rootfs /

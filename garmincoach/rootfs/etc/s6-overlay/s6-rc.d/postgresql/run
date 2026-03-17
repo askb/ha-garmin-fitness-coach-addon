@@ -1,0 +1,42 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# SPDX-License-Identifier: MIT
+# ==============================================================================
+# PostgreSQL — s6-overlay run script
+# ==============================================================================
+
+declare -r PG_DATA="/data/postgresql"
+declare -r PG_RUN="/run/postgresql"
+
+mkdir -p "${PG_RUN}"
+chown postgres:postgres "${PG_RUN}"
+
+# Initialize database on first run
+if [ ! -f "${PG_DATA}/PG_VERSION" ]; then
+    bashio::log.info "Initializing PostgreSQL database..."
+    mkdir -p "${PG_DATA}"
+    chown -R postgres:postgres "${PG_DATA}"
+    su - postgres -c "initdb -D '${PG_DATA}' --auth=trust --no-locale --encoding=UTF8"
+
+    # Configure for local connections only
+    echo "host all all 127.0.0.1/32 trust" >> "${PG_DATA}/pg_hba.conf"
+    echo "local all all trust" >> "${PG_DATA}/pg_hba.conf"
+
+    # Performance tuning for embedded use
+    cat >> "${PG_DATA}/postgresql.conf" << 'EOF'
+listen_addresses = '127.0.0.1'
+port = 5432
+max_connections = 20
+shared_buffers = 32MB
+work_mem = 4MB
+maintenance_work_mem = 16MB
+fsync = on
+synchronous_commit = off
+unix_socket_directories = '/run/postgresql'
+logging_collector = off
+log_destination = 'stderr'
+EOF
+fi
+
+bashio::log.info "Starting PostgreSQL..."
+exec s6-setuidgid postgres postgres -D "${PG_DATA}"
