@@ -53,6 +53,7 @@ bashio::log.info "Pushing database schema..."
 cd /app/packages/db && POSTGRES_URL="${POSTGRES_URL}" npx drizzle-kit push --force 2>&1 || bashio::log.warning "Schema push had warnings"
 
 # ─── Start Garmin sync in background ──────────────────────────────────────────
+TOKEN_DIR="/data/garmin-tokens"
 if [ -n "${GARMIN_EMAIL}" ] && [ -n "${GARMIN_PASSWORD}" ]; then
     bashio::log.info "Starting Garmin sync (every ${SYNC_INTERVAL} minutes)..."
     (
@@ -62,8 +63,19 @@ if [ -n "${GARMIN_EMAIL}" ] && [ -n "${GARMIN_PASSWORD}" ]; then
             sleep "$((SYNC_INTERVAL * 60))"
         done
     ) &
+elif [ -f "${TOKEN_DIR}/oauth1_token.json" ] && [ -f "${TOKEN_DIR}/oauth2_token.json" ]; then
+    bashio::log.info "Found saved Garmin tokens in ${TOKEN_DIR}"
+    bashio::log.info "Starting Garmin sync from saved tokens (every ${SYNC_INTERVAL} minutes)..."
+    (
+        while true; do
+            bashio::log.info "Syncing Garmin data..."
+            python3 /app/scripts/garmin-sync.py 2>&1 || bashio::log.warning "Garmin sync failed"
+            sleep "$((SYNC_INTERVAL * 60))"
+        done
+    ) &
 else
-    bashio::log.warning "No Garmin credentials configured — skipping auto-sync"
+    bashio::log.warning "No Garmin credentials or saved tokens — skipping auto-sync"
+    bashio::log.info "Use Settings page to log in, or run scripts/generate-garmin-tokens.py locally"
 fi
 
 # ─── Configure AI backend ─────────────────────────────────────────────────────
