@@ -72,6 +72,14 @@ def get_db():
     return psycopg2.connect(DATABASE_URL)
 
 
+def _safe_sleep_minutes(sleep_dto, key):
+    """Safely extract sleep seconds and convert to minutes."""
+    val = sleep_dto.get(key)
+    if val is None:
+        return None
+    return val // 60
+
+
 def sync_daily_stats(client, db, date_str):
     """Sync daily health stats for a given date."""
     cur = db.cursor()
@@ -82,6 +90,20 @@ def sync_daily_stats(client, db, date_str):
         stress = client.get_stress_data(date_str)
 
         sleep_dto = sleep_data.get("dailySleepDTO", {}) if sleep_data else {}
+
+        # Ensure unique constraint exists for upsert
+        cur.execute("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'daily_metric_user_date_uq'
+                ) THEN
+                    ALTER TABLE daily_metric
+                        ADD CONSTRAINT daily_metric_user_date_uq
+                        UNIQUE (user_id, date);
+                END IF;
+            END $$;
+        """)
 
         cur.execute("""
             INSERT INTO daily_metric (
@@ -116,11 +138,11 @@ def sync_daily_stats(client, db, date_str):
             stats.get("totalKilocalories"),
             stats.get("restingHeartRate"),
             stats.get("maxHeartRate"),
-            sleep_dto.get("sleepTimeSeconds", 0) // 60 if sleep_dto else None,
-            sleep_dto.get("deepSleepSeconds", 0) // 60 if sleep_dto else None,
-            sleep_dto.get("remSleepSeconds", 0) // 60 if sleep_dto else None,
-            sleep_dto.get("lightSleepSeconds", 0) // 60 if sleep_dto else None,
-            sleep_dto.get("awakeSleepSeconds", 0) // 60 if sleep_dto else None,
+            _safe_sleep_minutes(sleep_dto, "sleepTimeSeconds"),
+            _safe_sleep_minutes(sleep_dto, "deepSleepSeconds"),
+            _safe_sleep_minutes(sleep_dto, "remSleepSeconds"),
+            _safe_sleep_minutes(sleep_dto, "lightSleepSeconds"),
+            _safe_sleep_minutes(sleep_dto, "awakeSleepSeconds"),
             sleep_dto.get("sleepScores", {}).get("overall", {}).get("value"),
             hrv.get("hrvSummary", {}).get("weeklyAvg") if hrv else None,
             stress.get("averageStressLevel") if stress else None,
@@ -143,6 +165,20 @@ def sync_activities(client, db, days=7):
     """Sync recent activities."""
     cur = db.cursor()
     try:
+        # Ensure unique constraint exists for upsert
+        cur.execute("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'activity_garmin_id_uq'
+                ) THEN
+                    ALTER TABLE activity
+                        ADD CONSTRAINT activity_garmin_id_uq
+                        UNIQUE (garmin_activity_id);
+                END IF;
+            END $$;
+        """)
+
         activities = client.get_activities(0, days * 3)
         for act in activities:
             act_id = str(act.get("activityId", ""))
