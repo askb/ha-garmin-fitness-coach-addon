@@ -52,21 +52,26 @@ fi
 bashio::log.info "Pushing database schema..."
 cd /app/packages/db && POSTGRES_URL="${POSTGRES_URL}" npx drizzle-kit push --force 2>&1 || bashio::log.warning "Schema push had warnings"
 
-# ─── Data migration: fix userId for synced data ──────────────────────────────
-psql -h 127.0.0.1 -U postgres -d garmincoach -c \
-  "UPDATE daily_metric SET user_id = 'seed-user-001' WHERE user_id = 'addon-user';" 2>/dev/null
-psql -h 127.0.0.1 -U postgres -d garmincoach -c \
-  "UPDATE activity SET user_id = 'seed-user-001' WHERE user_id = 'addon-user';" 2>/dev/null
-
-# Deduplicate daily_metric (keep latest row per user_id+date)
-psql -h 127.0.0.1 -U postgres -d garmincoach -c \
-  "DELETE FROM daily_metric a USING daily_metric b
-   WHERE a.id < b.id AND a.user_id = b.user_id AND a.date = b.date;" 2>/dev/null
-
-# Deduplicate activity (keep latest row per garmin_activity_id)
-psql -h 127.0.0.1 -U postgres -d garmincoach -c \
-  "DELETE FROM activity a USING activity b
-   WHERE a.id < b.id AND a.garmin_activity_id = b.garmin_activity_id;" 2>/dev/null
+# ─── Data migration v0.4.0: fix userId + force full resync from 2019 ─────────
+MIGRATION_MARKER="/data/garmin-tokens/.migration_v040_done"
+if [ ! -f "${MIGRATION_MARKER}" ]; then
+    bashio::log.info "Running v0.4.0 migration: fix userId + reset sync marker..."
+    psql -h 127.0.0.1 -U postgres -d garmincoach -c \
+      "UPDATE daily_metric SET user_id = 'seed-user-001' WHERE user_id = 'addon-user';" 2>/dev/null
+    psql -h 127.0.0.1 -U postgres -d garmincoach -c \
+      "UPDATE activity SET user_id = 'seed-user-001' WHERE user_id = 'addon-user';" 2>/dev/null
+    # Deduplicate
+    psql -h 127.0.0.1 -U postgres -d garmincoach -c \
+      "DELETE FROM daily_metric a USING daily_metric b
+       WHERE a.id < b.id AND a.user_id = b.user_id AND a.date = b.date;" 2>/dev/null
+    psql -h 127.0.0.1 -U postgres -d garmincoach -c \
+      "DELETE FROM activity a USING activity b
+       WHERE a.id < b.id AND a.garmin_activity_id = b.garmin_activity_id;" 2>/dev/null
+    # Force full resync from 2019
+    rm -f /data/garmin-tokens/.initial_sync_done
+    touch "${MIGRATION_MARKER}"
+    bashio::log.info "Migration complete — full resync from 2019 will start"
+fi
 
 # ─── Start Garmin sync in background ──────────────────────────────────────────
 TOKEN_DIR="/data/garmin-tokens"
