@@ -164,7 +164,7 @@ def sync_daily_stats(client, db, date_str):
 
 
 def sync_activities(client, db, days=7):
-    """Sync recent activities."""
+    """Sync activities, fetching in batches of 100."""
     cur = db.cursor()
     try:
         # Ensure unique constraint exists for upsert
@@ -181,38 +181,56 @@ def sync_activities(client, db, days=7):
             END $$;
         """)
 
-        activities = client.get_activities(0, days * 3)
-        for act in activities:
-            act_id = str(act.get("activityId", ""))
-            cur.execute("""
-                INSERT INTO activity (
-                    user_id, garmin_activity_id, sport_type, sub_type,
-                    started_at, duration_minutes, distance_meters,
-                    avg_hr, max_hr, calories, avg_pace_sec_per_km,
-                    aerobic_te, anaerobic_te, synced_at, raw_garmin_data
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (garmin_activity_id) DO UPDATE SET
-                    synced_at = EXCLUDED.synced_at,
-                    raw_garmin_data = EXCLUDED.raw_garmin_data
-            """, (
-                USER_ID,
-                act_id,
-                act.get("activityType", {}).get("typeKey", "other"),
-                act.get("activityType", {}).get("typeId", ""),
-                act.get("startTimeLocal"),
-                (act.get("duration", 0) or 0) / 60,
-                act.get("distance"),
-                act.get("averageHR"),
-                act.get("maxHR"),
-                act.get("calories"),
-                act.get("averageSpeed"),
-                act.get("aerobicTrainingEffect"),
-                act.get("anaerobicTrainingEffect"),
-                datetime.now(timezone.utc).isoformat(),
-                json.dumps(act),
-            ))
-        db.commit()
-        print(f"  Synced {len(activities)} activities")
+        total = 0
+        batch_size = 100
+        start = 0
+        while True:
+            activities = client.get_activities(start, batch_size)
+            if not activities:
+                break
+
+            for act in activities:
+                act_id = str(act.get("activityId", ""))
+                cur.execute("""
+                    INSERT INTO activity (
+                        user_id, garmin_activity_id, sport_type, sub_type,
+                        started_at, duration_minutes, distance_meters,
+                        avg_hr, max_hr, calories, avg_pace_sec_per_km,
+                        aerobic_te, anaerobic_te, synced_at, raw_garmin_data
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (garmin_activity_id) DO UPDATE SET
+                        synced_at = EXCLUDED.synced_at,
+                        raw_garmin_data = EXCLUDED.raw_garmin_data
+                """, (
+                    USER_ID,
+                    act_id,
+                    act.get("activityType", {}).get("typeKey", "other"),
+                    act.get("activityType", {}).get("typeId", ""),
+                    act.get("startTimeLocal"),
+                    (act.get("duration", 0) or 0) / 60,
+                    act.get("distance"),
+                    act.get("averageHR"),
+                    act.get("maxHR"),
+                    act.get("calories"),
+                    act.get("averageSpeed"),
+                    act.get("aerobicTrainingEffect"),
+                    act.get("anaerobicTrainingEffect"),
+                    datetime.now(timezone.utc).isoformat(),
+                    json.dumps(act),
+                ))
+            db.commit()
+            total += len(activities)
+            print(f"  Synced batch: {len(activities)} activities (total: {total})")
+
+            if len(activities) < batch_size:
+                break
+            start += batch_size
+
+            # Incremental syncs: stop after enough recent activities
+            if days <= 30 and total >= 50:
+                break
+
+        print(f"  Synced {total} activities total")
     except Exception as e:
         db.rollback()
         print(f"  Failed to sync activities: {e}", file=sys.stderr)
@@ -236,13 +254,16 @@ def main():
         print("Failed to authenticate with Garmin, skipping sync", file=sys.stderr)
         return
 
-    # First sync: 180 days of history. Subsequent syncs: 7 days only.
+    # First sync: full history from 2019. Subsequent syncs: 7 days only.
     HISTORY_MARKER = os.path.join(TOKEN_DIR, ".initial_sync_done")
     if os.path.exists(HISTORY_MARKER):
         sync_days = 7
     else:
-        sync_days = 180
-        print(f"First sync — pulling {sync_days} days of history...")
+        # Calculate days from 2019-01-01 to today
+        epoch = datetime(2019, 1, 1, tzinfo=timezone.utc).date()
+        today = datetime.now(timezone.utc).date()
+        sync_days = (today - epoch).days
+        print(f"First sync — pulling {sync_days} days of history (from 2019-01-01)...")
 
     db = get_db()
 
@@ -251,6 +272,7 @@ def main():
         date_str = (today - timedelta(days=days_ago)).isoformat()
         sync_daily_stats(client, db, date_str)
 
+    # Garmin API: get_activities(start, limit) — fetch in batches of 100
     sync_activities(client, db, days=sync_days)
 
     db.close()

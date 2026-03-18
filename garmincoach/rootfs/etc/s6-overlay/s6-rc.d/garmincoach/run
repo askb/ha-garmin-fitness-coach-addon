@@ -70,8 +70,6 @@ psql -h 127.0.0.1 -U postgres -d garmincoach -c \
 
 # ─── Start Garmin sync in background ──────────────────────────────────────────
 TOKEN_DIR="/data/garmin-tokens"
-# Remove initial sync marker to force 180-day backfill after userId fix
-rm -f "${TOKEN_DIR}/.initial_sync_done"
 if [ -n "${GARMIN_EMAIL}" ] && [ -n "${GARMIN_PASSWORD}" ]; then
     bashio::log.info "Starting Garmin sync (every ${SYNC_INTERVAL} minutes)..."
     (
