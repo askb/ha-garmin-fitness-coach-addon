@@ -144,6 +144,36 @@ def status():
         return jsonify(connected=False, email="", lastSync="")
 
 
+@app.route("/auth/import-tokens", methods=["POST"])
+def import_tokens():
+    """Import pre-generated garth tokens (oauth1 + oauth2 JSON)."""
+    data = request.get_json(silent=True) or {}
+    oauth1 = data.get("oauth1_token")
+    oauth2 = data.get("oauth2_token")
+
+    if not oauth1 or not oauth2:
+        return jsonify(success=False,
+                       message="Both oauth1_token and oauth2_token required"), 400
+
+    try:
+        os.makedirs(TOKEN_DIR, exist_ok=True)
+        with open(os.path.join(TOKEN_DIR, "oauth1_token.json"), "w") as f:
+            json.dump(oauth1, f)
+        with open(os.path.join(TOKEN_DIR, "oauth2_token.json"), "w") as f:
+            json.dump(oauth2, f)
+
+        # Verify tokens work
+        client = _load_client()
+        if client is None:
+            return jsonify(success=False,
+                           message="Tokens saved but validation failed"), 500
+
+        return jsonify(success=True, message="Tokens imported and verified")
+
+    except Exception as exc:
+        return jsonify(success=False, message=f"Import failed: {exc}"), 500
+
+
 @app.route("/auth/logout", methods=["POST"])
 def logout():
     """Remove stored Garmin session token."""
