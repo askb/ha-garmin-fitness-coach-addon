@@ -191,14 +191,39 @@ def sync_activities(client, db, days=7):
 
             for act in activities:
                 act_id = str(act.get("activityId", ""))
+                # Extract HR zone minutes (seconds → minutes)
+                hr_zones = None
+                z1 = act.get("hrTimeInZone_1")
+                if z1 is not None:
+                    hr_zones = json.dumps({
+                        "zone1": round((act.get("hrTimeInZone_1", 0) or 0) / 60, 1),
+                        "zone2": round((act.get("hrTimeInZone_2", 0) or 0) / 60, 1),
+                        "zone3": round((act.get("hrTimeInZone_3", 0) or 0) / 60, 1),
+                        "zone4": round((act.get("hrTimeInZone_4", 0) or 0) / 60, 1),
+                        "zone5": round((act.get("hrTimeInZone_5", 0) or 0) / 60, 1),
+                    })
+
+                # Compute TRIMP from avg HR and duration
+                avg_hr = act.get("averageHR")
+                duration_min = (act.get("duration", 0) or 0) / 60
+                trimp = None
+                if avg_hr and duration_min > 0:
+                    # Simplified TRIMP: duration * intensity factor
+                    hr_ratio = avg_hr / 200.0  # Normalized intensity
+                    trimp = round(duration_min * hr_ratio * 0.64 * (1.92 ** hr_ratio), 1)
+
                 cur.execute("""
                     INSERT INTO activity (
                         user_id, garmin_activity_id, sport_type, sub_type,
                         started_at, duration_minutes, distance_meters,
                         avg_hr, max_hr, calories, avg_pace_sec_per_km,
-                        aerobic_te, anaerobic_te, synced_at, raw_garmin_data
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        aerobic_te, anaerobic_te, hr_zone_minutes,
+                        trimp_score, strain_score, synced_at, raw_garmin_data
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (garmin_activity_id) DO UPDATE SET
+                        hr_zone_minutes = COALESCE(EXCLUDED.hr_zone_minutes, activity.hr_zone_minutes),
+                        trimp_score = COALESCE(EXCLUDED.trimp_score, activity.trimp_score),
+                        strain_score = COALESCE(EXCLUDED.strain_score, activity.strain_score),
                         synced_at = EXCLUDED.synced_at,
                         raw_garmin_data = EXCLUDED.raw_garmin_data
                 """, (
@@ -207,14 +232,17 @@ def sync_activities(client, db, days=7):
                     act.get("activityType", {}).get("typeKey", "other"),
                     act.get("activityType", {}).get("typeId", ""),
                     act.get("startTimeLocal"),
-                    (act.get("duration", 0) or 0) / 60,
+                    duration_min,
                     act.get("distance"),
-                    act.get("averageHR"),
+                    avg_hr,
                     act.get("maxHR"),
                     act.get("calories"),
                     act.get("averageSpeed"),
                     act.get("aerobicTrainingEffect"),
                     act.get("anaerobicTrainingEffect"),
+                    hr_zones,
+                    trimp,
+                    act.get("activityTrainingLoad"),
                     datetime.now(timezone.utc).isoformat(),
                     json.dumps(act),
                 ))
@@ -234,6 +262,66 @@ def sync_activities(client, db, days=7):
     except Exception as e:
         db.rollback()
         print(f"  Failed to sync activities: {e}", file=sys.stderr)
+    finally:
+        cur.close()
+
+
+def backfill_from_raw_json(db):
+    """Extract hr_zone_minutes, strain_score, trimp_score from stored raw_garmin_data."""
+    cur = db.cursor()
+    try:
+        cur.execute("""
+            SELECT id, raw_garmin_data, avg_hr, duration_minutes
+            FROM activity
+            WHERE user_id = %s
+              AND raw_garmin_data IS NOT NULL
+              AND (hr_zone_minutes IS NULL OR strain_score IS NULL)
+        """, (USER_ID,))
+        rows = cur.fetchall()
+        if not rows:
+            return
+
+        updated = 0
+        for row_id, raw_json, avg_hr, duration_min in rows:
+            act = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+
+            # Extract HR zones (seconds → minutes)
+            hr_zones = None
+            z1 = act.get("hrTimeInZone_1")
+            if z1 is not None:
+                hr_zones = json.dumps({
+                    "zone1": round((act.get("hrTimeInZone_1", 0) or 0) / 60, 1),
+                    "zone2": round((act.get("hrTimeInZone_2", 0) or 0) / 60, 1),
+                    "zone3": round((act.get("hrTimeInZone_3", 0) or 0) / 60, 1),
+                    "zone4": round((act.get("hrTimeInZone_4", 0) or 0) / 60, 1),
+                    "zone5": round((act.get("hrTimeInZone_5", 0) or 0) / 60, 1),
+                })
+
+            # Garmin training load
+            strain = act.get("activityTrainingLoad")
+
+            # Compute TRIMP if we have HR data
+            trimp = None
+            if avg_hr and duration_min and duration_min > 0:
+                hr_ratio = avg_hr / 200.0
+                trimp = round(duration_min * hr_ratio * 0.64 * (1.92 ** hr_ratio), 1)
+
+            if hr_zones or strain or trimp:
+                cur.execute("""
+                    UPDATE activity SET
+                        hr_zone_minutes = COALESCE(%s, hr_zone_minutes),
+                        strain_score = COALESCE(%s, strain_score),
+                        trimp_score = COALESCE(%s, trimp_score)
+                    WHERE id = %s
+                """, (hr_zones, strain, trimp, row_id))
+                updated += 1
+
+        db.commit()
+        if updated:
+            print(f"  Backfilled {updated} activities with zones/strain/TRIMP")
+    except Exception as e:
+        db.rollback()
+        print(f"  Backfill failed: {e}", file=sys.stderr)
     finally:
         cur.close()
 
@@ -274,6 +362,9 @@ def main():
 
     # Garmin API: get_activities(start, limit) — fetch in batches of 100
     sync_activities(client, db, days=sync_days)
+
+    # Backfill computed fields from raw Garmin JSON
+    backfill_from_raw_json(db)
 
     db.close()
 
