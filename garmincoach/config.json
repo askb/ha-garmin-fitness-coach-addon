@@ -1,6 +1,6 @@
 {
   "name": "GarminCoach",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "slug": "garmincoach",
   "description": "AI-powered sport scientist \u2014 training analysis, coaching, and recovery optimization from your Garmin data",
   "url": "https://github.com/askb/ha-garmin-fitness-coach-addon",
