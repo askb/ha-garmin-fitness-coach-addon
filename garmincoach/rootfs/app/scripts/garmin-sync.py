@@ -32,6 +32,8 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres@127.0.0.1:5
 GARMIN_EMAIL = os.environ.get("GARMIN_EMAIL", "")
 GARMIN_PASSWORD = os.environ.get("GARMIN_PASSWORD", "")
 TOKEN_DIR = "/data/garmin-tokens"
+# Must match the userId used by the Next.js app (DEV_BYPASS_AUTH seed user)
+USER_ID = os.environ.get("GARMIN_USER_ID", "seed-user-001")
 
 
 def get_client():
@@ -132,7 +134,7 @@ def sync_daily_stats(client, db, date_str):
                 intensity_minutes = EXCLUDED.intensity_minutes,
                 synced_at = EXCLUDED.synced_at
         """, (
-            "addon-user",
+            USER_ID,
             date_str,
             stats.get("totalSteps"),
             stats.get("totalKilocalories"),
@@ -193,7 +195,7 @@ def sync_activities(client, db, days=7):
                     synced_at = EXCLUDED.synced_at,
                     raw_garmin_data = EXCLUDED.raw_garmin_data
             """, (
-                "addon-user",
+                USER_ID,
                 act_id,
                 act.get("activityType", {}).get("typeKey", "other"),
                 act.get("activityType", {}).get("typeId", ""),
