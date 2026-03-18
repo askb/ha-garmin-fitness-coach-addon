@@ -58,6 +58,16 @@ psql -h 127.0.0.1 -U postgres -d garmincoach -c \
 psql -h 127.0.0.1 -U postgres -d garmincoach -c \
   "UPDATE activity SET user_id = 'seed-user-001' WHERE user_id = 'addon-user';" 2>/dev/null
 
+# Deduplicate daily_metric (keep latest row per user_id+date)
+psql -h 127.0.0.1 -U postgres -d garmincoach -c \
+  "DELETE FROM daily_metric a USING daily_metric b
+   WHERE a.id < b.id AND a.user_id = b.user_id AND a.date = b.date;" 2>/dev/null
+
+# Deduplicate activity (keep latest row per garmin_activity_id)
+psql -h 127.0.0.1 -U postgres -d garmincoach -c \
+  "DELETE FROM activity a USING activity b
+   WHERE a.id < b.id AND a.garmin_activity_id = b.garmin_activity_id;" 2>/dev/null
+
 # ─── Start Garmin sync in background ──────────────────────────────────────────
 TOKEN_DIR="/data/garmin-tokens"
 # Remove initial sync marker to force 180-day backfill after userId fix
