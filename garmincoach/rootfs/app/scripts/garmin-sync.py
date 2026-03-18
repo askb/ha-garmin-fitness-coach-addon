@@ -234,16 +234,30 @@ def main():
         print("Failed to authenticate with Garmin, skipping sync", file=sys.stderr)
         return
 
+    # First sync: 180 days of history. Subsequent syncs: 7 days only.
+    HISTORY_MARKER = os.path.join(TOKEN_DIR, ".initial_sync_done")
+    if os.path.exists(HISTORY_MARKER):
+        sync_days = 7
+    else:
+        sync_days = 180
+        print(f"First sync — pulling {sync_days} days of history...")
+
     db = get_db()
 
     today = datetime.now(timezone.utc).date()
-    for days_ago in range(7):
+    for days_ago in range(sync_days):
         date_str = (today - timedelta(days=days_ago)).isoformat()
         sync_daily_stats(client, db, date_str)
 
-    sync_activities(client, db, days=7)
+    sync_activities(client, db, days=sync_days)
 
     db.close()
+
+    # Mark initial sync complete
+    if not os.path.exists(HISTORY_MARKER):
+        with open(HISTORY_MARKER, "w") as f:
+            f.write(datetime.now(timezone.utc).isoformat())
+
     print("Garmin sync complete")
 
 
