@@ -1,10 +1,13 @@
 {
   "name": "GarminCoach",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "slug": "garmincoach",
-  "description": "AI-powered sport scientist — training analysis, coaching, and recovery optimization from your Garmin data",
+  "description": "AI-powered sport scientist \u2014 training analysis, coaching, and recovery optimization from your Garmin data",
   "url": "https://github.com/askb/ha-garmin-fitness-coach-addon",
-  "arch": ["amd64", "aarch64"],
+  "arch": [
+    "amd64",
+    "aarch64"
+  ],
   "homeassistant_api": true,
   "ingress": true,
   "ingress_port": 3000,
@@ -13,7 +16,10 @@
   "init": false,
   "startup": "application",
   "timeout": 120,
-  "map": ["addon_config:rw", "share:rw"],
+  "map": [
+    "addon_config:rw",
+    "share:rw"
+  ],
   "ports": {
     "3000/tcp": null
   },
