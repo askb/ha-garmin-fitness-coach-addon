@@ -37,10 +37,10 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Checkout garmin-coach app
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ env.GARMIN_COACH_REPO }}
           ref: ${{ env.GARMIN_COACH_REF }}
@@ -98,7 +98,7 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
