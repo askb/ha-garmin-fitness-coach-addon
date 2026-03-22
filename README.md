@@ -41,19 +41,58 @@ your local network.
 
 ## Architecture
 
+```mermaid
+graph TD
+    subgraph "Home Assistant OS"
+        subgraph "GarminCoach Addon (s6-overlay)"
+            S6["s6-overlay init"]
+            PG["postgresql<br/>(longrun)"]
+            Auth["garmin-auth<br/>(longrun, Flask :8099)"]
+            GC["garmincoach orchestrator<br/>(longrun)"]
+            Sync["garmin-sync.py<br/>(loop, every N min)"]
+            Metrics["metrics-compute.py<br/>(120s delay, every 60 min)"]
+            Notify["ha-notify.py<br/>(180s delay, every 30 min)"]
+            NextJS["Next.js standalone<br/>(:3001)"]
+            Ingress["ingress-proxy<br/>(:3000 → :3001)"]
+            Monitor["process monitor<br/>(every 60s)"]
+        end
+        HA["Home Assistant Core"]
+        Ollama["Ollama Addon<br/>(optional)"]
+    end
+
+    Garmin["Garmin Connect API"]
+
+    S6 --> PG
+    S6 --> Auth
+    S6 --> GC
+    PG -.->|dependency| GC
+    GC --> Sync
+    GC --> Metrics
+    GC --> Notify
+    GC --> NextJS
+    GC --> Ingress
+    GC --> Monitor
+
+    Garmin --> Sync
+    Sync --> PG
+    PG --> Metrics
+    Metrics --> PG
+    PG --> Notify
+    Notify -->|7 sensors| HA
+    PG --> NextJS
+    NextJS -.-> Ollama
+    NextJS -.-> HA
+```
+
 ```text
-Home Assistant Supervisor
-│
-├── GarminCoach Addon  (this repository)
-│   ├── Next.js 15 standalone server  (:3000 via Ingress)
-│   ├── SQLite database               (/data/garmincoach.db)
-│   ├── Garmin sync daemon             (garminconnect-python, s6-overlay)
-│   └── AI backend abstraction         (ha_conversation | ollama | none)
-│
-├── Ollama Addon  (optional — local LLM inference)
-│
-└── Home Assistant Core
-    └── Conversation Agent  (optional — used by ha_conversation backend)
+Startup order:
+  postgresql → garmin-auth (parallel) → garmincoach orchestrator
+    → garmin-sync (background loop, waits for tokens)
+    → metrics-compute (120s delay, then every 60 min)
+    → ha-notify (180s delay, then every 30 min)
+    → Next.js standalone server (:3001)
+    → ingress-proxy (:3000 → :3001, HA ingress path rewriting)
+    → process monitor (restarts dead services every 60s)
 ```
 
 Supported architectures: **amd64**, **aarch64**.
@@ -98,7 +137,7 @@ GarminCoach authenticates with Garmin Connect using a **web-based auth flow**:
 3. Enter your **email** and **password**. If your account has MFA enabled you
    will be prompted for the one-time code during the same flow.
 4. On success the addon stores an OAuth session token locally in
-   `/data/garmincoach.db`. No credentials are sent to any third-party service.
+   `/data/garmin-tokens/`. No credentials are sent to any third-party service.
 
 > **Token lifetime:** The session token is valid for roughly **one year**
 > before Garmin forces a re-authentication.  The addon will surface a
@@ -111,6 +150,63 @@ GarminCoach authenticates with Garmin Connect using a **web-based auth flow**:
 | `ha_conversation` **(default)** | Routes prompts through the Home Assistant Conversation API to whatever agent you have configured (e.g., OpenAI, Claude, local LLM). Zero extra setup if you already use one. |
 | `ollama` | Direct HTTP connection to a local [Ollama](https://ollama.com/) instance — fully private, runs on your hardware. Set `ollama_url` to the instance address. |
 | `none` | Rules-based coaching only — no LLM required. Still provides all data-driven insights, readiness scores, and training-load analytics. |
+
+## Sprint 1 Features
+
+25 improvements shipped in Sprint 1:
+
+- **Whoop-style journal** — structured daily check-in (body feel, inputs, cycle)
+- **Full PMC chart** — CTL / ATL / TSB with colour-coded form zones
+- **ACWR gauge** — injury-risk indicator (1.3 / 1.5 thresholds)
+- **Proactive insights** — 6-rule engine surfaces cards automatically
+- **Activity forensics** — EF, aerobic decoupling, GAP, lap table, RPE
+- **Race predictions** — VDOT + Riegel with confidence intervals
+- **Intervention tracking** — ice bath, massage, deload, etc. with ratings
+- **Critical power page** — CP curve, W′, mFTP, power-duration chart
+- **Validation page** — reference measurement comparison with deviation badges
+- **Export page** — CSV/JSON download with date-range picker
+- **Team page** — multi-athlete profile switcher
+- **Readiness card upgrade** — confidence %, data quality dots, action text
+- **8 new database tables** — session_report, intervention, advanced_metric, athlete_baseline, data_quality_log, audit_log, reference_measurement, ai_insight
+- **metrics-compute.py** — EWMA CTL/ATL/TSB/ACWR/CP computation service
+- **ha-notify.py** — pushes 7 sensors to HA + fires injury-risk alerts
+- **AI context pipeline** — 10 structured sections in every coaching prompt
+- **239 app tests** (Jest + Playwright) and **19 addon tests** (pytest)
+- **CI workflows** — typecheck + test + Docker build on every PR
+
+## HA Sensors
+
+`ha-notify.py` pushes 7 sensors to Home Assistant via the Supervisor API:
+
+| Entity ID | Description |
+|-----------|-------------|
+| `sensor.garmincoach_ctl` | Chronic Training Load (42-day fitness) |
+| `sensor.garmincoach_atl` | Acute Training Load (7-day fatigue) |
+| `sensor.garmincoach_form` | Training Stress Balance (TSB = CTL − ATL) |
+| `sensor.garmincoach_acwr` | Acute:Chronic Workload Ratio (injury risk) |
+| `sensor.garmincoach_injury_risk` | Risk level: Low / Moderate / High / Very High |
+| `sensor.garmincoach_body_battery` | Current Garmin Body Battery value |
+| `sensor.garmincoach_sleep_debt` | Accumulated sleep debt (hours) |
+
+## Automation Templates
+
+Seven ready-to-paste HA automations are provided in
+[`HA_AUTOMATIONS.md`](garmincoach/HA_AUTOMATIONS.md):
+
+1. **Low Body Battery Recovery Mode** — dim lights, enable DND
+2. **Morning Training Briefing** — daily notification with readiness + plan
+3. **High Injury Risk Alert** — ACWR > 1.5 warning
+4. **Training Reminder (Fresh)** — nudge when TSB is positive
+5. **Sleep Debt Management** — bedtime reminder when debt accumulates
+6. **Weekly Summary** — end-of-week training recap
+7. **Voice — ACWR Query** — ask your voice assistant about injury risk
+
+## Testing
+
+- **19 pytest tests** covering Garmin auth flow, token handling, daily stats
+  sync, activity sync, TRIMP calculation, and ingress proxy path rewriting
+- **CI:** GitHub Actions builds the Docker image and runs `pytest -v` on every
+  PR
 
 ## Known Issues
 
