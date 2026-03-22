@@ -130,7 +130,7 @@ jobs:
           config: '.grype.yaml'
 
       - name: 'Upload SBOM'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-files
           path: sbom-cyclonedx.json
