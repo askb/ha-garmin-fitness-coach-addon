@@ -10,6 +10,25 @@ declare -r LOG_DIR="/app/logs"
 
 mkdir -p "${LOG_DIR}" "${DATA_DIR}"
 
+# ─── PID tracking & cleanup ──────────────────────────────────────────────────
+SYNC_PID=""
+COMPUTE_PID=""
+NOTIFY_PID=""
+NEXTJS_PID=""
+INGRESS_PID=""
+
+cleanup() {
+    bashio::log.info "Shutting down GarminCoach services..."
+    for pid in $SYNC_PID $COMPUTE_PID $NOTIFY_PID $NEXTJS_PID $INGRESS_PID; do
+        if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null
+        fi
+    done
+    wait
+    bashio::log.info "All services stopped."
+}
+trap cleanup EXIT INT TERM
+
 # ─── Read addon configuration ─────────────────────────────────────────────────
 GARMIN_EMAIL=$(bashio::config 'garmin_email')
 GARMIN_PASSWORD=$(bashio::config 'garmin_password')
@@ -84,6 +103,7 @@ if [ -n "${GARMIN_EMAIL}" ] && [ -n "${GARMIN_PASSWORD}" ]; then
             sleep "$((SYNC_INTERVAL * 60))"
         done
     ) &
+    SYNC_PID=$!
 elif [ -f "${TOKEN_DIR}/oauth1_token.json" ] && [ -f "${TOKEN_DIR}/oauth2_token.json" ]; then
     bashio::log.info "Found saved Garmin tokens in ${TOKEN_DIR}"
     bashio::log.info "Starting Garmin sync from saved tokens (every ${SYNC_INTERVAL} minutes)..."
@@ -94,6 +114,7 @@ elif [ -f "${TOKEN_DIR}/oauth1_token.json" ] && [ -f "${TOKEN_DIR}/oauth2_token.
             sleep "$((SYNC_INTERVAL * 60))"
         done
     ) &
+    SYNC_PID=$!
 else
     bashio::log.warning "No Garmin credentials or saved tokens — skipping auto-sync"
     bashio::log.info "Use Settings page to log in, or run scripts/generate-garmin-tokens.py locally"
@@ -111,6 +132,7 @@ export COMPUTE_INTERVAL_MINUTES="${SYNC_INTERVAL}"
         sleep "$((COMPUTE_INTERVAL_MINUTES * 60))"
     done
 ) &
+COMPUTE_PID=$!
 
 # ─── Start HA notification service ───────────────────────────────────────────
 if [ -n "${SUPERVISOR_TOKEN}" ]; then
@@ -124,6 +146,7 @@ if [ -n "${SUPERVISOR_TOKEN}" ]; then
             sleep "$((NOTIFY_INTERVAL_MINUTES * 60))"
         done
     ) &
+    NOTIFY_PID=$!
 else
     bashio::log.info "No Supervisor token — skipping HA sensor push (add-on needs homeassistant_api: true)"
 fi
@@ -166,7 +189,7 @@ cd /app/apps/nextjs
 export HOSTNAME="127.0.0.1"
 export PORT="3001"
 node server.js &
-NEXT_PID=$!
+NEXTJS_PID=$!
 
 # Wait for Next.js to be ready
 bashio::log.info "Waiting for Next.js..."
@@ -182,4 +205,60 @@ done
 bashio::log.info "Starting ingress proxy..."
 export PORT="3000"
 export NEXT_INTERNAL_PORT="3001"
-exec node /app/ingress-proxy.js
+node /app/ingress-proxy.js &
+INGRESS_PID=$!
+
+# ─── Process monitoring loop ─────────────────────────────────────────────────
+bashio::log.info "All services started — entering monitoring loop"
+while true; do
+    if [ -n "$SYNC_PID" ] && ! kill -0 "$SYNC_PID" 2>/dev/null; then
+        bashio::log.warning "Garmin sync died, restarting..."
+        (
+            while true; do
+                bashio::log.info "Syncing Garmin data..."
+                python3 /app/scripts/garmin-sync.py 2>&1 || bashio::log.warning "Garmin sync failed"
+                sleep "$((SYNC_INTERVAL * 60))"
+            done
+        ) &
+        SYNC_PID=$!
+    fi
+
+    if [ -n "$COMPUTE_PID" ] && ! kill -0 "$COMPUTE_PID" 2>/dev/null; then
+        bashio::log.warning "Metrics compute died, restarting..."
+        (
+            while true; do
+                bashio::log.info "Computing advanced metrics..."
+                python3 /app/scripts/metrics-compute.py --once 2>&1 || bashio::log.warning "Metrics compute failed"
+                sleep "$((COMPUTE_INTERVAL_MINUTES * 60))"
+            done
+        ) &
+        COMPUTE_PID=$!
+    fi
+
+    if [ -n "$NOTIFY_PID" ] && ! kill -0 "$NOTIFY_PID" 2>/dev/null; then
+        bashio::log.warning "HA notify died, restarting..."
+        (
+            while true; do
+                bashio::log.info "Pushing GarminCoach sensors to HA..."
+                python3 /app/scripts/ha-notify.py --once 2>&1 || bashio::log.warning "HA notify failed"
+                sleep "$((NOTIFY_INTERVAL_MINUTES * 60))"
+            done
+        ) &
+        NOTIFY_PID=$!
+    fi
+
+    if ! kill -0 "$NEXTJS_PID" 2>/dev/null; then
+        bashio::log.warning "Next.js died, restarting..."
+        cd /app/apps/nextjs
+        node server.js &
+        NEXTJS_PID=$!
+    fi
+
+    if ! kill -0 "$INGRESS_PID" 2>/dev/null; then
+        bashio::log.warning "Ingress proxy died, restarting..."
+        node /app/ingress-proxy.js &
+        INGRESS_PID=$!
+    fi
+
+    sleep 60
+done
