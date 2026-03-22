@@ -99,6 +99,19 @@ else
     bashio::log.info "Use Settings page to log in, or run scripts/generate-garmin-tokens.py locally"
 fi
 
+# ─── Start metrics compute in background ─────────────────────────────────────
+bashio::log.info "Starting advanced metrics compute service..."
+export COMPUTE_INTERVAL_MINUTES="${SYNC_INTERVAL}"
+(
+    # Wait for initial sync to complete before first compute (120s grace period)
+    sleep 120
+    while true; do
+        bashio::log.info "Computing advanced metrics..."
+        python3 /app/scripts/metrics-compute.py --once 2>&1 || bashio::log.warning "Metrics compute failed"
+        sleep "$((COMPUTE_INTERVAL_MINUTES * 60))"
+    done
+) &
+
 # ─── Configure AI backend ─────────────────────────────────────────────────────
 case "${AI_BACKEND}" in
     ha_conversation)
