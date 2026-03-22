@@ -37,7 +37,7 @@ def get_db():
 
 
 def ensure_advanced_metric_table(cur):
-    """Create advanced_metric table if it doesn't exist (belt-and-suspenders)."""
+    """Create advanced_metric table and ensure unique constraint exists."""
     cur.execute("""
         CREATE TABLE IF NOT EXISTS advanced_metric (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -57,6 +57,26 @@ def ensure_advanced_metric_table(cur):
             computed_at TIMESTAMP DEFAULT NOW(),
             UNIQUE(user_id, date)
         );
+    """)
+    # If the table was created by Drizzle push (without the constraint),
+    # CREATE TABLE IF NOT EXISTS won't add it. Ensure it exists separately.
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'advanced_metric_user_date_unique'
+                  AND conrelid = 'advanced_metric'::regclass
+            ) AND NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'advanced_metric_user_id_date_key'
+                  AND conrelid = 'advanced_metric'::regclass
+            ) THEN
+                ALTER TABLE advanced_metric
+                    ADD CONSTRAINT advanced_metric_user_date_unique
+                    UNIQUE (user_id, date);
+            END IF;
+        END $$;
     """)
 
 
