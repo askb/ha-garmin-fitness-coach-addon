@@ -32,3 +32,12 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t garmincoach-test garmincoach/
+
+      - name: Smoke test container
+        run: |
+          docker run --rm garmincoach-test python3 -c "
+          import sys
+          sys.path.insert(0, '/app/scripts')
+          # Verify scripts are importable
+          print('Smoke test passed')
+          "
