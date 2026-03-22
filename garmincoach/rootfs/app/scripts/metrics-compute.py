@@ -155,10 +155,11 @@ def compute_effective_vo2max(cur, user_id) -> dict:
 
 
 def compute_critical_power(cur, user_id) -> dict:
-    """Rough CP estimation from recent activity data using 2-parameter model.
+    """Rough CP estimation from activity data using 2-parameter model.
 
-    Uses avg_power/normalized_power from activities. Returns empty dict if
-    insufficient power data exists.
+    Uses avg_power/normalized_power from activities. Computes CP for each
+    date that has at least 3 different duration buckets in a 90-day rolling
+    window. Returns empty dict if insufficient power data exists.
     Returns dict: {date_str: {cp, w_prime, frc, mftp, tte}}
     """
     cur.execute("""
@@ -172,53 +173,59 @@ def compute_critical_power(cur, user_id) -> dict:
           AND avg_power IS NOT NULL
           AND avg_power > 50
           AND duration_minutes >= 10
-        ORDER BY started_at DESC
-        LIMIT 200
+        ORDER BY started_at ASC
     """, (user_id,))
     rows = cur.fetchall()
     if len(rows) < 5:
         return {}
 
-    power_by_duration: dict = defaultdict(list)
+    observations = []
     for row in rows:
         d_str, dur_min, avg_pwr, norm_pwr = row
         pwr = norm_pwr if norm_pwr else avg_pwr
-        # Bucket to nearest 10 min, cap at 120
         bucket = min(int(dur_min / 10) * 10, 120)
-        power_by_duration[bucket].append((d_str, float(pwr)))
+        observations.append((date.fromisoformat(d_str), bucket, float(pwr)))
 
-    # Find best 20-min and 60-min power
-    best_20 = max(
-        (p for _, p in power_by_duration.get(20, []) + power_by_duration.get(30, [])),
-        default=None,
-    )
-    best_60 = max(
-        (p for _, p in power_by_duration.get(60, [])),
-        default=None,
-    )
+    unique_dates = sorted(set(d for d, _, _ in observations))
 
-    if not best_20 or not best_60 or best_20 <= best_60:
-        return {}
+    result = {}
+    for target_date in unique_dates:
+        window_start = target_date - timedelta(days=90)
+        window_obs = [(b, p) for d, b, p in observations
+                      if window_start <= d <= target_date]
 
-    # 2-parameter CP model
-    t_short, t_long = 1200, 3600  # 20 min, 60 min in seconds
-    cp = (best_20 * t_short - best_60 * t_long) / (t_short - t_long)
-    w_prime = (best_20 - cp) * t_short
-    mftp = cp * 0.97
+        # Best power per duration bucket within the window
+        buckets: dict = defaultdict(float)
+        for bucket, power in window_obs:
+            buckets[bucket] = max(buckets[bucket], power)
 
-    if cp < 50 or w_prime < 5000:
-        return {}
+        if len(buckets) < 3:
+            continue
 
-    latest_date = max(d for rows_list in power_by_duration.values() for d, _ in rows_list)
-    return {
-        latest_date: {
+        best_20 = max(buckets.get(20, 0), buckets.get(30, 0))
+        best_60 = buckets.get(60, 0)
+
+        if not best_20 or not best_60 or best_20 <= best_60:
+            continue
+
+        # 2-parameter CP model
+        t_short, t_long = 1200, 3600  # 20 min, 60 min in seconds
+        cp = (best_20 * t_short - best_60 * t_long) / (t_short - t_long)
+        w_prime = (best_20 - cp) * t_short
+        mftp = cp * 0.97
+
+        if cp < 50 or w_prime < 5000:
+            continue
+
+        result[target_date.isoformat()] = {
             "cp": round(cp, 1),
             "w_prime": round(w_prime, 0),
             "frc": round(w_prime, 0),
             "mftp": round(mftp, 1),
             "tte": round((w_prime / (cp * 0.05)) / 60, 1) if cp > 0 else None,
         }
-    }
+
+    return result
 
 
 def upsert_advanced_metrics(

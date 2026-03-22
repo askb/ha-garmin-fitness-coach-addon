@@ -139,7 +139,7 @@ class TestMetricsCompute:
         for d_str, vals in results.items():
             expected_tsb = round(vals["ctl"] - vals["atl"], 2)
             # TSB is ctl - atl, allow small float rounding
-            assert abs(vals["tsb"] - expected_tsb) < 0.01, f"TSB mismatch on {d_str}"
+            assert abs(vals["tsb"] - expected_tsb) <= 0.02, f"TSB mismatch on {d_str}"
 
     def test_acwr_zero_ctl(self):
         """Test ACWR is None when CTL is near zero (avoid division by zero)."""

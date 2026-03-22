@@ -96,11 +96,12 @@ def get_latest_metrics(cur, user_id: str) -> dict:
 
     # Check consecutive hard days (last 3 days high strain)
     cur.execute("""
-        SELECT COUNT(*) FROM daily_metric
+        SELECT COUNT(*) as count FROM daily_metric
         WHERE user_id = %s AND date >= CURRENT_DATE - INTERVAL '3 days'
           AND garmin_training_load > 50
     """, (user_id,))
-    hard_days = cur.fetchone()[0]
+    hard_days_row = cur.fetchone()
+    hard_days = hard_days_row['count'] if hard_days_row else 0
 
     return {
         "daily": dm,
@@ -155,7 +156,7 @@ def run_notifications(user_id: str):
     db = None
     try:
         db = psycopg2.connect(DATABASE_URL)
-        cur = db.cursor()
+        cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         data = get_latest_metrics(cur, user_id)
         dm = data["daily"]
@@ -168,7 +169,7 @@ def run_notifications(user_id: str):
         # --- Push sensor states ---
 
         # sensor.garmincoach_acwr
-        acwr = am[4] if am else None
+        acwr = am['acwr'] if am else None
         push_sensor("sensor.garmincoach_acwr",
                     round(acwr, 2) if acwr else "unknown",
                     {
@@ -181,7 +182,7 @@ def run_notifications(user_id: str):
                     })
 
         # sensor.garmincoach_form (TSB)
-        tsb = am[3] if am else None
+        tsb = am['tsb'] if am else None
         push_sensor("sensor.garmincoach_form",
                     round(tsb, 1) if tsb is not None else "unknown",
                     {
@@ -194,7 +195,7 @@ def run_notifications(user_id: str):
                     })
 
         # sensor.garmincoach_injury_risk
-        ramp = am[5] if am else None
+        ramp = am['ramp_rate'] if am else None
         risk_level, risk_score = compute_injury_risk(acwr, tsb, ramp)
         push_sensor("sensor.garmincoach_injury_risk",
                     risk_level,
@@ -208,25 +209,25 @@ def run_notifications(user_id: str):
                     })
 
         # sensor.garmincoach_ctl (Fitness/CTL)
-        ctl = am[1] if am else None
+        ctl = am['ctl'] if am else None
         push_sensor("sensor.garmincoach_ctl",
                     round(ctl, 1) if ctl else "unknown",
                     {"friendly_name": "GarminCoach Fitness (CTL)", "unit_of_measurement": "pts", "icon": "mdi:trending-up"})
 
         # sensor.garmincoach_atl (Fatigue/ATL)
-        atl = am[2] if am else None
+        atl = am['atl'] if am else None
         push_sensor("sensor.garmincoach_atl",
                     round(atl, 1) if atl else "unknown",
                     {"friendly_name": "GarminCoach Fatigue (ATL)", "unit_of_measurement": "pts", "icon": "mdi:trending-down"})
 
         # sensor.garmincoach_body_battery
-        bb = dm[3] if dm else None
+        bb = dm['body_battery_end'] if dm else None
         push_sensor("sensor.garmincoach_body_battery",
                     bb if bb is not None else "unknown",
                     {"friendly_name": "GarminCoach Body Battery", "unit_of_measurement": "%", "icon": "mdi:battery"})
 
         # sensor.garmincoach_sleep_debt
-        sleep_debt = dm[5] if dm else None
+        sleep_debt = dm['sleep_debt_minutes'] if dm else None
         push_sensor("sensor.garmincoach_sleep_debt",
                     round(sleep_debt / 60, 1) if sleep_debt else 0,
                     {"friendly_name": "GarminCoach Sleep Debt", "unit_of_measurement": "h", "icon": "mdi:sleep"})
@@ -258,10 +259,17 @@ def run_notifications(user_id: str):
                           f"Prioritize sleep tonight for optimal recovery.",
                           "gc_sleep_debt"))
 
-        if bb and bb < 20 and dm[6] and dm[6] > 60:  # low end BB, started high
+        if bb and bb < 20 and dm['body_battery_start'] and dm['body_battery_start'] > 60:  # low end BB, started high
             alerts.append(("🔋 Low Body Battery",
                           f"Body Battery is critically low ({bb}%). Recovery priority today.",
                           "gc_body_battery_low"))
+
+        hard_days = data["consecutive_hard_days"]
+        if hard_days >= 3:
+            alerts.append(("🏋️ Consecutive Hard Training Days",
+                          f"{hard_days} high-load days in the last 3 days. "
+                          f"Consider a recovery or easy day to avoid overtraining.",
+                          "gc_hard_days"))
 
         for title, msg, nid in alerts:
             create_notification(title, msg, nid)

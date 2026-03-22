@@ -1,10 +1,10 @@
-# Telegram Bot Integration for OpenClaw
+# Telegram Bot Integration for GarminCoach
 
-This guide explains how to connect your OpenClaw AI assistant to Telegram
+This guide explains how to connect your GarminCoach AI assistant to Telegram
 so you can send messages and get fitness coaching responses via Telegram.
 
 ## Prerequisites
-- Home Assistant with OpenClaw addon running
+- Home Assistant with GarminCoach addon running
 - Telegram account
 
 ## Step 1: Create a Telegram Bot
@@ -38,12 +38,12 @@ notify:
     chat_id: YOUR_CHAT_ID
 ```
 
-## Step 4: Wire to OpenClaw
+## Step 4: Wire to GarminCoach
 
 Add to your `automations.yaml`:
 
 ```yaml
-- alias: "Telegram → OpenClaw"
+- alias: "Telegram → GarminCoach"
   trigger:
     - platform: event
       event_type: telegram_text
@@ -52,7 +52,7 @@ Add to your `automations.yaml`:
   action:
     - service: conversation.process
       data:
-        agent_id: conversation.openclaw_assistant
+        agent_id: conversation.garmincoach_assistant
         text: "{{ trigger.event.data.text }}"
       response_variable: ai_response
     - service: telegram_bot.send_message
@@ -69,8 +69,8 @@ Add to your `automations.yaml`:
       data:
         message: >
           🏃 Morning Fitness Briefing
-          Body Battery: {{ states('sensor.garmin_body_battery') }}%
-          HRV: {{ states('sensor.garmin_hrv') }} ms
+          Body Battery: {{ states('sensor.garmincoach_body_battery') }}%
+          HRV: {{ states('sensor.garmincoach_hrv') }} ms
           ACWR: {{ states('sensor.garmincoach_acwr') }}
           Risk: {{ states('sensor.garmincoach_injury_risk') }}
 ```
@@ -78,7 +78,7 @@ Add to your `automations.yaml`:
 ## Step 5: Test
 
 Send "What is my training status today?" to your Telegram bot.
-OpenClaw will respond with a personalized coaching analysis.
+GarminCoach will respond with a personalized coaching analysis.
 
 ## Example Queries
 - "What's my readiness today?"
