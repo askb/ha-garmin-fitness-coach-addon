@@ -1,0 +1,19 @@
+{
+  "activityId": 12345678901,
+  "activityName": "Morning Run",
+  "sportTypeId": 1,
+  "activityType": {"typeKey": "running"},
+  "startTimeLocal": "2024-01-15 07:30:00",
+  "startTimeGMT": "2024-01-15 07:30:00",
+  "duration": 3600.0,
+  "distance": 10000.0,
+  "averageHR": 158,
+  "maxHR": 178,
+  "calories": 680,
+  "averageSpeed": 2.78,
+  "activityTrainingLoad": 85.0,
+  "aerobicTrainingEffect": 3.5,
+  "anaerobicTrainingEffect": 1.2,
+  "vo2MaxValue": 52.3,
+  "averageRunningCadenceInStepsPerMinute": 172
+}
