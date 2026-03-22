@@ -11,6 +11,26 @@ It connects to Garmin Connect, syncs your metrics (heart rate, HRV, sleep,
 activities, VO2max, stress, body battery), and presents everything through a
 rich dashboard with optional AI coaching powered by local or cloud LLMs.
 
+## Architecture
+
+```text
+Home Assistant OS
+├── GarminCoach Addon (s6-overlay services)
+│   ├── PostgreSQL 16           (/data/postgresql, longrun)
+│   ├── garmin-auth             (Flask :8099, login/MFA/tokens)
+│   ├── garmincoach orchestrator
+│   │   ├── garmin-sync.py      (Garmin Connect → PostgreSQL, every N min)
+│   │   ├── metrics-compute.py  (CTL/ATL/TSB/ACWR/CP → PostgreSQL, every 60 min)
+│   │   ├── ha-notify.py        (PostgreSQL → 7 HA sensors, every 30 min)
+│   │   ├── Next.js standalone  (:3001, tRPC + Drizzle ORM)
+│   │   ├── ingress-proxy       (:3000 → :3001, HA path rewriting)
+│   │   └── process monitor     (restarts dead services every 60s)
+│   └── AI backend              (ha_conversation | ollama | none)
+├── Ollama Addon (optional — local LLM inference)
+└── Home Assistant Core
+    └── Conversation Agent (optional — used by ha_conversation backend)
+```
+
 ## Setup Guide
 
 ### 1. Install the Addon
@@ -70,22 +90,41 @@ fetches up to 6 years of historical data.
 | Page | Description |
 |---|---|
 | **Today** | Daily readiness score (0-100), body battery, recent activities, quick insights |
-| **Trends** | Multi-metric overlay charts, rolling averages, notable-change detection |
 | **Training** | CTL / ATL / TSB fitness-fatigue chart, ACWR injury-risk gauge, load focus, recovery time |
-| **Zones** | HR zone distribution, polarization index, efficiency trends, calendar heatmap |
+| **Fitness** | VO2max trends, VDOT score, race predictions (5K / 10K / half / marathon) with confidence intervals |
+| **Activities** | Activity detail — laps, efficiency factor, GAP, RPE, zone distribution |
+| **Insights** | Proactive AI insight cards — 6-rule engine (ACWR, TSB, HRV, sleep debt, ramp rate, interventions) |
+| **Journal** | Whoop-style daily check-in (body feel, inputs, cycle tracking) |
+| **Interventions** | Recovery intervention log with effectiveness ratings |
 | **Sleep** | Sleep stages breakdown, quality trends, debt tracker, bedtime recommendations |
-| **Coach** | AI specialist agents (sport scientist, psychologist, nutritionist, recovery coach) with data-driven personalized advice |
-| **Fitness** | VO2max trends, ACSM fitness classification, race predictions (5K / 10K / half / marathon) |
+| **Trends** | 6+ year multi-metric overlay charts with rolling averages |
+| **Coach** | AI specialist agents (sport scientist, psychologist, nutritionist, recovery coach) |
+| **Power** | Critical power curve, power-duration chart, W′ |
+| **Zones** | HR zone distribution, Seiler polarization index, calendar heatmap |
 | **Settings** | Garmin account connection, AI backend configuration, sync controls |
+
+## HA Sensors
+
+The addon pushes 7 sensors to Home Assistant via the Supervisor API:
+
+| Entity ID | Description |
+|-----------|-------------|
+| `sensor.garmincoach_ctl` | Chronic Training Load (42-day fitness) |
+| `sensor.garmincoach_atl` | Acute Training Load (7-day fatigue) |
+| `sensor.garmincoach_form` | Training Stress Balance (TSB) |
+| `sensor.garmincoach_acwr` | Acute:Chronic Workload Ratio |
+| `sensor.garmincoach_injury_risk` | Risk level: Low / Moderate / High / Very High |
+| `sensor.garmincoach_body_battery` | Current Garmin Body Battery |
+| `sensor.garmincoach_sleep_debt` | Accumulated sleep debt (hours) |
 
 ## Resource Usage
 
 | Component | RAM | CPU |
 |---|---|---|
 | Next.js server | ~80 MB | < 1 % idle |
-| SQLite database | ~5 MB | < 1 % |
+| PostgreSQL database | ~30 MB | < 1 % |
 | Garmin sync (periodic) | ~30 MB peak | burst |
-| **Total** | **~115 MB** | **< 2 % idle** |
+| **Total** | **~140 MB** | **< 2 % idle** |
 
 The addon requires a minimum of **256 MB** available RAM. Running the
 `ollama` backend locally will need additional resources depending on the
