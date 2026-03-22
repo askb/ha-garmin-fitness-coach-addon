@@ -112,6 +112,22 @@ export COMPUTE_INTERVAL_MINUTES="${SYNC_INTERVAL}"
     done
 ) &
 
+# ─── Start HA notification service ───────────────────────────────────────────
+if [ -n "${SUPERVISOR_TOKEN}" ]; then
+    bashio::log.info "Starting HA notification service..."
+    export NOTIFY_INTERVAL_MINUTES="${SYNC_INTERVAL}"
+    (
+        sleep 180  # Wait for initial sync + metrics compute (3 min)
+        while true; do
+            bashio::log.info "Pushing GarminCoach sensors to HA..."
+            python3 /app/scripts/ha-notify.py --once 2>&1 || bashio::log.warning "HA notify failed"
+            sleep "$((NOTIFY_INTERVAL_MINUTES * 60))"
+        done
+    ) &
+else
+    bashio::log.info "No Supervisor token — skipping HA sensor push (add-on needs homeassistant_api: true)"
+fi
+
 # ─── Configure AI backend ─────────────────────────────────────────────────────
 case "${AI_BACKEND}" in
     ha_conversation)

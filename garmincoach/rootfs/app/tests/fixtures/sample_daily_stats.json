@@ -1,0 +1,19 @@
+{
+  "totalSteps": 8432,
+  "totalKilocalories": 2150,
+  "floorsAscended": 8,
+  "averageStressLevel": 32,
+  "maxStressLevel": 75,
+  "bodyBatteryChargedValue": 45,
+  "bodyBatteryDrainedValue": 38,
+  "wellnessMaxAvailableBodyBattery": 82,
+  "minHeartRate": 48,
+  "maxHeartRate": 162,
+  "restingHeartRate": 52,
+  "averageHeartRate": 68,
+  "intensityMinutesGoal": 150,
+  "vigorousIntensityMinutes": 22,
+  "moderateIntensityMinutes": 45,
+  "respirationAvg": 14.2,
+  "avgSpo2": 97.1
+}
