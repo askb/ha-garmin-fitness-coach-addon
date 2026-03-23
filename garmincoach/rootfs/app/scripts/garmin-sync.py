@@ -400,7 +400,7 @@ def sync_vo2max(client, db, days=7):
         activities = cur.fetchall()
 
         acsm_count = 0
-        for act_id, act_date, distance, duration_min, avg_hr, sport in activities:
+        for idx, (act_id, act_date, distance, duration_min, avg_hr, sport) in enumerate(activities):
             # Fetch resting HR and max HR for the activity date
             cur.execute("""
                 SELECT resting_hr, max_hr FROM daily_metric
@@ -443,7 +443,11 @@ def sync_vo2max(client, db, days=7):
             ))
             acsm_count += 1
 
-        # --- Method 2: Uth method from resting HR ---
+            # Commit every 50 records to limit memory
+            if acsm_count % 50 == 0:
+                db.commit()
+
+        # --- Method 2: Uth method from resting HR (batched to limit memory) ---
         cur.execute("""
             SELECT date, resting_hr, max_hr FROM daily_metric
             WHERE user_id = %s
@@ -451,33 +455,38 @@ def sync_vo2max(client, db, days=7):
               AND resting_hr IS NOT NULL
               AND max_hr IS NOT NULL
               AND resting_hr > 0
+            ORDER BY date DESC
         """, (USER_ID, cutoff))
-        daily_rows = cur.fetchall()
 
         uth_count = 0
-        for d_date, resting_hr, max_hr in daily_rows:
-            if resting_hr <= 0:
-                continue
+        while True:
+            daily_rows = cur.fetchmany(100)
+            if not daily_rows:
+                break
+            for d_date, resting_hr, max_hr in daily_rows:
+                if resting_hr <= 0:
+                    continue
 
-            vo2max_uth = 15.3 * (max_hr / resting_hr)
+                vo2max_uth = 15.3 * (max_hr / resting_hr)
 
-            if vo2max_uth < 20 or vo2max_uth > 90:
-                continue
+                if vo2max_uth < 20 or vo2max_uth > 90:
+                    continue
 
-            cur.execute("""
-                INSERT INTO vo2max_estimate (
-                    user_id, date, sport, value, source
-                ) VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (user_id, date, sport) DO UPDATE SET
-                    value = EXCLUDED.value,
-                    source = EXCLUDED.source
-            """, (
-                USER_ID, d_date, "general",
-                round(vo2max_uth, 1), "uth_method",
-            ))
-            uth_count += 1
+                cur.execute("""
+                    INSERT INTO vo2max_estimate (
+                        user_id, date, sport, value, source
+                    ) VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (user_id, date, sport) DO UPDATE SET
+                        value = EXCLUDED.value,
+                        source = EXCLUDED.source
+                """, (
+                    USER_ID, d_date, "general",
+                    round(vo2max_uth, 1), "uth_method",
+                ))
+                uth_count += 1
+            # Commit each batch
+            db.commit()
 
-        db.commit()
         if acsm_count or uth_count:
             print(f"  VO2max estimates: {acsm_count} ACSM (running), {uth_count} Uth (daily)")
     except Exception as e:
