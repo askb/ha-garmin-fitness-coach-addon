@@ -50,6 +50,7 @@ def _load_client():
 def login():
     """Attempt Garmin Connect login. Returns MFA prompt if required."""
     global _pending_client_state  # noqa: PLW0603
+    global _pending_garmin_client  # noqa: PLW0603
 
     data = request.get_json(silent=True) or {}
     email = data.get("email", "").strip()
