@@ -363,6 +363,130 @@ def backfill_from_raw_json(db):
         cur.close()
 
 
+def sync_vo2max(client, db, days=7):
+    """Compute and upsert VO2max estimates from running activities and daily stats."""
+    cur = db.cursor()
+    try:
+        # Ensure unique constraint exists for upsert
+        cur.execute("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'vo2max_estimate_user_date_sport_uq'
+                ) THEN
+                    ALTER TABLE vo2max_estimate
+                        ADD CONSTRAINT vo2max_estimate_user_date_sport_uq
+                        UNIQUE (user_id, date, sport);
+                END IF;
+            END $$;
+        """)
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
+
+        # --- Method 1: ACSM running-pace + HR method ---
+        cur.execute("""
+            SELECT id, started_at::date, distance_meters, duration_minutes,
+                   avg_hr, sport_type
+            FROM activity
+            WHERE user_id = %s
+              AND started_at::date >= %s
+              AND sport_type IN ('running', 'trail_running')
+              AND distance_meters IS NOT NULL
+              AND duration_minutes IS NOT NULL
+              AND avg_hr IS NOT NULL
+              AND distance_meters >= 1500
+              AND duration_minutes >= 12
+        """, (USER_ID, cutoff))
+        activities = cur.fetchall()
+
+        acsm_count = 0
+        for act_id, act_date, distance, duration_min, avg_hr, sport in activities:
+            # Fetch resting HR and max HR for the activity date
+            cur.execute("""
+                SELECT resting_hr, max_hr FROM daily_metric
+                WHERE user_id = %s AND date = %s
+            """, (USER_ID, act_date))
+            row = cur.fetchone()
+            if not row or not row[0] or not row[1]:
+                continue
+            resting_hr, max_hr = row
+
+            if max_hr <= resting_hr:
+                continue
+
+            # ACSM running VO2 formula
+            speed_m_per_min = distance / duration_min
+            vo2_running = 3.5 + 0.2 * speed_m_per_min
+
+            # Heart rate reserve fraction
+            hrr_fraction = (avg_hr - resting_hr) / (max_hr - resting_hr)
+            if hrr_fraction <= 0:
+                continue
+
+            vo2max = vo2_running / hrr_fraction
+
+            # Sanity check
+            if vo2max < 20 or vo2max > 90:
+                continue
+
+            cur.execute("""
+                INSERT INTO vo2max_estimate (
+                    user_id, date, sport, value, source, activity_id
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (user_id, date, sport) DO UPDATE SET
+                    value = EXCLUDED.value,
+                    source = EXCLUDED.source,
+                    activity_id = EXCLUDED.activity_id
+            """, (
+                USER_ID, act_date, sport,
+                round(vo2max, 1), "running_pace_hr", act_id,
+            ))
+            acsm_count += 1
+
+        # --- Method 2: Uth method from resting HR ---
+        cur.execute("""
+            SELECT date, resting_hr, max_hr FROM daily_metric
+            WHERE user_id = %s
+              AND date >= %s
+              AND resting_hr IS NOT NULL
+              AND max_hr IS NOT NULL
+              AND resting_hr > 0
+        """, (USER_ID, cutoff))
+        daily_rows = cur.fetchall()
+
+        uth_count = 0
+        for d_date, resting_hr, max_hr in daily_rows:
+            if resting_hr <= 0:
+                continue
+
+            vo2max_uth = 15.3 * (max_hr / resting_hr)
+
+            if vo2max_uth < 20 or vo2max_uth > 90:
+                continue
+
+            cur.execute("""
+                INSERT INTO vo2max_estimate (
+                    user_id, date, sport, value, source
+                ) VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (user_id, date, sport) DO UPDATE SET
+                    value = EXCLUDED.value,
+                    source = EXCLUDED.source
+            """, (
+                USER_ID, d_date, "general",
+                round(vo2max_uth, 1), "uth_method",
+            ))
+            uth_count += 1
+
+        db.commit()
+        if acsm_count or uth_count:
+            print(f"  VO2max estimates: {acsm_count} ACSM (running), {uth_count} Uth (daily)")
+    except Exception as e:
+        db.rollback()
+        print(f"  Failed to compute VO2max: {e}", file=sys.stderr)
+    finally:
+        cur.close()
+
+
 def main():
     has_tokens = (
         os.path.exists(os.path.join(TOKEN_DIR, "oauth1_token.json"))
@@ -409,6 +533,9 @@ def main():
     # Backfill computed fields from raw Garmin JSON
     _write_sync_status("backfill", "Computing zones & strain...", 80)
     backfill_from_raw_json(db)
+
+    _write_sync_status("vo2max", "Computing VO2max estimates...", 90)
+    sync_vo2max(client, db, days=sync_days)
 
     db.close()
 
