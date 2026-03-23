@@ -4,7 +4,7 @@ ARG BUILD_ARCH
 # ──────────────────────────────────────────────
 # Stage 1: Build the Next.js application
 # ──────────────────────────────────────────────
-FROM node:25-alpine AS builder
+FROM node:22-alpine AS builder
 
 RUN apk add --no-cache git
 RUN corepack enable && corepack prepare pnpm@latest --activate
