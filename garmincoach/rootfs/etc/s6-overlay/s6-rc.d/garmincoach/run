@@ -7,8 +7,55 @@
 
 declare -r DATA_DIR="/data"
 declare -r LOG_DIR="/app/logs"
+declare -r SHARE_BACKUP="/share/garmincoach"
 
-mkdir -p "${LOG_DIR}" "${DATA_DIR}"
+mkdir -p "${LOG_DIR}" "${DATA_DIR}" "${SHARE_BACKUP}"
+
+# ─── Restore tokens & database from /share/ (survives uninstall) ─────────────
+restore_from_share() {
+    # Restore Garmin tokens
+    if [ -d "${SHARE_BACKUP}/garmin-tokens" ] && [ ! -f "/data/garmin-tokens/oauth1_token.json" ]; then
+        bashio::log.info "Restoring Garmin tokens from /share/ backup..."
+        mkdir -p /data/garmin-tokens
+        cp -a "${SHARE_BACKUP}/garmin-tokens/"* /data/garmin-tokens/ 2>/dev/null || true
+    fi
+    # Restore PostgreSQL dump (after DB is ready, called later)
+}
+
+restore_database() {
+    if [ -f "${SHARE_BACKUP}/garmincoach.sql.gz" ] && [ -n "$1" ]; then
+        # Only restore if the database is empty (fresh install)
+        local row_count
+        row_count=$(psql -h 127.0.0.1 -U postgres -d garmincoach -tAc \
+            "SELECT COUNT(*) FROM daily_metric;" 2>/dev/null || echo "0")
+        if [ "${row_count}" = "0" ] || [ "${row_count}" = "" ]; then
+            bashio::log.info "Restoring database from /share/ backup..."
+            gunzip -c "${SHARE_BACKUP}/garmincoach.sql.gz" | \
+                psql -h 127.0.0.1 -U postgres -d garmincoach -q 2>/dev/null || \
+                bashio::log.warning "Database restore had warnings (may be OK)"
+            bashio::log.info "Database restore complete"
+        fi
+    fi
+}
+
+backup_to_share() {
+    bashio::log.info "Backing up tokens & database to /share/..."
+    mkdir -p "${SHARE_BACKUP}/garmin-tokens"
+    # Backup tokens
+    if [ -d "/data/garmin-tokens" ]; then
+        cp -a /data/garmin-tokens/* "${SHARE_BACKUP}/garmin-tokens/" 2>/dev/null || true
+    fi
+    # Backup database (compressed)
+    if pg_isready -h 127.0.0.1 -p 5432 -q 2>/dev/null; then
+        pg_dump -h 127.0.0.1 -U postgres garmincoach 2>/dev/null | \
+            gzip > "${SHARE_BACKUP}/garmincoach.sql.gz.tmp" && \
+            mv "${SHARE_BACKUP}/garmincoach.sql.gz.tmp" "${SHARE_BACKUP}/garmincoach.sql.gz"
+    fi
+    bashio::log.info "Backup complete → /share/garmincoach/"
+}
+
+# Restore tokens early (before DB starts)
+restore_from_share
 
 # ─── PID tracking & cleanup ──────────────────────────────────────────────────
 SYNC_PID=""
@@ -19,6 +66,8 @@ INGRESS_PID=""
 
 cleanup() {
     bashio::log.info "Shutting down GarminCoach services..."
+    # Backup before shutdown
+    backup_to_share
     for pid in $SYNC_PID $COMPUTE_PID $NOTIFY_PID $NEXTJS_PID $INGRESS_PID; do
         if kill -0 "$pid" 2>/dev/null; then
             kill "$pid" 2>/dev/null
@@ -76,6 +125,9 @@ fi
 bashio::log.info "Pushing database schema..."
 cd /app/packages/db && POSTGRES_URL="${POSTGRES_URL}" npx drizzle-kit push --force 2>&1 || bashio::log.warning "Schema push had warnings"
 
+# Restore database from /share/ backup if this is a fresh install
+restore_database "check"
+
 # ─── Data migration v0.4.0: fix userId + force full resync from 2019 ─────────
 MIGRATION_MARKER="/data/garmin-tokens/.migration_v040_done"
 if [ ! -f "${MIGRATION_MARKER}" ]; then
@@ -105,6 +157,7 @@ if [ -n "${GARMIN_EMAIL}" ] && [ -n "${GARMIN_PASSWORD}" ]; then
         while true; do
             bashio::log.info "Syncing Garmin data..."
             python3 /app/scripts/garmin-sync.py 2>&1 || bashio::log.warning "Garmin sync failed"
+            backup_to_share
             sleep "$((SYNC_INTERVAL * 60))"
         done
     ) &
@@ -116,6 +169,7 @@ elif [ -f "${TOKEN_DIR}/oauth1_token.json" ] && [ -f "${TOKEN_DIR}/oauth2_token.
         while true; do
             bashio::log.info "Syncing Garmin data..."
             python3 /app/scripts/garmin-sync.py 2>&1 || bashio::log.warning "Garmin sync failed"
+            backup_to_share
             sleep "$((SYNC_INTERVAL * 60))"
         done
     ) &
