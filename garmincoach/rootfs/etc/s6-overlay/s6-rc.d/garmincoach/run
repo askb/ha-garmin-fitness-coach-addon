@@ -252,13 +252,13 @@ while true; do
     if ! kill -0 "$NEXTJS_PID" 2>/dev/null; then
         bashio::log.warning "Next.js died, restarting..."
         cd /app/apps/nextjs
-        node server.js &
+        HOSTNAME="127.0.0.1" PORT="3001" node server.js &
         NEXTJS_PID=$!
     fi
 
     if ! kill -0 "$INGRESS_PID" 2>/dev/null; then
         bashio::log.warning "Ingress proxy died, restarting..."
-        node /app/ingress-proxy.js &
+        PORT="3000" NEXT_INTERNAL_PORT="3001" node /app/ingress-proxy.js &
         INGRESS_PID=$!
     fi
 
