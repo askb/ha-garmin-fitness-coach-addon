@@ -63,8 +63,10 @@ COMPUTE_PID=""
 NOTIFY_PID=""
 NEXTJS_PID=""
 INGRESS_PID=""
+SHUTTING_DOWN=false
 
 cleanup() {
+    SHUTTING_DOWN=true
     bashio::log.info "Shutting down GarminCoach services..."
     # Backup before shutdown
     backup_to_share
@@ -275,6 +277,10 @@ INGRESS_PID=$!
 # ─── Process monitoring loop ─────────────────────────────────────────────────
 bashio::log.info "All services started — entering monitoring loop"
 while true; do
+    if [ "$SHUTTING_DOWN" = true ]; then
+        break
+    fi
+
     if [ -n "$SYNC_PID" ] && ! kill -0 "$SYNC_PID" 2>/dev/null; then
         bashio::log.warning "Garmin sync died, restarting..."
         (
