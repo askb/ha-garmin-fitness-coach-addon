@@ -35,6 +35,43 @@ TOKEN_DIR = "/data/garmin-tokens"
 # Must match the userId used by the Next.js app (DEV_BYPASS_AUTH seed user)
 USER_ID = os.environ.get("GARMIN_USER_ID", "seed-user-001")
 
+SYNC_STATUS_FILE = os.path.join(TOKEN_DIR, ".sync_status")
+
+
+def _write_sync_status(phase, detail="", progress=0):
+    """Write sync progress to a shared status file for the auth server."""
+    import json as _json
+    os.makedirs(TOKEN_DIR, exist_ok=True)
+    status = {
+        "syncing": True,
+        "phase": phase,
+        "detail": detail,
+        "progress": progress,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        with open(SYNC_STATUS_FILE, "w") as f:
+            _json.dump(status, f)
+    except Exception:
+        pass
+
+
+def _clear_sync_status():
+    """Clear sync status file when sync completes."""
+    import json as _json
+    status = {
+        "syncing": False,
+        "phase": "idle",
+        "detail": "",
+        "progress": 100,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        with open(SYNC_STATUS_FILE, "w") as f:
+            _json.dump(status, f)
+    except Exception:
+        pass
+
 
 def get_client():
     """Authenticate with Garmin Connect, preferring saved tokens."""
@@ -334,12 +371,15 @@ def main():
 
     if not has_tokens and (not GARMIN_EMAIL or not GARMIN_PASSWORD):
         print("No Garmin tokens or credentials configured, skipping sync")
+        _clear_sync_status()
         return
 
     print(f"Starting Garmin sync at {datetime.now(timezone.utc).isoformat()}")
+    _write_sync_status("starting", "Authenticating with Garmin...")
     client = get_client()
     if client is None:
         print("Failed to authenticate with Garmin, skipping sync", file=sys.stderr)
+        _clear_sync_status()
         return
 
     # First sync: full history from 2019. Subsequent syncs: 7 days only.
@@ -358,12 +398,16 @@ def main():
     today = datetime.now(timezone.utc).date()
     for days_ago in range(sync_days):
         date_str = (today - timedelta(days=days_ago)).isoformat()
+        _write_sync_status("daily_stats", f"Syncing {date_str}",
+                           int((days_ago / sync_days) * 50))
         sync_daily_stats(client, db, date_str)
 
     # Garmin API: get_activities(start, limit) — fetch in batches of 100
+    _write_sync_status("activities", "Syncing activities...", 50)
     sync_activities(client, db, days=sync_days)
 
     # Backfill computed fields from raw Garmin JSON
+    _write_sync_status("backfill", "Computing zones & strain...", 80)
     backfill_from_raw_json(db)
 
     db.close()
@@ -373,6 +417,7 @@ def main():
         with open(HISTORY_MARKER, "w") as f:
             f.write(datetime.now(timezone.utc).isoformat())
 
+    _clear_sync_status()
     print("Garmin sync complete")
 
 
