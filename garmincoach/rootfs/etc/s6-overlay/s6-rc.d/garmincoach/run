@@ -63,10 +63,13 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
+# Ensure token directory exists (needed for migration marker)
+mkdir -p /data/garmin-tokens
+
 # Create database if it doesn't exist
-if ! psql -h 127.0.0.1 -U postgres -lqt | cut -d \| -f 1 | grep -qw garmincoach; then
+if ! psql -h 127.0.0.1 -U postgres -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw garmincoach; then
     bashio::log.info "Creating garmincoach database..."
-    createdb -h 127.0.0.1 -U postgres garmincoach
+    createdb -h 127.0.0.1 -U postgres garmincoach 2>/dev/null || true
 fi
 
 # Push schema to database (creates tables if missing)
