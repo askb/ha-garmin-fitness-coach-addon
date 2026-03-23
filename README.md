@@ -116,15 +116,44 @@ Then install **GarminCoach** from the add-on store and start it.
    https://github.com/askb/ha-garmin-fitness-coach-addon
    ```
 3. Click **Add**, then find **GarminCoach** in the store and click **Install**.
-4. Start the addon — it appears in your sidebar automatically.
+4. Wait for the build to complete (~10-15 minutes on aarch64, ~5 min on amd64).
+5. Start the addon — it appears in your sidebar automatically.
+
+### First-Time Setup
+
+1. **Open the addon** from your HA sidebar (or Settings → Add-ons → GarminCoach → Open Web UI).
+2. **Complete the onboarding wizard** (4 steps):
+   - **About You** — age, sex, weight, height
+   - **Your Sports** — select sports and goals for each
+   - **Weekly Schedule** — training days and session duration
+   - **Health & Safety** *(optional)* — health conditions, injuries, medications
+3. **Connect Garmin** — go to **Settings → Connect Garmin**, enter your email
+   and password. If MFA is enabled, enter the verification code when prompted.
+4. **Wait for initial sync** — the first sync pulls your full Garmin history
+   (up to 6+ years). This takes **30-45 minutes** due to Garmin API rate
+   limits. You can monitor progress in Settings (a progress bar shows sync
+   status). Subsequent syncs only pull the last 7 days and take ~30 seconds.
+5. **Restart the addon** after the first sync completes to trigger the
+   metrics compute and HA sensor push.
+
+> **⚠️ Initial Sync Note:** The first sync fetches all your historical Garmin
+> data (daily stats, activities, HR zones) going back to 2019. This is a
+> one-time operation that can take 30-45 minutes due to Garmin Connect API
+> rate limits (7 days per batch request). The addon will show sync progress
+> in Settings. After the initial sync, daily syncs run every 60 minutes
+> (configurable) and complete in under a minute.
+
+> **💡 Tip:** You can trigger a manual sync at any time from
+> **Settings → 🔄 Sync Now** without waiting for the next scheduled interval.
 
 ## Configuration
 
 | Option | Type | Default | Required | Description |
 |---|---|---|---|---|
-| `garmin_email` | email | — | **Yes** | Your Garmin Connect email address |
-| `garmin_password` | password | — | **Yes** | Your Garmin Connect password |
+| `garmin_email` | email | — | No | Your Garmin Connect email (or use web-based login in Settings) |
+| `garmin_password` | password | — | No | Your Garmin Connect password (or use web-based login in Settings) |
 | `ai_backend` | list | `ha_conversation` | No | AI coaching backend (`ha_conversation`, `ollama`, or `none`) |
+| `openclaw_agent_id` | string | — | No | OpenClaw agent ID for HA Conversation API (auto-detected if not set) |
 | `ollama_url` | url | — | No | Ollama server URL (only when `ai_backend` is `ollama`) |
 | `sync_interval_minutes` | integer | `60` | No | How often to pull new data from Garmin (5 – 1440 minutes) |
 
@@ -212,10 +241,11 @@ Seven ready-to-paste HA automations are provided in
 
 | Issue | Details |
 |---|---|
-| **Garmin MFA prompt** | If MFA is enabled on your Garmin account the addon will request the code during the web-based Settings flow. Re-authenticate from Settings if the MFA step is missed. |
+| **First sync is slow** | The initial sync pulls up to 6+ years of Garmin history (daily stats, activities, HR zones). This takes **30-45 minutes** due to API rate limits. Use the 🔄 Sync Now button in Settings to monitor progress. Subsequent syncs take ~30 seconds. |
+| **Garmin MFA prompt** | If MFA is enabled on your Garmin account the addon will request the code during the web-based Settings flow. Enter the code promptly — Garmin's MFA session expires quickly. Re-authenticate from Settings if the MFA step times out. |
 | **Token expiry (~1 year)** | Garmin session tokens expire after approximately one year. The addon will show an alert; re-authenticate from **Settings → Connect Garmin**. |
 | **Rate limiting** | Garmin may temporarily block requests if the sync interval is too aggressive. Keep `sync_interval_minutes` at 30 or above. |
-| **First sync delay** | The initial sync fetches up to 6 years of history and can take several minutes depending on data volume. |
+| **Rebuild vs reinstall** | If changes aren't appearing after a rebuild, do a full **uninstall → install**. Docker may cache stale layers during rebuild. |
 
 ## Development
 
