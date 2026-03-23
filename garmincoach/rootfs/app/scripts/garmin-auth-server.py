@@ -192,6 +192,60 @@ def status():
         return jsonify(connected=False, email="", lastSync="")
 
 
+@app.route("/auth/sync-status", methods=["GET"])
+def sync_status():
+    """Return current sync progress."""
+    status_file = os.path.join(TOKEN_DIR, ".sync_status")
+    try:
+        if os.path.exists(status_file):
+            with open(status_file) as f:
+                data = json.load(f)
+            return jsonify(**data)
+    except Exception:
+        pass
+    return jsonify(syncing=False, phase="idle", detail="", progress=100)
+
+
+@app.route("/auth/sync", methods=["POST"])
+def trigger_sync():
+    """Trigger an immediate Garmin sync in the background."""
+    import subprocess
+
+    # Check if sync is already running
+    status_file = os.path.join(TOKEN_DIR, ".sync_status")
+    try:
+        if os.path.exists(status_file):
+            with open(status_file) as f:
+                data = json.load(f)
+            if data.get("syncing"):
+                return jsonify(success=False, message="Sync already in progress"), 409
+    except Exception:
+        pass
+
+    # Check if tokens exist
+    if not os.path.exists(os.path.join(TOKEN_DIR, "oauth1_token.json")):
+        return jsonify(success=False, message="Not connected to Garmin"), 400
+
+    # Launch sync in background
+    try:
+        env = os.environ.copy()
+        env["DATABASE_URL"] = os.environ.get(
+            "DATABASE_URL",
+            "postgresql://postgres@127.0.0.1:5432/garmincoach"
+        )
+        subprocess.Popen(
+            ["python3", "/app/scripts/garmin-sync.py"],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        log.info("Manual sync triggered")
+        return jsonify(success=True, message="Sync started")
+    except Exception as exc:
+        log.error("Failed to trigger sync: %s", exc)
+        return jsonify(success=False, message=f"Failed to start sync: {exc}"), 500
+
+
 @app.route("/auth/import-tokens", methods=["POST"])
 def import_tokens():
     """Import pre-generated garth tokens (oauth1 + oauth2 JSON)."""
