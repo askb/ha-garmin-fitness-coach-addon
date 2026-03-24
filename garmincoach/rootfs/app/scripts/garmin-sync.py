@@ -128,6 +128,15 @@ def sync_daily_stats(client, db, date_str):
         hrv = client.get_hrv_data(date_str)
         stress = client.get_stress_data(date_str)
 
+        # Debug: log stress field names so we can verify data extraction
+        stress_val = None
+        if stress:
+            stress_val = stress.get("avgStressLevel") or stress.get("averageStressLevel")
+        if not stress_val and stats:
+            stress_val = stats.get("averageStressLevel")
+        if stress_val:
+            print(f"  Stress score for {date_str}: {stress_val}")
+
         sleep_dto = sleep_data.get("dailySleepDTO", {}) if sleep_data else {}
 
         # Ensure unique constraint exists for upsert
@@ -184,7 +193,7 @@ def sync_daily_stats(client, db, date_str):
             _safe_sleep_minutes(sleep_dto, "awakeSleepSeconds"),
             sleep_dto.get("sleepScores", {}).get("overall", {}).get("value"),
             hrv.get("hrvSummary", {}).get("weeklyAvg") if hrv else None,
-            stress.get("averageStressLevel") if stress else None,
+            (stress.get("avgStressLevel") or stress.get("averageStressLevel") or stats.get("averageStressLevel")) if stress else stats.get("averageStressLevel"),
             stats.get("bodyBatteryChargedValue"),
             stats.get("bodyBatteryDrainedValue"),
             stats.get("floorsAscended"),
