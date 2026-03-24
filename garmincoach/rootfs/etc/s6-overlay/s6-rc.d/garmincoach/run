@@ -33,7 +33,10 @@ restore_database() {
             gunzip -c "${SHARE_BACKUP}/garmincoach.sql.gz" | \
                 psql -h 127.0.0.1 -U postgres -d garmincoach -q 2>/dev/null || \
                 bashio::log.warning "Database restore had warnings (may be OK)"
-            bashio::log.info "Database restore complete"
+            # Clean stale computed VO2max — will be re-synced from Garmin API
+            psql -h 127.0.0.1 -U postgres -d garmincoach -qc \
+                "DELETE FROM vo2max_estimate WHERE source IN ('running_pace_hr', 'uth_method');" 2>/dev/null || true
+            bashio::log.info "Database restore complete (stale VO2max cleared)"
         fi
     fi
 }

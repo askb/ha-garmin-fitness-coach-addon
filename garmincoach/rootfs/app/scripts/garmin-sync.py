@@ -364,7 +364,7 @@ def backfill_from_raw_json(db):
 
 
 def sync_vo2max(client, db, days=7):
-    """Compute and upsert VO2max estimates from running activities and daily stats."""
+    """Sync VO2max from Garmin's official max-metrics API, with computed fallback."""
     cur = db.cursor()
     try:
         # Ensure unique constraint exists for upsert
@@ -381,132 +381,126 @@ def sync_vo2max(client, db, days=7):
             END $$;
         """)
 
-        # Delete old (incorrect) VO2max records so they get recalculated
+        # Delete old computed records (keep garmin_official)
         cur.execute("DELETE FROM vo2max_estimate WHERE user_id = %s AND source IN ('running_pace_hr', 'uth_method')", (USER_ID,))
+        db.commit()
 
-        # Fetch user age for age-predicted max HR
-        cur.execute("SELECT age FROM profile WHERE user_id = %s", (USER_ID,))
-        age_row = cur.fetchone()
-        user_age = age_row[0] if age_row and age_row[0] else None
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date()
+        today = datetime.now(timezone.utc).date()
 
-        if not user_age:
-            # Fallback: estimate age from typical resting HR, or use default 35
-            print("  No age in profile — using default age=35 for VO2max estimation")
-            user_age = 35
-
-        age_predicted_max_hr = 220 - user_age
-        print(f"  VO2max calc: age={user_age}, predicted HRmax={age_predicted_max_hr}")
-
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
-
-        # --- Method 1: ACSM running-pace + HR method ---
-        cur.execute("""
-            SELECT id, started_at::date, distance_meters, duration_minutes,
-                   avg_hr, sport_type
-            FROM activity
-            WHERE user_id = %s
-              AND started_at::date >= %s
-              AND sport_type IN ('running', 'trail_running')
-              AND distance_meters IS NOT NULL
-              AND duration_minutes IS NOT NULL
-              AND avg_hr IS NOT NULL
-              AND distance_meters >= 1500
-              AND duration_minutes >= 12
-        """, (USER_ID, cutoff))
-        activities = cur.fetchall()
-
-        acsm_count = 0
-        for idx, (act_id, act_date, distance, duration_min, avg_hr, sport) in enumerate(activities):
-            # Fetch resting HR for the activity date
-            cur.execute("""
-                SELECT resting_hr FROM daily_metric
-                WHERE user_id = %s AND date = %s
-            """, (USER_ID, act_date))
-            row = cur.fetchone()
-            if not row or not row[0]:
-                continue
-            resting_hr = row[0]
-
-            if age_predicted_max_hr <= resting_hr:
-                continue
-
-            # ACSM running VO2 formula
-            speed_m_per_min = distance / duration_min
-            vo2_running = 3.5 + 0.2 * speed_m_per_min
-
-            # Heart rate reserve fraction (using age-predicted max HR)
-            hrr_fraction = (avg_hr - resting_hr) / (age_predicted_max_hr - resting_hr)
-            if hrr_fraction <= 0:
-                continue
-
-            vo2max = vo2_running / hrr_fraction
-
-            # Sanity check
-            if vo2max < 20 or vo2max > 90:
-                continue
-
-            cur.execute("""
-                INSERT INTO vo2max_estimate (
-                    user_id, date, sport, value, source, activity_id
-                ) VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (user_id, date, sport) DO UPDATE SET
-                    value = EXCLUDED.value,
-                    source = EXCLUDED.source,
-                    activity_id = EXCLUDED.activity_id
-            """, (
-                USER_ID, act_date, sport,
-                round(vo2max, 1), "running_pace_hr", act_id,
-            ))
-            acsm_count += 1
-
-            # Commit every 50 records to limit memory
-            if acsm_count % 50 == 0:
-                db.commit()
-
-        # --- Method 2: Uth method from resting HR (batched to limit memory) ---
-        cur.execute("""
-            SELECT date, resting_hr FROM daily_metric
-            WHERE user_id = %s
-              AND date >= %s
-              AND resting_hr IS NOT NULL
-              AND resting_hr > 0
-            ORDER BY date DESC
-        """, (USER_ID, cutoff))
-
-        uth_count = 0
-        while True:
-            daily_rows = cur.fetchmany(100)
-            if not daily_rows:
-                break
-            for d_date, resting_hr in daily_rows:
-                if resting_hr < 30 or resting_hr > 100:
+        # --- Primary: Garmin's official VO2max from max-metrics API ---
+        garmin_count = 0
+        try:
+            d = cutoff
+            while d <= today:
+                date_str = d.isoformat()
+                try:
+                    metrics = client.get_max_metrics(date_str)
+                except Exception:
+                    d += timedelta(days=1)
                     continue
 
-                vo2max_uth = 15.3 * (age_predicted_max_hr / resting_hr)
-
-                if vo2max_uth < 20 or vo2max_uth > 90:
+                if not metrics:
+                    d += timedelta(days=1)
                     continue
 
-                cur.execute("""
-                    INSERT INTO vo2max_estimate (
-                        user_id, date, sport, value, source
-                    ) VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (user_id, date, sport) DO UPDATE SET
-                        value = EXCLUDED.value,
-                        source = EXCLUDED.source
-                """, (
-                    USER_ID, d_date, "general",
-                    round(vo2max_uth, 1), "uth_method",
-                ))
-                uth_count += 1
-            # Commit each batch
+                # get_max_metrics returns a list of metric entries
+                entries = metrics if isinstance(metrics, list) else [metrics]
+                for entry in entries:
+                    vo2 = entry.get("generic", {}).get("vo2MaxPreciseValue") \
+                        or entry.get("generic", {}).get("vo2MaxValue")
+                    sport = "general"
+
+                    if not vo2:
+                        # Try cycling-specific
+                        vo2 = entry.get("cycling", {}).get("vo2MaxPreciseValue") \
+                            or entry.get("cycling", {}).get("vo2MaxValue")
+                        if vo2:
+                            sport = "cycling"
+
+                    if not vo2:
+                        continue
+
+                    vo2 = float(vo2)
+                    if vo2 < 10 or vo2 > 90:
+                        continue
+
+                    metric_date = entry.get("calendarDate", date_str)
+                    cur.execute("""
+                        INSERT INTO vo2max_estimate (
+                            user_id, date, sport, value, source
+                        ) VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (user_id, date, sport) DO UPDATE SET
+                            value = EXCLUDED.value,
+                            source = EXCLUDED.source
+                    """, (USER_ID, metric_date, sport, round(vo2, 1), "garmin_official"))
+                    garmin_count += 1
+
+                if garmin_count % 50 == 0 and garmin_count > 0:
+                    db.commit()
+                d += timedelta(days=1)
+
             db.commit()
+        except Exception as e:
+            print(f"  Garmin max-metrics API failed: {e} — falling back to computed")
+            db.rollback()
 
-        if acsm_count or uth_count:
-            print(f"  VO2max estimates: {acsm_count} ACSM (running), {uth_count} Uth (daily)")
+        # --- Fallback: computed VO2max if Garmin API returned nothing ---
+        if garmin_count == 0:
+            cur2 = db.cursor()
+            try:
+                # Fetch user age for age-predicted max HR
+                cur2.execute("SELECT age FROM profile WHERE user_id = %s", (USER_ID,))
+                age_row = cur2.fetchone()
+                user_age = age_row[0] if age_row and age_row[0] else 35
+                if not (age_row and age_row[0]):
+                    print("  No age in profile — using default age=35")
+
+                age_predicted_max_hr = 220 - user_age
+                print(f"  Fallback VO2max: age={user_age}, HRmax={age_predicted_max_hr}")
+
+                cutoff_str = cutoff.isoformat()
+
+                # Uth method from resting HR (simpler, works without activities)
+                cur2.execute("""
+                    SELECT date, resting_hr FROM daily_metric
+                    WHERE user_id = %s AND date >= %s
+                      AND resting_hr IS NOT NULL AND resting_hr > 30
+                    ORDER BY date DESC
+                """, (USER_ID, cutoff_str))
+
+                uth_count = 0
+                while True:
+                    rows = cur2.fetchmany(100)
+                    if not rows:
+                        break
+                    for d_date, resting_hr in rows:
+                        if resting_hr > 100:
+                            continue
+                        vo2 = 15.3 * (age_predicted_max_hr / resting_hr)
+                        if vo2 < 20 or vo2 > 90:
+                            continue
+                        cur2.execute("""
+                            INSERT INTO vo2max_estimate (
+                                user_id, date, sport, value, source
+                            ) VALUES (%s, %s, %s, %s, %s)
+                            ON CONFLICT (user_id, date, sport) DO UPDATE SET
+                                value = EXCLUDED.value, source = EXCLUDED.source
+                        """, (USER_ID, d_date, "general", round(vo2, 1), "uth_method"))
+                        uth_count += 1
+                    db.commit()
+
+                if uth_count:
+                    print(f"  VO2max fallback: {uth_count} Uth estimates")
+                else:
+                    print("  No VO2max data available (no Garmin metrics, no resting HR)")
+            finally:
+                cur2.close()
+        else:
+            print(f"  VO2max: {garmin_count} official Garmin records synced")
     except Exception as e:
         db.rollback()
-        print(f"  Failed to compute VO2max: {e}", file=sys.stderr)
+        print(f"  Failed to sync VO2max: {e}", file=sys.stderr)
     finally:
         cur.close()
 
