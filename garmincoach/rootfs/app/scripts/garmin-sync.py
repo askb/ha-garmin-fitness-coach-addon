@@ -249,18 +249,35 @@ def sync_activities(client, db, days=7):
                     hr_ratio = avg_hr / 200.0  # Normalized intensity
                     trimp = round(duration_min * hr_ratio * 0.64 * (1.92 ** hr_ratio), 1)
 
+                avg_cadence = (
+                    act.get("averageRunningCadenceInStepsPerMinute")
+                    or act.get("averageBikingCadenceInRevPerMinute")
+                )
+                max_cadence = (
+                    act.get("maxRunningCadenceInStepsPerMinute")
+                    or act.get("maxBikingCadenceInRevPerMinute")
+                )
+
                 cur.execute("""
                     INSERT INTO activity (
                         user_id, garmin_activity_id, sport_type, sub_type,
                         started_at, duration_minutes, distance_meters,
                         avg_hr, max_hr, calories, avg_pace_sec_per_km,
                         aerobic_te, anaerobic_te, hr_zone_minutes,
-                        trimp_score, strain_score, synced_at, raw_garmin_data
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        trimp_score, strain_score,
+                        avg_power, normalized_power, max_power,
+                        avg_cadence, max_cadence,
+                        synced_at, raw_garmin_data
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (garmin_activity_id) DO UPDATE SET
                         hr_zone_minutes = COALESCE(EXCLUDED.hr_zone_minutes, activity.hr_zone_minutes),
                         trimp_score = COALESCE(EXCLUDED.trimp_score, activity.trimp_score),
                         strain_score = COALESCE(EXCLUDED.strain_score, activity.strain_score),
+                        avg_power = COALESCE(EXCLUDED.avg_power, activity.avg_power),
+                        normalized_power = COALESCE(EXCLUDED.normalized_power, activity.normalized_power),
+                        max_power = COALESCE(EXCLUDED.max_power, activity.max_power),
+                        avg_cadence = COALESCE(EXCLUDED.avg_cadence, activity.avg_cadence),
+                        max_cadence = COALESCE(EXCLUDED.max_cadence, activity.max_cadence),
                         synced_at = EXCLUDED.synced_at,
                         raw_garmin_data = EXCLUDED.raw_garmin_data
                 """, (
@@ -280,6 +297,11 @@ def sync_activities(client, db, days=7):
                     hr_zones,
                     trimp,
                     act.get("activityTrainingLoad"),
+                    act.get("averagePower"),
+                    act.get("normPower"),
+                    act.get("maxPower"),
+                    avg_cadence,
+                    max_cadence,
                     datetime.now(timezone.utc).isoformat(),
                     json.dumps(act),
                 ))
