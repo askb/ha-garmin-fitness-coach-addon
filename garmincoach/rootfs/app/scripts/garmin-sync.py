@@ -14,6 +14,7 @@ import json
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 try:
     from garminconnect import Garmin
@@ -119,6 +120,30 @@ def _safe_sleep_minutes(sleep_dto, key):
     return val // 60
 
 
+def _extract_sleep_time(sleep_dto, key):
+    """Extract sleep timestamp and convert to minutes-from-midnight string."""
+    ts = sleep_dto.get(key)
+    if ts is None:
+        return None
+    try:
+        # Garmin returns epoch milliseconds (local time)
+        dt = datetime.fromtimestamp(ts / 1000)
+        minutes = dt.hour * 60 + dt.minute
+        return str(minutes)
+    except (ValueError, TypeError, OSError):
+        return None
+
+
+def _compute_sleep_debt(sleep_dto):
+    """Compute sleep debt = need - actual (in minutes). Positive = deficit."""
+    need = sleep_dto.get("sleepNeedInMinutes")
+    actual_sec = sleep_dto.get("sleepTimeSeconds")
+    if need is None or actual_sec is None:
+        return None
+    actual_min = actual_sec // 60
+    return need - actual_min
+
+
 def sync_daily_stats(client, db, date_str):
     """Sync daily health stats for a given date."""
     cur = db.cursor()
@@ -159,8 +184,10 @@ def sync_daily_stats(client, db, date_str):
                 total_sleep_minutes, deep_sleep_minutes, rem_sleep_minutes,
                 light_sleep_minutes, awake_minutes, sleep_score,
                 hrv, stress_score, body_battery_start, body_battery_end,
-                floors_climbed, intensity_minutes, synced_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                floors_climbed, intensity_minutes,
+                sleep_start_time, sleep_end_time, sleep_need_minutes, sleep_debt_minutes,
+                synced_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, date) DO UPDATE SET
                 steps = EXCLUDED.steps,
                 calories = EXCLUDED.calories,
@@ -178,6 +205,10 @@ def sync_daily_stats(client, db, date_str):
                 body_battery_end = EXCLUDED.body_battery_end,
                 floors_climbed = EXCLUDED.floors_climbed,
                 intensity_minutes = EXCLUDED.intensity_minutes,
+                sleep_start_time = COALESCE(EXCLUDED.sleep_start_time, daily_metric.sleep_start_time),
+                sleep_end_time = COALESCE(EXCLUDED.sleep_end_time, daily_metric.sleep_end_time),
+                sleep_need_minutes = COALESCE(EXCLUDED.sleep_need_minutes, daily_metric.sleep_need_minutes),
+                sleep_debt_minutes = COALESCE(EXCLUDED.sleep_debt_minutes, daily_metric.sleep_debt_minutes),
                 synced_at = EXCLUDED.synced_at
         """, (
             USER_ID,
@@ -198,6 +229,10 @@ def sync_daily_stats(client, db, date_str):
             stats.get("bodyBatteryDrainedValue"),
             stats.get("floorsAscended"),
             stats.get("intensityMinutesGoal"),
+            _extract_sleep_time(sleep_dto, "sleepStartTimestampLocal"),
+            _extract_sleep_time(sleep_dto, "sleepEndTimestampLocal"),
+            sleep_dto.get("sleepNeedInMinutes"),
+            _compute_sleep_debt(sleep_dto),
             datetime.now(timezone.utc).isoformat(),
         ))
         db.commit()
@@ -394,6 +429,71 @@ def backfill_from_raw_json(db):
         cur.close()
 
 
+def backfill_stress_and_sleep(client, db):
+    """One-time backfill: re-fetch stress and sleep timing for dates with NULL values."""
+    MARKER = os.path.join(TOKEN_DIR, ".stress_sleep_backfill_done")
+    if os.path.exists(MARKER):
+        return
+
+    cur = db.cursor()
+    try:
+        cur.execute("""
+            SELECT date FROM daily_metric
+            WHERE user_id = %s
+              AND (stress_score IS NULL OR sleep_start_time IS NULL)
+            ORDER BY date DESC
+            LIMIT 365
+        """, (USER_ID,))
+        dates = [row[0] for row in cur.fetchall()]
+        if not dates:
+            Path(MARKER).touch()
+            return
+
+        print(f"  Backfilling stress/sleep for {len(dates)} dates...")
+        filled = 0
+        for date_str in dates:
+            try:
+                stress = client.get_stress_data(date_str)
+                sleep_data = client.get_sleep_data(date_str)
+                stats = client.get_stats(date_str)
+                sleep_dto = sleep_data.get("dailySleepDTO", {}) if sleep_data else {}
+
+                stress_val = None
+                if stress:
+                    stress_val = stress.get("avgStressLevel") or stress.get("averageStressLevel")
+                if not stress_val and stats:
+                    stress_val = stats.get("averageStressLevel")
+
+                sleep_start = _extract_sleep_time(sleep_dto, "sleepStartTimestampLocal")
+                sleep_end = _extract_sleep_time(sleep_dto, "sleepEndTimestampLocal")
+                sleep_need = sleep_dto.get("sleepNeedInMinutes")
+                sleep_debt = _compute_sleep_debt(sleep_dto)
+
+                cur.execute("""
+                    UPDATE daily_metric SET
+                        stress_score = COALESCE(%s, stress_score),
+                        sleep_start_time = COALESCE(%s, sleep_start_time),
+                        sleep_end_time = COALESCE(%s, sleep_end_time),
+                        sleep_need_minutes = COALESCE(%s, sleep_need_minutes),
+                        sleep_debt_minutes = COALESCE(%s, sleep_debt_minutes)
+                    WHERE user_id = %s AND date = %s
+                """, (stress_val, sleep_start, sleep_end, sleep_need, sleep_debt,
+                      USER_ID, date_str))
+                if stress_val or sleep_start:
+                    filled += 1
+            except Exception:
+                pass  # skip individual date failures
+
+        db.commit()
+        Path(MARKER).touch()
+        print(f"  Backfilled stress/sleep for {filled}/{len(dates)} dates")
+    except Exception as e:
+        db.rollback()
+        print(f"  Stress/sleep backfill failed: {e}", file=sys.stderr)
+    finally:
+        cur.close()
+
+
 def sync_vo2max(client, db, days=7):
     """Sync VO2max from Garmin's official max-metrics API, with computed fallback."""
     cur = db.cursor()
@@ -582,6 +682,9 @@ def main():
     # Backfill computed fields from raw Garmin JSON
     _write_sync_status("backfill", "Computing zones & strain...", 80)
     backfill_from_raw_json(db)
+
+    _write_sync_status("backfill_stress", "Backfilling stress & sleep timing...", 85)
+    backfill_stress_and_sleep(client, db)
 
     _write_sync_status("vo2max", "Computing VO2max estimates...", 90)
     sync_vo2max(client, db, days=sync_days)
