@@ -247,6 +247,43 @@ Seven ready-to-paste HA automations are provided in
 | **Rate limiting** | Garmin may temporarily block requests if the sync interval is too aggressive. Keep `sync_interval_minutes` at 30 or above. |
 | **Rebuild vs reinstall** | If changes aren't appearing after a rebuild, do a full **uninstall → install**. Docker may cache stale layers during rebuild. |
 
+## Data Persistence & Backup
+
+All data is stored in PostgreSQL at `/data/postgresql/` and automatically
+backed up to `/share/garmincoach/` (survives addon uninstalls).
+
+### What Gets Saved
+
+| Data | Location | Backup Path |
+|---|---|---|
+| Daily metrics, activities, VO2max | PostgreSQL `/data/` | `/share/garmincoach/garmincoach.sql.gz` |
+| Athlete Profile & Health info | PostgreSQL `/data/` (profile table) | `/share/garmincoach/garmincoach.sql.gz` |
+| Readiness scores, chat history | PostgreSQL `/data/` | `/share/garmincoach/garmincoach.sql.gz` |
+| Garmin OAuth tokens | `/data/garmin-tokens/` | `/share/garmincoach/garmin-tokens/` |
+
+### When Backups Happen
+
+- **After every Garmin sync** (hourly by default)
+- **On addon shutdown** (graceful stop or HA restart)
+
+### Restore on Reinstall
+
+When the addon starts with an empty database:
+1. Checks `/share/garmincoach/garmincoach.sql.gz` — restores full DB if found
+2. Checks `/share/garmincoach/garmin-tokens/` — restores auth tokens if found
+
+No manual steps needed — data is restored automatically.
+
+### Athlete Profile vs Garmin Data
+
+| Field | Source | User-Editable? |
+|---|---|---|
+| Age, sex, weight, height | User input (Settings page) | ✅ Yes |
+| Goals, weekly schedule | User input (Settings page) | ✅ Yes |
+| Health conditions, injuries, meds | User input (Health & Safety) | ✅ Yes |
+| Resting HR, HRV baselines | Computed from Garmin data | ❌ Auto-calculated |
+| VO2max, lactate threshold | Synced from Garmin API | ❌ Auto-synced |
+
 ## Development
 
 This addon packages the
