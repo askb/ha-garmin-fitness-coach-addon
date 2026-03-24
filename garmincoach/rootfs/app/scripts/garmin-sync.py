@@ -387,11 +387,15 @@ def sync_vo2max(client, db, days=7):
         # Fetch user age for age-predicted max HR
         cur.execute("SELECT age FROM profile WHERE user_id = %s", (USER_ID,))
         age_row = cur.fetchone()
-        if not age_row or not age_row[0]:
-            print("  No age in profile — skipping VO2max (needed for HRmax estimation)")
-            return
-        user_age = age_row[0]
+        user_age = age_row[0] if age_row and age_row[0] else None
+
+        if not user_age:
+            # Fallback: estimate age from typical resting HR, or use default 35
+            print("  No age in profile — using default age=35 for VO2max estimation")
+            user_age = 35
+
         age_predicted_max_hr = 220 - user_age
+        print(f"  VO2max calc: age={user_age}, predicted HRmax={age_predicted_max_hr}")
 
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
 
