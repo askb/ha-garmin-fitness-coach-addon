@@ -381,6 +381,18 @@ def sync_vo2max(client, db, days=7):
             END $$;
         """)
 
+        # Delete old (incorrect) VO2max records so they get recalculated
+        cur.execute("DELETE FROM vo2max_estimate WHERE user_id = %s AND source IN ('running_pace_hr', 'uth_method')", (USER_ID,))
+
+        # Fetch user age for age-predicted max HR
+        cur.execute("SELECT age FROM profile WHERE user_id = %s", (USER_ID,))
+        age_row = cur.fetchone()
+        if not age_row or not age_row[0]:
+            print("  No age in profile — skipping VO2max (needed for HRmax estimation)")
+            return
+        user_age = age_row[0]
+        age_predicted_max_hr = 220 - user_age
+
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
 
         # --- Method 1: ACSM running-pace + HR method ---
@@ -401,25 +413,25 @@ def sync_vo2max(client, db, days=7):
 
         acsm_count = 0
         for idx, (act_id, act_date, distance, duration_min, avg_hr, sport) in enumerate(activities):
-            # Fetch resting HR and max HR for the activity date
+            # Fetch resting HR for the activity date
             cur.execute("""
-                SELECT resting_hr, max_hr FROM daily_metric
+                SELECT resting_hr FROM daily_metric
                 WHERE user_id = %s AND date = %s
             """, (USER_ID, act_date))
             row = cur.fetchone()
-            if not row or not row[0] or not row[1]:
+            if not row or not row[0]:
                 continue
-            resting_hr, max_hr = row
+            resting_hr = row[0]
 
-            if max_hr <= resting_hr:
+            if age_predicted_max_hr <= resting_hr:
                 continue
 
             # ACSM running VO2 formula
             speed_m_per_min = distance / duration_min
             vo2_running = 3.5 + 0.2 * speed_m_per_min
 
-            # Heart rate reserve fraction
-            hrr_fraction = (avg_hr - resting_hr) / (max_hr - resting_hr)
+            # Heart rate reserve fraction (using age-predicted max HR)
+            hrr_fraction = (avg_hr - resting_hr) / (age_predicted_max_hr - resting_hr)
             if hrr_fraction <= 0:
                 continue
 
@@ -449,11 +461,10 @@ def sync_vo2max(client, db, days=7):
 
         # --- Method 2: Uth method from resting HR (batched to limit memory) ---
         cur.execute("""
-            SELECT date, resting_hr, max_hr FROM daily_metric
+            SELECT date, resting_hr FROM daily_metric
             WHERE user_id = %s
               AND date >= %s
               AND resting_hr IS NOT NULL
-              AND max_hr IS NOT NULL
               AND resting_hr > 0
             ORDER BY date DESC
         """, (USER_ID, cutoff))
@@ -463,11 +474,11 @@ def sync_vo2max(client, db, days=7):
             daily_rows = cur.fetchmany(100)
             if not daily_rows:
                 break
-            for d_date, resting_hr, max_hr in daily_rows:
-                if resting_hr <= 0:
+            for d_date, resting_hr in daily_rows:
+                if resting_hr < 30 or resting_hr > 100:
                     continue
 
-                vo2max_uth = 15.3 * (max_hr / resting_hr)
+                vo2max_uth = 15.3 * (age_predicted_max_hr / resting_hr)
 
                 if vo2max_uth < 20 or vo2max_uth > 90:
                     continue
