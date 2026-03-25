@@ -75,9 +75,11 @@ jobs:
           context: garmincoach
           file: garmincoach/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
+          # yamllint disable rule:line-length
           tags: |
             ghcr.io/${{ github.repository_owner }}/garmincoach-addon-${{ matrix.arch }}:${{ steps.config.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/garmincoach-addon-${{ matrix.arch }}:latest
+          # yamllint enable rule:line-length
           build-args: |
             BUILD_FROM=${{ steps.config.outputs.build_from }}
             BUILD_ARCH=${{ matrix.arch }}

@@ -100,7 +100,8 @@ export DATABASE_URL="postgresql://postgres@127.0.0.1:5432/garmincoach"
 export POSTGRES_URL="postgresql://postgres@127.0.0.1:5432/garmincoach"
 export DEV_BYPASS_AUTH="true"
 export NODE_ENV="production"
-export AUTH_SECRET="ha-addon-local-secret-$(cat /proc/sys/kernel/random/boot_id)"
+AUTH_SECRET="ha-addon-local-secret-$(cat /proc/sys/kernel/random/boot_id)"
+export AUTH_SECRET
 export AUTH_DISCORD_ID="unused"
 export AUTH_DISCORD_SECRET="unused"
 
@@ -110,7 +111,7 @@ export HA_BASE_URL="http://supervisor/core"
 
 # ─── Wait for PostgreSQL and initialize database ─────────────────────────────
 bashio::log.info "Waiting for PostgreSQL..."
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
     if pg_isready -h 127.0.0.1 -p 5432 -q; then
         break
     fi
@@ -128,7 +129,9 @@ fi
 
 # Push schema to database (creates tables if missing)
 bashio::log.info "Pushing database schema..."
-cd /app/packages/db && POSTGRES_URL="${POSTGRES_URL}" npx drizzle-kit push --force 2>&1 || bashio::log.warning "Schema push had warnings"
+if ! { cd /app/packages/db && POSTGRES_URL="${POSTGRES_URL}" npx drizzle-kit push --force 2>&1; }; then
+    bashio::log.warning "Schema push had warnings"
+fi
 
 # Restore database from /share/ backup if this is a fresh install
 restore_database "check"
@@ -252,7 +255,7 @@ esac
 
 # ─── Start Next.js ────────────────────────────────────────────────────────────
 bashio::log.info "Starting GarminCoach..."
-cd /app/apps/nextjs
+cd /app/apps/nextjs || exit
 
 # Start Next.js on internal port (not exposed to ingress)
 export HOSTNAME="127.0.0.1"
@@ -262,7 +265,7 @@ NEXTJS_PID=$!
 
 # Wait for Next.js to be ready
 bashio::log.info "Waiting for Next.js..."
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
     if curl -s -o /dev/null http://127.0.0.1:3001/; then
         break
     fi
@@ -322,7 +325,7 @@ while true; do
 
     if ! kill -0 "$NEXTJS_PID" 2>/dev/null; then
         bashio::log.warning "Next.js died, restarting..."
-        cd /app/apps/nextjs
+        cd /app/apps/nextjs || exit
         HOSTNAME="127.0.0.1" PORT="3001" node server.js &
         NEXTJS_PID=$!
     fi

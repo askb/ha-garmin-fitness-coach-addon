@@ -2,6 +2,13 @@
 # SPDX-FileCopyrightText: 2025 Anil Belur <askb23@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
 
+# Exclude auto-generated lock files from all hooks
+exclude: >-
+  (?x)^(
+    \.github/workflows/garmin-addon-review\.lock\.yml|
+    \.github/workflows/garmin-addon-daily-health\.lock\.yml
+  )$
+
 ci:
   autofix_commit_msg: |
     Chore: pre-commit autofixes
