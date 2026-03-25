@@ -1,7 +1,13 @@
 # SPDX-FileCopyrightText: 2025 Anil Belur <askb23@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
 
-# AI Coding Agent Instructions
+# Agent Development Guidelines
+
+## Constitution
+
+If `.specify/memory/constitution.md` exists in this repository, read it and
+follow its principles. The constitution takes precedence over this file if
+there is any conflict between the two documents.
 
 ## Project Overview
 
@@ -73,15 +79,60 @@ Tests are in `tests/` directory:
 
 ## Commit Conventions
 
-- Conventional Commits: `Feat:`, `Fix:`, `Chore:`, `Docs:`, etc.
-- Title max 72 chars, body max 72 chars per line
-- Required: `Signed-off-by: Anil Belur <askb23@gmail.com>`
-- Change-Id trailer added automatically
+This project follows the
+[seven rules of a great Git commit message](https://chris.beams.io/posts/git-commit/).
+
+### Conventional Commit Format
+
+```plaintext
+Type(scope): Short imperative description
+
+Body explaining what and why. Wrap at 72 characters.
+URLs on their own line are exempt from the wrap limit.
+
+Co-authored-by: <AI Model Name> <appropriate-email@provider.com>
+Signed-off-by: Anil Belur <askb23@gmail.com>
+```
+
+**Allowed types** (capitalized, enforced by gitlint):
+`Fix`, `Feat`, `Chore`, `Docs`, `Style`, `Refactor`, `Perf`, `Test`,
+`Revert`, `CI`, `Build`
+
+### Co-Authorship
+
+All AI-assisted commits MUST include a `Co-authored-by` trailer:
+
+| Model   | Co-authored-by |
+|---------|----------------|
+| Copilot | `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` |
+| Claude  | `Co-authored-by: Claude <claude@anthropic.com>` |
+| ChatGPT | `Co-authored-by: ChatGPT <chatgpt@openai.com>` |
+| Gemini  | `Co-authored-by: Gemini <gemini@google.com>` |
+
+### DCO Sign-off
+
+Always use `git commit -s`: `Signed-off-by: Anil Belur <askb23@gmail.com>`
+
+## Atomic Commits
+
+Each commit MUST represent exactly one logical change:
+
+- ✅ One feature per commit
+- ✅ One bug fix per commit
+- ❌ Multiple unrelated changes in one commit
 
 ## Pre-commit
 
 Run `pre-commit run --all-files`. Hooks: yamllint, gitlint, shellcheck,
 REUSE compliance, actionlint.
+
+### If Pre-Commit Fails
+
+1. Fix the issues identified by the hooks
+2. Stage the fixes: `git add <files>`
+3. Commit again (hooks will re-run)
+
+Using `--no-verify` is **PROHIBITED**.
 
 ## Important Files
 
