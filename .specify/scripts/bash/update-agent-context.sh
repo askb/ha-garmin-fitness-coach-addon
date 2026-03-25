@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
+##############################################################################
+# update-agent-context.sh
+#
+# Aggregates technical information from all specs/*/plan.md files into
+# .github/copilot-instructions.md (or a specified output file).
+# Preserves manual additions between <!-- MANUAL START --> and
+# <!-- MANUAL END --> markers.
+#
+# Usage: update-agent-context.sh [--output <path>]
+##############################################################################
+
+set -euo pipefail
+IFS=$'\n\t'
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+OUTPUT_FILE=".github/copilot-instructions.md"
+
+function usage() {
+    echo "Usage: $(basename "$0") [OPTIONS]"
+    echo ""
+    echo "Aggregate spec plan data into agent context file."
+    echo ""
+    echo "Options:"
+    echo "  --output <path>  Output file path (default: .github/copilot-instructions.md)"
+    echo "  -h, --help       Show this help"
+    exit 0
+}
+
+function extract_manual_section() {
+    local file="$1"
+    if [[ ! -f "$file" ]]; then
+        echo ""
+        return
+    fi
+
+    local in_manual=false
+    local manual_content=""
+
+    while IFS= read -r line; do
+        if [[ "$line" == *"<!-- MANUAL START -->"* ]]; then
+            in_manual=true
+            continue
+        fi
+        if [[ "$line" == *"<!-- MANUAL END -->"* ]]; then
+            in_manual=false
+            continue
+        fi
+        if [[ "$in_manual" == "true" ]]; then
+            manual_content="${manual_content}${line}"$'\n'
+        fi
+    done < "$file"
+
+    echo "$manual_content"
+}
+
+function extract_tech_context() {
+    local plan_file="$1"
+    local spec_id
+    spec_id="$(basename "$(dirname "$plan_file")")"
+
+    # Extract the Technical Context and Architecture Decisions sections
+    local in_section=false
+    local section_content=""
+    local current_heading=""
+
+    while IFS= read -r line; do
+        # Detect section headings
+        if [[ "$line" =~ ^##[[:space:]]+(Technical\ Context|Architecture\ Decisions) ]]; then
+            in_section=true
+            current_heading="${BASH_REMATCH[1]}"
+            section_content="${section_content}### ${spec_id}: ${current_heading}"$'\n'$'\n'
+            continue
+        fi
+
+        # Stop at next ## heading
+        if [[ "$line" =~ ^##[[:space:]] ]] && [[ "$in_section" == "true" ]]; then
+            in_section=false
+            section_content="${section_content}"$'\n'
+            continue
+        fi
+
+        if [[ "$in_section" == "true" ]]; then
+            section_content="${section_content}${line}"$'\n'
+        fi
+    done < "$plan_file"
+
+    echo "$section_content"
+}
+
+function main() {
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --output)
+                OUTPUT_FILE="$2"
+                shift 2
+                ;;
+            -h|--help)
+                usage
+                ;;
+            *)
+                echo "ERROR: Unknown argument: $1" >&2
+                exit 1
+                ;;
+        esac
+    done
+
+    cd "${REPO_ROOT}"
+
+    # Preserve manual section from existing file
+    local manual_content=""
+    if [[ -f "$OUTPUT_FILE" ]]; then
+        manual_content="$(extract_manual_section "$OUTPUT_FILE")"
+    fi
+
+    # Find all plan.md files
+    local plans=()
+    if [[ -d "specs" ]]; then
+        while IFS= read -r plan; do
+            plans+=("$plan")
+        done < <(find specs -name "plan.md" -type f 2>/dev/null | sort)
+    fi
+
+    # Build the active specs table
+    local specs_table="| Spec ID | Has Spec | Has Plan | Has Tasks |"$'\n'
+    specs_table="${specs_table}| ------- | -------- | -------- | --------- |"$'\n'
+
+    if [[ -d "specs" ]]; then
+        while IFS= read -r spec_dir; do
+            local sid
+            sid="$(basename "$spec_dir")"
+            local has_spec="❌"
+            local has_plan="❌"
+            local has_tasks="❌"
+            [[ -f "${spec_dir}/spec.md" ]] && has_spec="✅"
+            [[ -f "${spec_dir}/plan.md" ]] && has_plan="✅"
+            [[ -f "${spec_dir}/tasks.md" ]] && has_tasks="✅"
+            specs_table="${specs_table}| ${sid} | ${has_spec} | ${has_plan} | ${has_tasks} |"$'\n'
+        done < <(find specs -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
+    fi
+
+    # Aggregate tech context from all plans
+    local aggregated_context=""
+    for plan in "${plans[@]}"; do
+        aggregated_context="${aggregated_context}$(extract_tech_context "$plan")"$'\n'
+    done
+
+    # Generate timestamp
+    local timestamp
+    timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+    # Write output file
+    mkdir -p "$(dirname "$OUTPUT_FILE")"
+
+    cat > "$OUTPUT_FILE" << EOF
+<!--
+SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
+SPDX-License-Identifier: Apache-2.0
+-->
+
+# Agent Context — HA Garmin Fitness Coach Addon
+
+> Auto-generated by \`update-agent-context.sh\` on ${timestamp}.
+> Manual edits between \`<!-- MANUAL START -->\` and \`<!-- MANUAL END -->\`
+> markers will be preserved across regeneration.
+
+---
+
+## Active Feature Specifications
+
+${specs_table}
+
+---
+
+## Technical Stack
+
+| Component | Technology | Version |
+| --------- | ---------- | ------- |
+| Runtime | Python | 3.11+ |
+| AI/Coaching | TypeScript | (optional) |
+| Container | Docker | multi-arch |
+| Supervisor | s6-overlay | v3 |
+| Database | PostgreSQL / SQLite | — |
+| Web | aiohttp | — |
+| Platform | Home Assistant | 2024.1+ |
+
+---
+
+## Aggregated Technical Context
+
+${aggregated_context:-_No plan.md files found in specs/._}
+
+---
+
+<!-- MANUAL START -->
+${manual_content:-
+## Custom Context
+
+Add any additional context below that should persist across regeneration.
+}
+<!-- MANUAL END -->
+EOF
+
+    echo "✅ Agent context updated: ${OUTPUT_FILE}"
+    echo "   Plans processed: ${#plans[@]}"
+    echo "   Timestamp: ${timestamp}"
+}
+
+main "$@"
