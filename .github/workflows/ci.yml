@@ -20,7 +20,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install test dependencies
-        run: pip install pytest psycopg2-binary
+        run: pip install pytest psycopg2-binary garminconnect
 
       - name: Run tests
         run: pytest garmincoach/rootfs/app/tests/ -v
@@ -30,8 +30,14 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
+      - name: Read build config
+        id: config
+        run: |
+          BUILD_FROM=$(python3 -c "import json; print(json.load(open('garmincoach/build.json'))['build_from']['amd64'])")
+          echo "build_from=${BUILD_FROM}" >> "$GITHUB_OUTPUT"
+
       - name: Build Docker image
-        run: docker build -t garmincoach-test garmincoach/
+        run: docker build --build-arg BUILD_FROM=${{ steps.config.outputs.build_from }} -t garmincoach-test garmincoach/
 
       - name: Smoke test container
         run: |
