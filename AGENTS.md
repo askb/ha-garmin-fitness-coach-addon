@@ -13,7 +13,8 @@ there is any conflict between the two documents.
 
 Home Assistant addon that packages the GarminCoach fitness coaching app
 for easy installation on HAOS. Uses s6-overlay for process management,
-SQLite for storage, and HA Conversation API (OpenClaw/Claude) for AI.
+embedded PostgreSQL for storage, and HA Conversation API
+(OpenClaw/Claude) for AI.
 
 ## Repository Structure
 
