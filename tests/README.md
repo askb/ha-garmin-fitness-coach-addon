@@ -25,6 +25,8 @@ pytest tests/ -v -m unit
 ```
 tests/
 ├── conftest.py                # Shared fixtures (mock Garmin client, DB, env vars)
+├── test_garmin_sync.py        # Tests for _safe_sleep_minutes, sync_daily_stats,
+│                              # sync_activities, sync_vo2max, backfill_from_raw_json
 ├── unit/
 │   └── test_garmin_sync.py    # Tests for the Python Garmin sync script
 └── README.md
