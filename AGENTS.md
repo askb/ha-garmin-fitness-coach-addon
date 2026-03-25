@@ -94,9 +94,11 @@ Co-authored-by: <AI Model Name> <appropriate-email@provider.com>
 Signed-off-by: Anil Belur <askb23@gmail.com>
 ```
 
-**Allowed types** (capitalized, enforced by gitlint):
-`Fix`, `Feat`, `Chore`, `Docs`, `Style`, `Refactor`, `Perf`, `Test`,
-`Revert`, `CI`, `Build`
+**Allowed types** (case-insensitive, enforced by semantic PR check):
+`fix`, `feat`, `chore`, `docs`, `style`, `refactor`, `perf`, `test`,
+`revert`, `ci`, `build`
+
+**Use lowercase** for PR titles and commit messages (e.g., `feat: add feature`).
 
 ### Co-Authorship
 

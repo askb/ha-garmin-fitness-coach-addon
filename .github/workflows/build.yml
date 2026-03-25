@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GARMIN_COACH_REPO: askb/garmin-coach
+  GARMIN_COACH_REPO: askb/ha-garmin-fitness-coach-app
   GARMIN_COACH_REF: main
 
 jobs:

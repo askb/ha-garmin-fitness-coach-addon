@@ -19,8 +19,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install pytest
-        run: pip install pytest
+      - name: Install test dependencies
+        run: pip install pytest psycopg2-binary
 
       - name: Run tests
         run: pytest garmincoach/rootfs/app/tests/ -v

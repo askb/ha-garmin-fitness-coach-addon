@@ -75,6 +75,7 @@ jobs:
         uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: garmincoach/Dockerfile
+          failure-threshold: error
 
   lint-json:
     name: 'JSON Lint'
