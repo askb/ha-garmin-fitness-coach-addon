@@ -39,6 +39,7 @@ repos:
     rev: v1.35.1
     hooks:
       - id: yamllint
+        exclude: ^\.github/workflows/.*\.lock\.yml$
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.10.0.1
@@ -55,3 +56,4 @@ repos:
     rev: v1.7.7
     hooks:
       - id: actionlint
+        exclude: ^\.github/workflows/.*\.lock\.yml$
