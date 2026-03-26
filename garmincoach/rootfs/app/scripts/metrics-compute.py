@@ -93,7 +93,7 @@ def fetch_daily_loads(cur, user_id):
         WHERE user_id = %s AND date IS NOT NULL
         ORDER BY date ASC
     """, (user_id,))
-    daily_rows = {row[0]: float(row[1]) for row in cur.fetchall()}
+    daily_rows = {row['date']: float(row['load']) for row in cur.fetchall()}
 
     # Fill in from activity TRIMP where daily_metric has no garmin_training_load
     cur.execute("""
@@ -105,7 +105,7 @@ def fetch_daily_loads(cur, user_id):
         ORDER BY activity_date ASC
     """, (user_id,))
     for row in cur.fetchall():
-        d, trimp = row[0], float(row[1])
+        d, trimp = row['activity_date'], float(row['total_trimp'])
         if d in daily_rows and daily_rows[d] == 0 and trimp > 0:
             daily_rows[d] = trimp
 
@@ -171,7 +171,7 @@ def compute_effective_vo2max(cur, user_id) -> dict:
         GROUP BY d
         ORDER BY d ASC
     """, (user_id,))
-    return {row[0]: float(row[1]) for row in cur.fetchall()}
+    return {row['d']: float(row['vo2max']) for row in cur.fetchall()}
 
 
 def compute_critical_power(cur, user_id) -> dict:
@@ -201,7 +201,9 @@ def compute_critical_power(cur, user_id) -> dict:
 
     observations = []
     for row in rows:
-        d_str, dur_min, avg_pwr, norm_pwr = row
+        d_str, dur_min, avg_pwr, norm_pwr = (
+            row['d'], row['duration_minutes'], row['avg_power'], row['normalized_power']
+        )
         pwr = norm_pwr if norm_pwr else avg_pwr
         bucket = min(int(dur_min / 10) * 10, 120)
         observations.append((date.fromisoformat(d_str), bucket, float(pwr)))
@@ -295,7 +297,7 @@ def run_compute(user_id: str):
     """Run a full metrics computation pass."""
     print(f"[metrics-compute] Computing advanced metrics for user {user_id}...")
     db = get_db()
-    cur = db.cursor()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         ensure_advanced_metric_table(cur)
         daily_loads = fetch_daily_loads(cur, user_id)
