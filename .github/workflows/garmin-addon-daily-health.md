@@ -78,6 +78,17 @@ Create a concise daily health report as a GitHub issue covering:
 - Flag any Python scripts missing type hints
 - Note any s6 services missing proper shutdown handling
 
+### 7. Spec Kit Health
+- List all active specs in `specs/` directory (skip `.gitkeep`)
+- For each spec directory, check completeness:
+  - ✅ Has `spec.md` (requirements defined)
+  - ✅ Has `plan.md` (implementation planned)
+  - ✅ Has `tasks.md` (work breakdown exists)
+  - ⚠️ Missing any of the above
+- Check `tasks.md` files for unchecked items (`- [ ]`) — report count of pending vs done
+- Flag specs not modified in the last 14 days as potentially stale
+- If `specs/` is empty (only `.gitkeep`), note "No active feature specs — consider creating specs for planned work"
+
 ### Format
 Use clear headings, bullet points, and emoji status indicators:
 - ✅ Healthy

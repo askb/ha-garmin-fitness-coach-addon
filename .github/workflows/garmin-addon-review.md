@@ -78,6 +78,12 @@ pushes 7 HA sensors via the Supervisor REST API.
 - Shell scripts must use `set -euo pipefail`
 - Check for TODO/FIXME/HACK comments that should be resolved
 
+### Spec Kit Compliance
+- Check if the PR branch name matches pattern `speckit/NNN-*` or `feat/NNN-*`
+- If so, verify `specs/NNN-*/` directory exists with at least `spec.md`
+- If the PR modifies files related to a spec, check that `tasks.md` is being updated
+- For any new features (not bug fixes), suggest creating a spec if none exists
+
 3. **Post a single review comment** summarizing:
    - ✅ What looks good
    - ⚠️ Warnings (non-blocking suggestions)
