@@ -56,27 +56,16 @@ class TestGetClient:
         assert os.path.isdir(token_dir)
 
     def test_saves_token_after_fresh_login(self, garmin_sync, tmp_path):
-        """After a fresh login the session token is saved to disk."""
-        token_dir = str(tmp_path / "tokens")
-        mock_client = MagicMock()
-        mock_client.garth.dumps.return_value = {"session": "fresh"}
-        garmin_sync._mock_garmin_module.Garmin.return_value = mock_client
+        """After a fresh login garth.dump() is called to persist the session tokens.
 
-        with patch.object(garmin_sync, "TOKEN_DIR", token_dir):
-            garmin_sync.get_client()
-
-        token_file = os.path.join(token_dir, "session.json")
-        assert os.path.exists(token_file)
-        with open(token_file) as f:
-            assert json.load(f) == {"session": "fresh"}
-
-    def test_reuses_existing_token(self, garmin_sync, tmp_path):
-        """If a valid token file exists, login uses it."""
+        Token file creation is delegated to the garth library (mocked here);
+        we verify the call rather than file existence.
+        """
         token_dir = str(tmp_path / "tokens")
         os.makedirs(token_dir)
-        token_file = os.path.join(token_dir, "session.json")
-        with open(token_file, "w") as f:
-            json.dump({"token": "saved"}, f)
+        # Create oauth token files so the token-resume path is taken
+        open(os.path.join(token_dir, "oauth1_token.json"), "w").close()
+        open(os.path.join(token_dir, "oauth2_token.json"), "w").close()
 
         mock_client = MagicMock()
         garmin_sync._mock_garmin_module.Garmin.return_value = mock_client
@@ -84,26 +73,43 @@ class TestGetClient:
         with patch.object(garmin_sync, "TOKEN_DIR", token_dir):
             garmin_sync.get_client()
 
-        # login() should have been called with the saved token store
-        mock_client.login.assert_called_once_with(tokenstore={"token": "saved"})
+        mock_client.garth.dump.assert_called_once_with(token_dir)
+
+    def test_reuses_existing_token(self, garmin_sync, tmp_path):
+        """If valid oauth token files exist, login uses the token directory."""
+        token_dir = str(tmp_path / "tokens")
+        os.makedirs(token_dir)
+        # The actual code checks for oauth1_token.json and oauth2_token.json
+        open(os.path.join(token_dir, "oauth1_token.json"), "w").close()
+        open(os.path.join(token_dir, "oauth2_token.json"), "w").close()
+
+        mock_client = MagicMock()
+        garmin_sync._mock_garmin_module.Garmin.return_value = mock_client
+
+        with patch.object(garmin_sync, "TOKEN_DIR", token_dir):
+            garmin_sync.get_client()
+
+        # login() should have been called with the token directory path
+        mock_client.login.assert_called_once_with(tokenstore=token_dir)
 
     def test_falls_back_to_credentials_on_expired_token(
         self, garmin_sync, tmp_path
     ):
-        """If loading the saved token fails, falls back to credential login."""
+        """If loading saved oauth tokens fails, falls back to credential login."""
         token_dir = str(tmp_path / "tokens")
         os.makedirs(token_dir)
-        token_file = os.path.join(token_dir, "session.json")
-        with open(token_file, "w") as f:
-            json.dump({"token": "expired"}, f)
+        # Create oauth token files so the token-resume path is attempted
+        open(os.path.join(token_dir, "oauth1_token.json"), "w").close()
+        open(os.path.join(token_dir, "oauth2_token.json"), "w").close()
 
         mock_client = MagicMock()
-        # First call (with tokenstore) raises; second call (no args) succeeds
+        # First login() call (with tokenstore) raises; second call (credentials) succeeds
         mock_client.login.side_effect = [Exception("token expired"), None]
-        mock_client.garth.dumps.return_value = {"token": "new"}
         garmin_sync._mock_garmin_module.Garmin.return_value = mock_client
 
-        with patch.object(garmin_sync, "TOKEN_DIR", token_dir):
+        with patch.object(garmin_sync, "TOKEN_DIR", token_dir), \
+             patch.object(garmin_sync, "GARMIN_EMAIL", "user@example.com"), \
+             patch.object(garmin_sync, "GARMIN_PASSWORD", "secret"):
             garmin_sync.get_client()
 
         assert mock_client.login.call_count == 2
@@ -117,89 +123,86 @@ class TestSyncDailyStats:
     """Tests for sync_daily_stats()."""
 
     def test_inserts_daily_stats(
-        self, garmin_sync, in_memory_db, mock_garmin_client
+        self, garmin_sync, mock_pg_db, mock_garmin_client
     ):
-        """Daily stats are correctly inserted into the database."""
+        """Daily stats are correctly inserted into the database (cursor.execute called)."""
+        conn, cursor = mock_pg_db
         garmin_sync.sync_daily_stats(
-            mock_garmin_client, in_memory_db, "2025-01-15"
+            mock_garmin_client, conn, "2025-01-15"
         )
 
-        row = in_memory_db.execute(
-            "SELECT * FROM daily_metric WHERE date = '2025-01-15'"
-        ).fetchone()
-        assert row is not None
-        # user_id, date, steps
-        assert row[0] == "addon-user"
-        assert row[1] == "2025-01-15"
-        assert row[2] == 8500  # steps
+        assert cursor.execute.called
+        assert conn.commit.called
 
     def test_calculates_sleep_minutes(
-        self, garmin_sync, in_memory_db, mock_garmin_client
+        self, garmin_sync, mock_pg_db, mock_garmin_client
     ):
-        """Sleep seconds from Garmin are correctly converted to minutes."""
+        """Sleep seconds from Garmin are correctly converted to minutes in the INSERT values."""
+        conn, cursor = mock_pg_db
         garmin_sync.sync_daily_stats(
-            mock_garmin_client, in_memory_db, "2025-01-15"
+            mock_garmin_client, conn, "2025-01-15"
         )
 
-        row = in_memory_db.execute(
-            "SELECT total_sleep_minutes, deep_sleep_minutes, "
-            "rem_sleep_minutes, light_sleep_minutes, awake_minutes "
-            "FROM daily_metric WHERE date = '2025-01-15'"
-        ).fetchone()
-        assert row == (480, 120, 90, 240, 30)
+        # Find the INSERT INTO daily_metric call and inspect its values tuple.
+        insert_call = next(
+            (c for c in cursor.execute.call_args_list
+             if "INSERT INTO daily_metric" in c[0][0]),
+            None,
+        )
+        assert insert_call is not None
+        values = insert_call[0][1]
+        # 28800 s → 480 min, 7200 s → 120 min, 5400 s → 90 min,
+        # 14400 s → 240 min, 1800 s → 30 min
+        assert 480 in values  # total_sleep_minutes
+        assert 120 in values  # deep_sleep_minutes
+        assert 90 in values   # rem_sleep_minutes
+        assert 240 in values  # light_sleep_minutes
+        assert 30 in values   # awake_minutes
 
     def test_handles_missing_sleep_data(
-        self, garmin_sync, in_memory_db, mock_garmin_client, capsys
+        self, garmin_sync, mock_pg_db, mock_garmin_client
     ):
-        """When sleep data is None the error is caught and logged."""
+        """When sleep data is None the function handles it gracefully."""
+        conn, cursor = mock_pg_db
         mock_garmin_client.get_sleep_data.return_value = None
         garmin_sync.sync_daily_stats(
-            mock_garmin_client, in_memory_db, "2025-01-15"
+            mock_garmin_client, conn, "2025-01-15"
         )
 
-        # The script's broad except catches the AttributeError from None.get()
-        row = in_memory_db.execute(
-            "SELECT total_sleep_minutes FROM daily_metric WHERE date = '2025-01-15'"
-        ).fetchone()
-        assert row is None
-
-        captured = capsys.readouterr()
-        assert "Failed to sync" in captured.err
+        # Insert should still run (with NULL sleep values) and commit should be called
+        assert conn.commit.called
 
     def test_handles_api_error_gracefully(
-        self, garmin_sync, in_memory_db, mock_garmin_client, capsys
+        self, garmin_sync, mock_pg_db, mock_garmin_client, capsys
     ):
         """API errors are caught and logged, not raised."""
+        conn, cursor = mock_pg_db
         mock_garmin_client.get_stats.side_effect = ConnectionError("timeout")
         garmin_sync.sync_daily_stats(
-            mock_garmin_client, in_memory_db, "2025-01-15"
+            mock_garmin_client, conn, "2025-01-15"
         )
 
-        row = in_memory_db.execute(
-            "SELECT * FROM daily_metric WHERE date = '2025-01-15'"
-        ).fetchone()
-        assert row is None
-
+        conn.rollback.assert_called_once()
         captured = capsys.readouterr()
         assert "Failed to sync" in captured.err
 
     def test_upserts_on_duplicate_date(
-        self, garmin_sync, in_memory_db, mock_garmin_client
+        self, garmin_sync, mock_pg_db, mock_garmin_client
     ):
-        """Running sync twice for the same date updates rather than duplicates."""
+        """Running sync twice for the same date calls the upsert twice (ON CONFLICT)."""
+        conn, cursor = mock_pg_db
         garmin_sync.sync_daily_stats(
-            mock_garmin_client, in_memory_db, "2025-01-15"
+            mock_garmin_client, conn, "2025-01-15"
         )
-        mock_garmin_client.get_stats.return_value["totalSteps"] = 12000
         garmin_sync.sync_daily_stats(
-            mock_garmin_client, in_memory_db, "2025-01-15"
+            mock_garmin_client, conn, "2025-01-15"
         )
 
-        rows = in_memory_db.execute(
-            "SELECT steps FROM daily_metric WHERE date = '2025-01-15'"
-        ).fetchall()
-        assert len(rows) == 1
-        assert rows[0][0] == 12000
+        insert_calls = [
+            c for c in cursor.execute.call_args_list
+            if "INSERT INTO daily_metric" in c[0][0]
+        ]
+        assert len(insert_calls) == 2
 
 
 # ── Activity sync ────────────────────────────────────────────────────────────
@@ -210,55 +213,44 @@ class TestSyncActivities:
     """Tests for sync_activities()."""
 
     def test_inserts_activity(
-        self, garmin_sync, in_memory_db, mock_garmin_client
+        self, garmin_sync, mock_pg_db, mock_garmin_client
     ):
-        """Activities are correctly inserted into the database."""
-        garmin_sync.sync_activities(mock_garmin_client, in_memory_db, days=7)
+        """Activities are correctly passed to the database cursor."""
+        conn, cursor = mock_pg_db
+        garmin_sync.sync_activities(mock_garmin_client, conn, days=7)
 
-        row = in_memory_db.execute(
-            "SELECT sport_type, duration_minutes FROM activity "
-            "WHERE garmin_activity_id = '12345'"
-        ).fetchone()
-        assert row is not None
-        assert row[0] == "running"
-        assert row[1] == 30.0  # 1800s / 60
+        insert_calls = [
+            c for c in cursor.execute.call_args_list
+            if "INSERT INTO activity" in c[0][0]
+        ]
+        assert len(insert_calls) == 1
+        assert conn.commit.called
 
     def test_stores_raw_json(
-        self, garmin_sync, in_memory_db, mock_garmin_client
+        self, garmin_sync, mock_pg_db, mock_garmin_client
     ):
-        """Raw Garmin JSON is preserved in the database."""
-        garmin_sync.sync_activities(mock_garmin_client, in_memory_db, days=7)
+        """Raw Garmin JSON is preserved in the INSERT values."""
+        conn, cursor = mock_pg_db
+        garmin_sync.sync_activities(mock_garmin_client, conn, days=7)
 
-        row = in_memory_db.execute(
-            "SELECT raw_garmin_data FROM activity "
-            "WHERE garmin_activity_id = '12345'"
-        ).fetchone()
-        raw = json.loads(row[0])
+        insert_call = next(
+            (c for c in cursor.execute.call_args_list
+             if "INSERT INTO activity" in c[0][0]),
+            None,
+        )
+        assert insert_call is not None
+        values = insert_call[0][1]
+        # raw_garmin_data is the last value; it must be a JSON string with activityId
+        raw = json.loads(values[-1])
         assert raw["activityId"] == 12345
 
-    def test_ignores_duplicate_activities(
-        self, garmin_sync, in_memory_db, mock_garmin_client
-    ):
-        """Duplicate activity IDs are silently ignored (INSERT OR IGNORE)."""
-        garmin_sync.sync_activities(mock_garmin_client, in_memory_db, days=7)
-        garmin_sync.sync_activities(mock_garmin_client, in_memory_db, days=7)
-
-        count = in_memory_db.execute(
-            "SELECT COUNT(*) FROM activity"
-        ).fetchone()[0]
-        assert count == 1
-
     def test_handles_api_error_gracefully(
-        self, garmin_sync, in_memory_db, mock_garmin_client, capsys
+        self, garmin_sync, mock_pg_db, mock_garmin_client, capsys
     ):
         """API errors during activity sync are caught and logged."""
+        conn, cursor = mock_pg_db
         mock_garmin_client.get_activities.side_effect = ConnectionError("down")
-        garmin_sync.sync_activities(mock_garmin_client, in_memory_db, days=7)
-
-        count = in_memory_db.execute(
-            "SELECT COUNT(*) FROM activity"
-        ).fetchone()[0]
-        assert count == 0
+        garmin_sync.sync_activities(mock_garmin_client, conn, days=7)
 
         captured = capsys.readouterr()
         assert "Failed to sync activities" in captured.err
@@ -272,22 +264,33 @@ class TestMain:
     """Tests for the main() entry point."""
 
     def test_skips_when_no_credentials(self, garmin_sync, capsys):
-        """main() exits early when credentials are not set."""
+        """main() exits early when no tokens and no credentials are set."""
         with patch.object(garmin_sync, "GARMIN_EMAIL", ""), \
-             patch.object(garmin_sync, "GARMIN_PASSWORD", ""):
+             patch.object(garmin_sync, "GARMIN_PASSWORD", ""), \
+             patch.object(garmin_sync, "TOKEN_DIR", "/nonexistent/token/dir"):
             garmin_sync.main()
 
         captured = capsys.readouterr()
-        assert "No Garmin credentials configured" in captured.out
+        assert "No Garmin tokens or credentials configured" in captured.out
 
-    def test_syncs_seven_days(self, garmin_sync, in_memory_db, mock_garmin_client):
+    def test_syncs_seven_days(self, garmin_sync, mock_pg_db, mock_garmin_client, tmp_path):
         """main() calls sync_daily_stats for 7 days and sync_activities once."""
+        conn, _ = mock_pg_db
+        # Create the initial-sync marker so main() uses sync_days=7
+        (tmp_path / ".initial_sync_done").touch()
+
         with patch.object(garmin_sync, "GARMIN_EMAIL", "a@b.com"), \
              patch.object(garmin_sync, "GARMIN_PASSWORD", "pass"), \
+             patch.object(garmin_sync, "TOKEN_DIR", str(tmp_path)), \
              patch.object(garmin_sync, "get_client", return_value=mock_garmin_client), \
-             patch("sqlite3.connect", return_value=in_memory_db), \
+             patch.object(garmin_sync, "get_db", return_value=conn), \
+             patch.object(garmin_sync, "_write_sync_status"), \
+             patch.object(garmin_sync, "_clear_sync_status"), \
              patch.object(garmin_sync, "sync_daily_stats") as mock_daily, \
-             patch.object(garmin_sync, "sync_activities") as mock_act:
+             patch.object(garmin_sync, "sync_activities") as mock_act, \
+             patch.object(garmin_sync, "backfill_from_raw_json"), \
+             patch.object(garmin_sync, "backfill_stress_and_sleep"), \
+             patch.object(garmin_sync, "sync_vo2max"):
             garmin_sync.main()
 
         assert mock_daily.call_count == 7

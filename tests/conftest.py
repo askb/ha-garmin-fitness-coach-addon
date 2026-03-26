@@ -130,6 +130,15 @@ def mock_garmin_client():
 
 
 @pytest.fixture()
+def mock_pg_db():
+    """Return a mock psycopg2 connection and cursor (avoids PostgreSQL-specific SQL issues)."""
+    conn = MagicMock()
+    cursor = MagicMock()
+    conn.cursor.return_value = cursor
+    return conn, cursor
+
+
+@pytest.fixture()
 def garmin_env():
     """Set Garmin credential environment variables for testing."""
     env = {
