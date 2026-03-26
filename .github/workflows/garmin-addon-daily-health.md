@@ -61,6 +61,11 @@ Create a concise daily health report as a GitHub issue covering:
 - Verify no secrets in source code
 - Check `config.json` for proper permission scoping
 - Verify ingress-proxy.js doesn't expose internal paths
+- **Scan for hardcoded IP addresses** (e.g., 192.168.x.x) — should use env vars or `!secret`
+- **Scan for personal email addresses** (not maintainer SPDX headers)
+- **Scan for RTSP/HTTP URLs containing embedded credentials** (user:pass@host)
+- **Check for personal names or identifiable health data** in code or comments
+- Flag any `.env` or `.env.local` files committed (should be in .gitignore)
 
 ### 5. HA Integration Health
 - Verify all 7 sensors are defined in ha-notify.py

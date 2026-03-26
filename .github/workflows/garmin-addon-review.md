@@ -73,6 +73,8 @@ pushes 7 HA sensors via the Supervisor REST API.
 ### General
 - No hardcoded IPs (use environment variables or service names)
 - No credentials in source code
+- No personal email addresses, names, or identifiable health data in code/comments
+- No RTSP/HTTP URLs with embedded credentials (user:pass@host)
 - Shell scripts must use `set -euo pipefail`
 - Check for TODO/FIXME/HACK comments that should be resolved
 
