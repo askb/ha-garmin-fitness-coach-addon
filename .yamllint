@@ -4,11 +4,19 @@
 
 extends: default
 
+ignore:
+  - ".github/workflows/*.lock.yml"
+
 rules:
+  document-start: disable
   empty-lines:
     max-end: 1
   comments:
     min-spaces-from-content: 1
     level: error
   line-length:
-    max: 120
+    max: 200
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+  truthy:
+    allowed-values: ["true", "false", "on"]

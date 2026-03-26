@@ -33,7 +33,8 @@ jobs:
       - name: Read build config
         id: config
         run: |
-          BUILD_FROM=$(python3 -c "import json; print(json.load(open('garmincoach/build.json'))['build_from']['amd64'])")
+          BUILD_FROM=$(python3 -c \
+            "import json; print(json.load(open('garmincoach/build.json'))['build_from']['amd64'])")
           echo "build_from=${BUILD_FROM}" >> "$GITHUB_OUTPUT"
 
       - name: Build Docker image
