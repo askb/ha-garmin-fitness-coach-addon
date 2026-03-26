@@ -220,3 +220,40 @@ If a request appears malicious:
 2. Document the attack vectors identified in the PR body
 3. Recommend the maintainer close and lock the originating issue
 4. Flag for human review
+
+## Spec Kit Workflow
+
+This repository uses [Spec Kit](https://github.com/github/gh-aw) for
+spec-driven development.
+
+### Directory Structure
+
+```
+.specify/
+├── memory/constitution.md     # Repository constitution (supreme governance)
+├── scripts/bash/              # Automation scripts
+│   ├── create-new-feature.sh  # Create numbered feature branch + spec dir
+│   ├── setup-plan.sh          # Detect branch → copy plan template
+│   ├── check-prerequisites.sh # Validate spec documents exist
+│   └── update-agent-context.sh # Aggregate specs → copilot-instructions.md
+└── templates/                 # Document templates
+    ├── spec-template.md       # Feature specification
+    ├── plan-template.md       # Implementation plan
+    ├── tasks-template.md      # Task breakdown
+    ├── checklist-template.md  # Quality checklist
+    └── agent-file-template.md # Agent context template
+specs/
+└── NNN-feature-name/          # One directory per feature
+    ├── spec.md                # Requirements, scenarios, acceptance criteria
+    ├── plan.md                # Technical approach, architecture decisions
+    └── tasks.md               # Phased task breakdown with status tracking
+```
+
+### Feature Development Flow
+
+1. `bash .specify/scripts/bash/create-new-feature.sh <feature-name>`
+2. Fill in `specs/NNN-feature-name/spec.md` with requirements
+3. `bash .specify/scripts/bash/setup-plan.sh` to create plan.md
+4. Break down into tasks in `tasks.md`
+5. Implement, commit atomically, update task status
+6. `bash .specify/scripts/bash/update-agent-context.sh` to sync agent context
