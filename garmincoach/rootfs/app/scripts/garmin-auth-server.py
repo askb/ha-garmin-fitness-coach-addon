@@ -10,8 +10,9 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+from typing import Optional
 
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 
 try:
     from garminconnect import Garmin
@@ -34,14 +35,14 @@ _mfa_state = {
 }
 
 
-def _save_tokens(client):
+def _save_tokens(client: "Garmin") -> None:
     """Save garth tokens to disk in native directory format."""
     os.makedirs(TOKEN_DIR, exist_ok=True)
     client.garth.dump(TOKEN_DIR)
     log.info("Tokens saved to %s", TOKEN_DIR)
 
 
-def _load_client():
+def _load_client() -> Optional["Garmin"]:
     """Load a Garmin client from saved tokens. Returns None on failure."""
     if not os.path.exists(TOKEN_DIR):
         return None
@@ -56,7 +57,7 @@ def _load_client():
 
 
 @app.route("/auth/login", methods=["POST"])
-def login():
+def login() -> tuple[Response, int] | Response:
     """Attempt Garmin Connect login. Returns MFA prompt if required."""
     global _mfa_state  # noqa: PLW0603
 
@@ -115,7 +116,7 @@ def login():
 
 
 @app.route("/auth/mfa", methods=["POST"])
-def mfa():
+def mfa() -> tuple[Response, int] | Response:
     """Complete MFA verification and save token."""
     global _mfa_state  # noqa: PLW0603
 
@@ -174,7 +175,7 @@ def mfa():
 
 
 @app.route("/auth/status", methods=["GET"])
-def status():
+def status() -> Response:
     """Check whether a valid Garmin session token exists."""
     client = _load_client()
     if client is None:
@@ -193,7 +194,7 @@ def status():
 
 
 @app.route("/auth/sync-status", methods=["GET"])
-def sync_status():
+def sync_status() -> Response:
     """Return current sync progress."""
     status_file = os.path.join(TOKEN_DIR, ".sync_status")
     try:
@@ -207,7 +208,7 @@ def sync_status():
 
 
 @app.route("/auth/sync", methods=["POST"])
-def trigger_sync():
+def trigger_sync() -> tuple[Response, int] | Response:
     """Trigger an immediate Garmin sync in the background."""
     import subprocess
 
@@ -247,7 +248,7 @@ def trigger_sync():
 
 
 @app.route("/auth/import-tokens", methods=["POST"])
-def import_tokens():
+def import_tokens() -> tuple[Response, int] | Response:
     """Import pre-generated garth tokens (oauth1 + oauth2 JSON)."""
     data = request.get_json(silent=True) or {}
     oauth1 = data.get("oauth1_token")
@@ -277,7 +278,7 @@ def import_tokens():
 
 
 @app.route("/auth/logout", methods=["POST"])
-def logout():
+def logout() -> tuple[Response, int] | Response:
     """Remove stored Garmin session token."""
     try:
         import shutil

@@ -24,6 +24,7 @@ except ImportError:
 
 try:
     import psycopg2
+    import psycopg2.extras
 except ImportError:
     print("ERROR: psycopg2 not installed", file=sys.stderr)
     sys.exit(1)
@@ -371,7 +372,7 @@ def sync_activities(client, db, days=7):
 
 def backfill_from_raw_json(db):
     """Extract hr_zone_minutes, strain_score, trimp_score from stored raw_garmin_data."""
-    cur = db.cursor()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute("""
             SELECT id, raw_garmin_data, avg_hr, duration_minutes
@@ -385,7 +386,10 @@ def backfill_from_raw_json(db):
             return
 
         updated = 0
-        for row_id, raw_json, avg_hr, duration_min in rows:
+        for row in rows:
+            row_id, raw_json, avg_hr, duration_min = (
+                row['id'], row['raw_garmin_data'], row['avg_hr'], row['duration_minutes']
+            )
             act = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
 
             # Extract HR zones (seconds → minutes)
@@ -435,7 +439,7 @@ def backfill_stress_and_sleep(client, db):
     if os.path.exists(MARKER):
         return
 
-    cur = db.cursor()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute("""
             SELECT date FROM daily_metric
@@ -444,7 +448,7 @@ def backfill_stress_and_sleep(client, db):
             ORDER BY date DESC
             LIMIT 365
         """, (USER_ID,))
-        dates = [row[0] for row in cur.fetchall()]
+        dates = [row['date'] for row in cur.fetchall()]
         if not dates:
             Path(MARKER).touch()
             return
@@ -578,13 +582,13 @@ def sync_vo2max(client, db, days=7):
 
         # --- Fallback: computed VO2max if Garmin API returned nothing ---
         if garmin_count == 0:
-            cur2 = db.cursor()
+            cur2 = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             try:
                 # Fetch user age for age-predicted max HR
                 cur2.execute("SELECT age FROM profile WHERE user_id = %s", (USER_ID,))
                 age_row = cur2.fetchone()
-                user_age = age_row[0] if age_row and age_row[0] else 35
-                if not (age_row and age_row[0]):
+                user_age = age_row['age'] if age_row and age_row['age'] else 35
+                if not (age_row and age_row['age']):
                     print("  No age in profile — using default age=35")
 
                 age_predicted_max_hr = 220 - user_age
@@ -605,7 +609,8 @@ def sync_vo2max(client, db, days=7):
                     rows = cur2.fetchmany(100)
                     if not rows:
                         break
-                    for d_date, resting_hr in rows:
+                    for row in rows:
+                        d_date, resting_hr = row['date'], row['resting_hr']
                         if resting_hr > 100:
                             continue
                         vo2 = 15.3 * (age_predicted_max_hr / resting_hr)

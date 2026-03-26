@@ -403,10 +403,10 @@ class TestSyncVo2max:
         # No VO2max from official API
         mock_client.get_max_metrics.return_value = []
         # Profile age = 35 (used to compute age-predicted HRmax = 220 - 35 = 185)
-        cursor.fetchone.return_value = (35,)
+        cursor.fetchone.return_value = {'age': 35}
         # Provide one resting-HR row (resting_hr=58)
         cursor.fetchmany.side_effect = [
-            [("2025-01-15", 58)],  # first fetchmany batch
+            [{'date': '2025-01-15', 'resting_hr': 58}],  # first fetchmany batch
             [],                     # second call → stop loop
         ]
         garmin_sync.sync_vo2max(mock_client, conn, days=1)
@@ -424,9 +424,9 @@ class TestSyncVo2max:
         conn, cursor = mock_db
         mock_client.get_max_metrics.return_value = []
         # age=35 fetched from the profile table → HRmax = 220 - 35 = 185
-        cursor.fetchone.return_value = (35,)
+        cursor.fetchone.return_value = {'age': 35}
         cursor.fetchmany.side_effect = [
-            [("2025-01-15", 58)],
+            [{'date': '2025-01-15', 'resting_hr': 58}],
             [],
         ]
         garmin_sync.sync_vo2max(mock_client, conn, days=1)
@@ -496,7 +496,7 @@ class TestBackfillFromRawJson:
             hrTimeInZone_4=420,
             hrTimeInZone_5=300,
         )
-        cursor.fetchall.return_value = [(1, raw, 150, 30.0)]
+        cursor.fetchall.return_value = [{'id': 1, 'raw_garmin_data': raw, 'avg_hr': 150, 'duration_minutes': 30.0}]
         garmin_sync.backfill_from_raw_json(conn)
         update_calls = [
             c for c in cursor.execute.call_args_list
@@ -517,7 +517,7 @@ class TestBackfillFromRawJson:
         conn, cursor = mock_db
         raw = self._raw_activity()
         # avg_hr=150, duration_min=30
-        cursor.fetchall.return_value = [(1, raw, 150, 30.0)]
+        cursor.fetchall.return_value = [{'id': 1, 'raw_garmin_data': raw, 'avg_hr': 150, 'duration_minutes': 30.0}]
         garmin_sync.backfill_from_raw_json(conn)
         update_calls = [
             c for c in cursor.execute.call_args_list
@@ -535,7 +535,7 @@ class TestBackfillFromRawJson:
         """activityTrainingLoad in raw JSON is stored as strain_score."""
         conn, cursor = mock_db
         raw = self._raw_activity(activityTrainingLoad=92.5)
-        cursor.fetchall.return_value = [(1, raw, 150, 30.0)]
+        cursor.fetchall.return_value = [{'id': 1, 'raw_garmin_data': raw, 'avg_hr': 150, 'duration_minutes': 30.0}]
         garmin_sync.backfill_from_raw_json(conn)
         update_calls = [
             c for c in cursor.execute.call_args_list
@@ -550,7 +550,7 @@ class TestBackfillFromRawJson:
         """The DB transaction is committed after backfill updates."""
         conn, cursor = mock_db
         raw = self._raw_activity()
-        cursor.fetchall.return_value = [(1, raw, 150, 30.0)]
+        cursor.fetchall.return_value = [{'id': 1, 'raw_garmin_data': raw, 'avg_hr': 150, 'duration_minutes': 30.0}]
         garmin_sync.backfill_from_raw_json(conn)
         conn.commit.assert_called_once()
 
