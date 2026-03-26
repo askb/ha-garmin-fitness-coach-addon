@@ -32,9 +32,9 @@ except ImportError:
     sys.exit(1)
 
 LOCAL_TOKEN_DIR = "/tmp/garmin-tokens"
-HAOS_HOST = "192.168.1.176"
-HAOS_PORT = "22222"
-HAOS_USER = "hassio"
+HAOS_HOST = os.environ.get("HAOS_HOST", "homeassistant.local")
+HAOS_PORT = os.environ.get("HAOS_PORT", "22222")
+HAOS_USER = os.environ.get("HAOS_USER", "hassio")
 ADDON_TOKEN_PATH = "/data/garmin-tokens"
 
 
