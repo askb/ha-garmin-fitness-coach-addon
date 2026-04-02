@@ -110,6 +110,156 @@ def get_latest_metrics(cur, user_id: str) -> dict:
     }
 
 
+def recommend_workout(
+    acwr: float | None,
+    tsb: float | None,
+    ctl: float | None,
+    body_battery: int | None,
+    stress_score: int | None,
+    sleep_debt_minutes: int | None,
+    hrv: float | None,
+    resting_hr: int | None,
+    consecutive_hard_days: int,
+) -> dict:
+    """Generate an AI-informed workout recommendation based on readiness signals.
+
+    Uses evidence-based decision logic to replace Garmin Coach's rest-day
+    suggestion, which suffers from a known sync desynchronization bug.
+
+    Decision framework (Banister 1975, Hulin 2016, Buchheit 2014):
+    - ACWR sweet spot: 0.8-1.3 (Hulin 2016)
+    - TSB < -20: overreaching, need recovery (Meeusen 2013)
+    - Body Battery < 30: insufficient energy reserves
+    - Sleep debt > 2h: impaired adaptation (Halson 2014)
+    - 3+ consecutive hard days: schedule recovery (Kellmann 2010)
+
+    Returns dict with: is_rest_day, workout_type, intensity, duration_min,
+    hr_zone_target, rationale.
+    """
+    # Default signals — conservative when data is missing
+    bb = body_battery if body_battery is not None else 50
+    sd_hrs = (sleep_debt_minutes / 60) if sleep_debt_minutes else 0
+    stress = stress_score if stress_score is not None else 50
+
+    # --- Rest day triggers (any one is sufficient) ---
+    rest_reasons: list[str] = []
+
+    if consecutive_hard_days >= 3:
+        rest_reasons.append(
+            f"{consecutive_hard_days} consecutive high-load days "
+            "(Kellmann 2010: recovery required after 3+ hard days)"
+        )
+
+    if tsb is not None and tsb < -25:
+        rest_reasons.append(
+            f"TSB is {tsb:.1f} — deep overreach zone "
+            "(Meeusen 2013: TSB < -25 indicates functional overreaching)"
+        )
+
+    if bb < 20:
+        rest_reasons.append(
+            f"Body Battery critically low ({bb}%) — insufficient energy reserves"
+        )
+
+    if sd_hrs > 3:
+        rest_reasons.append(
+            f"Sleep debt {sd_hrs:.1f}h — performance impaired "
+            "(Mah 2011: >3h debt degrades reaction time and power output)"
+        )
+
+    if acwr is not None and acwr > 1.5:
+        rest_reasons.append(
+            f"ACWR {acwr:.2f} — high injury risk zone "
+            "(Hulin 2016: ACWR >1.5 = 2-4x injury risk)"
+        )
+
+    if rest_reasons:
+        return {
+            "is_rest_day": True,
+            "workout_type": "rest",
+            "intensity": "none",
+            "duration_min": 0,
+            "hr_zone_target": 0,
+            "rationale": "Rest day recommended. " + rest_reasons[0],
+            "all_factors": rest_reasons,
+        }
+
+    # --- Active recovery triggers ---
+    recovery_signals = 0
+    if tsb is not None and tsb < -15:
+        recovery_signals += 2
+    if bb < 40:
+        recovery_signals += 1
+    if sd_hrs > 1.5:
+        recovery_signals += 1
+    if stress > 70:
+        recovery_signals += 1
+    if consecutive_hard_days >= 2:
+        recovery_signals += 1
+    if acwr is not None and acwr > 1.3:
+        recovery_signals += 1
+
+    if recovery_signals >= 3:
+        return {
+            "is_rest_day": False,
+            "workout_type": "active_recovery",
+            "intensity": "easy",
+            "duration_min": 30,
+            "hr_zone_target": 1,
+            "rationale": (
+                "Active recovery day — easy effort only. "
+                f"Multiple recovery signals detected (TSB: {tsb}, "
+                f"BB: {bb}%, stress: {stress})."
+            ),
+            "all_factors": [],
+        }
+
+    # --- Normal training day: select intensity based on form ---
+    if tsb is not None and tsb > 5 and bb >= 70 and (acwr is None or acwr <= 1.2):
+        # Fresh and ready — quality session
+        return {
+            "is_rest_day": False,
+            "workout_type": "quality",
+            "intensity": "hard",
+            "duration_min": 60,
+            "hr_zone_target": 4,
+            "rationale": (
+                f"Great day for intensity — TSB +{tsb:.0f} (fresh), "
+                f"Body Battery {bb}%. Tempo, intervals, or race-pace work."
+            ),
+            "all_factors": [],
+        }
+
+    if tsb is not None and tsb >= -10 and bb >= 50:
+        # Moderate form — aerobic development
+        return {
+            "is_rest_day": False,
+            "workout_type": "aerobic",
+            "intensity": "moderate",
+            "duration_min": 45,
+            "hr_zone_target": 2,
+            "rationale": (
+                f"Steady aerobic session — TSB {tsb:.0f}, Body Battery {bb}%. "
+                "Zone 2 base building or moderate tempo."
+            ),
+            "all_factors": [],
+        }
+
+    # Default: easy day
+    return {
+        "is_rest_day": False,
+        "workout_type": "easy",
+        "intensity": "easy",
+        "duration_min": 35,
+        "hr_zone_target": 1,
+        "rationale": (
+            f"Easy effort today — form is neutral (TSB: {tsb}, BB: {bb}%). "
+            "Keep it conversational pace."
+        ),
+        "all_factors": [],
+    }
+
+
 def compute_injury_risk(acwr: float | None, tsb: float | None, ramp_rate: float | None) -> tuple[str, int]:
     """Compute injury risk level. Returns (level, score_0_100)."""
     if acwr is None:
@@ -232,7 +382,36 @@ def run_notifications(user_id: str):
                     round(sleep_debt / 60, 1) if sleep_debt else 0,
                     {"friendly_name": "GarminCoach Sleep Debt", "unit_of_measurement": "h", "icon": "mdi:sleep"})
 
-        print(f"[ha-notify] Sensors pushed — ACWR: {acwr}, Form: {tsb}, Risk: {risk_level}")
+        # sensor.garmincoach_workout_recommendation
+        # AI-informed workout suggestion replacing Garmin Coach rest-day logic
+        hard_days = data["consecutive_hard_days"]
+        workout = recommend_workout(
+            acwr=acwr,
+            tsb=tsb,
+            ctl=am['ctl'] if am else None,
+            body_battery=dm['body_battery_end'] if dm else None,
+            stress_score=dm['stress_score'] if dm else None,
+            sleep_debt_minutes=dm['sleep_debt_minutes'] if dm else None,
+            hrv=dm['hrv'] if dm else None,
+            resting_hr=dm['resting_hr'] if dm else None,
+            consecutive_hard_days=hard_days,
+        )
+        push_sensor("sensor.garmincoach_workout_recommendation",
+                    workout["workout_type"],
+                    {
+                        "friendly_name": "GarminCoach Workout Recommendation",
+                        "icon": "mdi:dumbbell" if not workout["is_rest_day"] else "mdi:sleep",
+                        "is_rest_day": workout["is_rest_day"],
+                        "intensity": workout["intensity"],
+                        "duration_min": workout["duration_min"],
+                        "hr_zone_target": workout["hr_zone_target"],
+                        "rationale": workout["rationale"],
+                    })
+
+        print(
+            f"[ha-notify] Sensors pushed — ACWR: {acwr}, Form: {tsb}, "
+            f"Risk: {risk_level}, Workout: {workout['workout_type']}"
+        )
 
         # --- Alert notifications ---
         alerts = []
@@ -264,7 +443,6 @@ def run_notifications(user_id: str):
                           f"Body Battery is critically low ({bb}%). Recovery priority today.",
                           "gc_body_battery_low"))
 
-        hard_days = data["consecutive_hard_days"]
         if hard_days >= 3:
             alerts.append(("🏋️ Consecutive Hard Training Days",
                           f"{hard_days} high-load days in the last 3 days. "
