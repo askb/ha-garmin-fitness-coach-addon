@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-04-03
+
+### Fixed
+
+- **GHCR image pull support** — added `image` field to `config.json` so HA
+  Supervisor pulls pre-built images from GHCR instead of building the
+  Dockerfile locally on the HAOS device. Eliminates the need for manual SSH
+  rebuilds and reduces install/update time from 10-20+ minutes to ~30 seconds.
+- **Per-date VO2max fallback** — changed Uth method fallback from
+  all-or-nothing to per-date; only computes estimates for dates missing
+  `garmin_official` data, preventing overwrites when the Garmin API partially
+  fails.
+- **Stale Dockerfile label** — updated `io.hass.version` from `0.2.0` to
+  match actual release version.
+
+### Added
+
+- **AI workout recommendation sensor** — new
+  `sensor.garmincoach_workout_recommendation` pushed to HA with workout type,
+  intensity, duration, HR zone target, and evidence-based rationale. Uses
+  ACWR, TSB, body battery, sleep debt, and consecutive hard days to suggest
+  rest/recovery/aerobic/quality sessions. Replaces reliance on Garmin Coach
+  which has a known watch-phone sync desynchronization bug.
+
 ## [0.1.0] — 2025-07-09
 
 ### Added
