@@ -600,7 +600,14 @@ def sync_vo2max(client, db, days=7):
                 ORDER BY dm.date DESC
             """, (USER_ID, cutoff.isoformat()))
 
-            missing_dates = cur2.fetchall()
+            # Use fetchmany() batching to handle large sync windows gracefully
+            missing_dates: list[tuple] = []
+            while True:
+                rows = cur2.fetchmany(500)
+                if not rows:
+                    break
+                missing_dates.extend(rows)
+
             uth_count = 0
 
             if missing_dates:

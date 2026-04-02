@@ -113,12 +113,9 @@ def get_latest_metrics(cur, user_id: str) -> dict:
 def recommend_workout(
     acwr: float | None,
     tsb: float | None,
-    ctl: float | None,
     body_battery: int | None,
     stress_score: int | None,
     sleep_debt_minutes: int | None,
-    hrv: float | None,
-    resting_hr: int | None,
     consecutive_hard_days: int,
 ) -> dict:
     """Generate an AI-informed workout recommendation based on readiness signals.
@@ -388,12 +385,9 @@ def run_notifications(user_id: str):
         workout = recommend_workout(
             acwr=acwr,
             tsb=tsb,
-            ctl=am['ctl'] if am else None,
             body_battery=dm['body_battery_end'] if dm else None,
             stress_score=dm['stress_score'] if dm else None,
             sleep_debt_minutes=dm['sleep_debt_minutes'] if dm else None,
-            hrv=dm['hrv'] if dm else None,
-            resting_hr=dm['resting_hr'] if dm else None,
             consecutive_hard_days=hard_days,
         )
         push_sensor("sensor.garmincoach_workout_recommendation",
@@ -406,6 +400,7 @@ def run_notifications(user_id: str):
                         "duration_min": workout["duration_min"],
                         "hr_zone_target": workout["hr_zone_target"],
                         "rationale": workout["rationale"],
+                        "all_factors": workout.get("all_factors", []),
                     })
 
         print(
