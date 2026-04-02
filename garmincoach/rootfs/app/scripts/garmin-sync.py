@@ -512,8 +512,10 @@ def sync_vo2max(client, db, days=7):
             END $$;
         """)
 
-        # Delete old computed records (keep garmin_official)
-        cur.execute("DELETE FROM vo2max_estimate WHERE user_id = %s AND source IN ('running_pace_hr', 'uth_method')", (USER_ID,))
+        # Note: we no longer bulk-delete computed records. The per-date
+        # fallback logic below uses ON CONFLICT to update only dates that
+        # lack official Garmin data, preserving existing Uth estimates for
+        # historical dates outside the current sync window.
         db.commit()
 
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date()
@@ -576,10 +578,39 @@ def sync_vo2max(client, db, days=7):
             print(f"  Garmin max-metrics API failed: {e} — falling back to computed")
             db.rollback()
 
-        # --- Fallback: computed VO2max if Garmin API returned nothing ---
-        if garmin_count == 0:
-            cur2 = db.cursor()
-            try:
+        # --- Fallback: computed VO2max only for dates missing official data ---
+        # Only compute Uth estimates for specific dates where the Garmin API
+        # returned no data, rather than the previous all-or-nothing approach.
+        # This prevents overwriting good official data when the API partially fails.
+        cur2 = db.cursor()
+        try:
+            # Find dates in the sync window that have no garmin_official record
+            cur2.execute("""
+                SELECT dm.date, dm.resting_hr
+                FROM daily_metric dm
+                WHERE dm.user_id = %s AND dm.date >= %s
+                  AND dm.resting_hr IS NOT NULL AND dm.resting_hr > 30
+                  AND dm.resting_hr <= 100
+                  AND NOT EXISTS (
+                      SELECT 1 FROM vo2max_estimate ve
+                      WHERE ve.user_id = dm.user_id
+                        AND ve.date = dm.date
+                        AND ve.source = 'garmin_official'
+                  )
+                ORDER BY dm.date DESC
+            """, (USER_ID, cutoff.isoformat()))
+
+            # Use fetchmany() batching to handle large sync windows gracefully
+            missing_dates: list[tuple] = []
+            while True:
+                rows = cur2.fetchmany(500)
+                if not rows:
+                    break
+                missing_dates.extend(rows)
+
+            uth_count = 0
+
+            if missing_dates:
                 # Fetch user age for age-predicted max HR
                 cur2.execute("SELECT age FROM profile WHERE user_id = %s", (USER_ID,))
                 age_row = cur2.fetchone()
@@ -588,47 +619,28 @@ def sync_vo2max(client, db, days=7):
                     print("  No age in profile — using default age=35")
 
                 age_predicted_max_hr = 220 - user_age
-                print(f"  Fallback VO2max: age={user_age}, HRmax={age_predicted_max_hr}")
 
-                cutoff_str = cutoff.isoformat()
+                for d_date, resting_hr in missing_dates:
+                    vo2 = 15.3 * (age_predicted_max_hr / resting_hr)
+                    if vo2 < 20 or vo2 > 90:
+                        continue
+                    cur2.execute("""
+                        INSERT INTO vo2max_estimate (
+                            user_id, date, sport, value, source
+                        ) VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (user_id, date, sport) DO UPDATE SET
+                            value = EXCLUDED.value, source = EXCLUDED.source
+                    """, (USER_ID, d_date, "general", round(vo2, 1), "uth_method"))
+                    uth_count += 1
+                db.commit()
 
-                # Uth method from resting HR (simpler, works without activities)
-                cur2.execute("""
-                    SELECT date, resting_hr FROM daily_metric
-                    WHERE user_id = %s AND date >= %s
-                      AND resting_hr IS NOT NULL AND resting_hr > 30
-                    ORDER BY date DESC
-                """, (USER_ID, cutoff_str))
-
-                uth_count = 0
-                while True:
-                    rows = cur2.fetchmany(100)
-                    if not rows:
-                        break
-                    for d_date, resting_hr in rows:
-                        if resting_hr > 100:
-                            continue
-                        vo2 = 15.3 * (age_predicted_max_hr / resting_hr)
-                        if vo2 < 20 or vo2 > 90:
-                            continue
-                        cur2.execute("""
-                            INSERT INTO vo2max_estimate (
-                                user_id, date, sport, value, source
-                            ) VALUES (%s, %s, %s, %s, %s)
-                            ON CONFLICT (user_id, date, sport) DO UPDATE SET
-                                value = EXCLUDED.value, source = EXCLUDED.source
-                        """, (USER_ID, d_date, "general", round(vo2, 1), "uth_method"))
-                        uth_count += 1
-                    db.commit()
-
-                if uth_count:
-                    print(f"  VO2max fallback: {uth_count} Uth estimates")
-                else:
-                    print("  No VO2max data available (no Garmin metrics, no resting HR)")
-            finally:
-                cur2.close()
-        else:
-            print(f"  VO2max: {garmin_count} official Garmin records synced")
+            print(
+                f"  VO2max: {garmin_count} official Garmin records, "
+                f"{uth_count} Uth fallback estimates "
+                f"(for dates without official data)"
+            )
+        finally:
+            cur2.close()
     except Exception as e:
         db.rollback()
         print(f"  Failed to sync VO2max: {e}", file=sys.stderr)
