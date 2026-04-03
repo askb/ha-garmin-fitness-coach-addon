@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-04-03
+
+### Fixed
+
+- **Smart workout recommendations** — replaced unconditional "Rest Day"
+  for poor readiness with evidence-based decision logic. Complete rest now
+  only prescribed for critical signals (ACWR >1.5, TSB <-25, Body Battery
+  <20, sleep debt >3h). Otherwise suggests Active Recovery with
+  sport-specific guidance.
+- **VO2max trend filtering** — low-confidence VO2max sources (Uth method)
+  excluded from trend calculations to prevent non-workout-day data from
+  skewing improving/declining detection.
+
+### Added
+
+- **RecoveryContext type** — ACWR, TSB, body battery, sleep debt, and
+  stress score passed from database to coaching engine for evidence-based
+  workout modulation.
+- **Active Recovery workout type** — new workout category with structured
+  warmup/main/cooldown phases, sport-specific descriptions (running:
+  conversational jog, cycling: easy spin, strength: mobility work).
+- **Comprehensive vitest coverage** — VO2max trend source filtering and
+  coaching modulation tests (20+ test cases covering all critical triggers).
+
+### References
+
+- Hulin BT et al. (2016) Br J Sports Med — ACWR >1.5 injury risk
+- Meeusen R et al. (2013) Eur J Sport Sci — overreaching indicators
+- Mah CD et al. (2011) Sleep — sleep debt impact on performance
+- Barnett A (2006) Sports Med — active recovery modalities
+- Uth N et al. (2004) Eur J Appl Physiol — VO2max HR ratio accuracy
+
 ## [0.7.0] — 2026-04-03
 
 ### Fixed

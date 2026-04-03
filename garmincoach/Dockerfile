@@ -89,4 +89,4 @@ LABEL \
     io.hass.description="AI-powered sport scientist for Garmin athletes" \
     io.hass.arch="${BUILD_ARCH}" \
     io.hass.type="addon" \
-    io.hass.version="0.7.0"
+    io.hass.version="0.8.0"
