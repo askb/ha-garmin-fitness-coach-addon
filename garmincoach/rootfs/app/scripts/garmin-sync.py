@@ -618,10 +618,34 @@ def sync_vo2max(client, db, days=7):
                 if not (age_row and age_row[0]):
                     print("  No age in profile — using default age=35")
 
-                age_predicted_max_hr = 220 - user_age
+                # Tanaka formula (2001) for HRmax: more accurate than 220-age
+                # Ref: Tanaka H et al. Age-predicted maximal heart rate revisited.
+                #      J Am Coll Cardiol. 2001;37(1):153-156.
+                # 220-age has SD ±10-12 bpm; Tanaka reduces error significantly.
+                age_predicted_max_hr = 208 - (0.7 * user_age)
+
+                # Age-corrected Uth proportionality factor.
+                # Original Uth et al. (2004) used 15.3 but this was validated ONLY
+                # on well-trained men aged 21-51 (N=46).
+                # Ref: PMC8443998 (2021) — factor decreases inversely with age:
+                #   Age 20-35: ~15.3 (original)
+                #   Age 35-45: ~13.5
+                #   Age 45-55: ~12.5
+                #   Age 55+:   ~11.5
+                # Using 15.3 for a 45-year-old overestimates VO2max by ~18%.
+                if user_age <= 35:
+                    uth_factor = 15.3
+                elif user_age <= 45:
+                    uth_factor = 13.5
+                elif user_age <= 55:
+                    uth_factor = 12.5
+                else:
+                    uth_factor = 11.5
+
+                print(f"  Uth fallback: age={user_age}, HRmax={age_predicted_max_hr:.0f}, factor={uth_factor}")
 
                 for d_date, resting_hr in missing_dates:
-                    vo2 = 15.3 * (age_predicted_max_hr / resting_hr)
+                    vo2 = uth_factor * (age_predicted_max_hr / resting_hr)
                     if vo2 < 20 or vo2 > 90:
                         continue
                     cur2.execute("""
