@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-04-03
+
+### Fixed
+
+- **VO2max Uth overestimation** — replaced flat 15.3 constant with
+  age-corrected factor (13.5 for 35-45, 12.5 for 45-55, 11.5 for 55+).
+  The original constant was validated only on trained men 21-51 and
+  overestimates by 10-28% for older users (PMC8443998, 2021).
+- **HRmax formula** — replaced 220-age (SD ±10-12 bpm) with Tanaka
+  formula: 208 - 0.7×age (Tanaka 2001, N=18,712).
+- **VO2max source priority** — dashboard now shows garmin_official values
+  over Uth estimates. Priority: garmin_official > running_pace_hr > cooper
+  > uth_method.
+- **Race predictions** — now use highest-priority VO2max source within
+  90 days instead of most recent date (prevents inflated Uth values from
+  producing unrealistic race times).
+
 ## [0.8.0] — 2026-04-03
 
 ### Fixed

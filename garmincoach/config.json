@@ -1,6 +1,6 @@
 {
   "name": "GarminCoach",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "slug": "garmincoach",
   "image": "ghcr.io/askb/garmincoach-addon-{arch}",
   "description": "AI-powered sport scientist \u2014 training analysis, coaching, and recovery optimization from your Garmin data",
