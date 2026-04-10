@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Anil Belur
+---
+blueprint:
+  name: "GarminCoach: Weekly Training Summary"
+  description: >
+    Sends a weekly push notification summarising training load, form,
+    injury risk, and body battery trend. Fires on a configurable day.
+  domain: automation
+  author: askb
+  source_url: >-
+    https://github.com/askb/ha-garmin-fitness-coach-addon/blob/main/garmincoach/rootfs/app/blueprints/weekly_training_summary.yaml
+  input:
+    summary_day:
+      name: Summary Day
+      description: Day of the week for the summary.
+      default: "7"
+      selector:
+        select:
+          options:
+            - label: Monday
+              value: "1"
+            - label: Tuesday
+              value: "2"
+            - label: Wednesday
+              value: "3"
+            - label: Thursday
+              value: "4"
+            - label: Friday
+              value: "5"
+            - label: Saturday
+              value: "6"
+            - label: Sunday
+              value: "7"
+    summary_time:
+      name: Summary Time
+      default: "09:00:00"
+      selector:
+        time: {}
+    acwr_sensor:
+      name: ACWR Sensor
+      default: sensor.garmincoach_acwr
+      selector:
+        entity:
+          domain: sensor
+    form_sensor:
+      name: Form (TSB) Sensor
+      default: sensor.garmincoach_form
+      selector:
+        entity:
+          domain: sensor
+    ctl_sensor:
+      name: Fitness (CTL) Sensor
+      default: sensor.garmincoach_ctl
+      selector:
+        entity:
+          domain: sensor
+    atl_sensor:
+      name: Fatigue (ATL) Sensor
+      default: sensor.garmincoach_atl
+      selector:
+        entity:
+          domain: sensor
+    injury_risk_sensor:
+      name: Injury Risk Sensor
+      default: sensor.garmincoach_injury_risk
+      selector:
+        entity:
+          domain: sensor
+    body_battery_sensor:
+      name: Body Battery Sensor
+      default: sensor.garmincoach_body_battery
+      selector:
+        entity:
+          domain: sensor
+    notify_service:
+      name: Notification Service
+      default: notify.persistent_notification
+      selector:
+        text: {}
+
+trigger:
+  - platform: time
+    at: !input summary_time
+
+condition:
+  - condition: template
+    value_template: >-
+      {{ now().isoweekday() == (summary_day | int) }}
+
+action:
+  - service: !input notify_service
+    data:
+      title: "📊 Weekly Training Summary"
+      message: >-
+        **Fitness (CTL):** {{ states(ctl_sensor) }}
+        **Fatigue (ATL):** {{ states(atl_sensor) }}
+        **Form (TSB):** {{ states(form_sensor) }}
+        **ACWR:** {{ states(acwr_sensor) }}
+        **Injury Risk:** {{ states(injury_risk_sensor) }}
+        **Body Battery:** {{ states(body_battery_sensor) }}%
+
+mode: single
