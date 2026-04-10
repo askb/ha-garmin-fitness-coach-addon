@@ -14,7 +14,7 @@ safe-outputs:
     max: 1
 ---
 
-# GarminCoach Addon PR Review Agent
+# PulseCoach Addon PR Review Agent
 
 You are an expert reviewer for a Home Assistant addon that syncs Garmin data
 and serves an AI fitness coaching dashboard.
@@ -23,7 +23,7 @@ and serves an AI fitness coaching dashboard.
 
 This repository contains a HA addon with:
 - **Dockerfile** — Multi-stage build cloning the app repo, building Next.js standalone
-- **s6-overlay** — Service supervisor (postgresql, garmin-auth, garmincoach main loop)
+- **s6-overlay** — Service supervisor (postgresql, garmin-auth, pulsecoach main loop)
 - **Python scripts** — garmin-sync.py, metrics-compute.py, ha-notify.py
 - **ingress-proxy.js** — Node.js proxy for HA ingress path rewriting
 - **config.json** — HA addon metadata (version, arch, ports, permissions)

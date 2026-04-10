@@ -62,15 +62,15 @@ description. Produces a structured `spec.md` following the addon spec template.
 - The spec template includes an **HA Addon Impact** section that is unique to
   this addon repository. Always fill it with concrete details about how the
   feature affects the Home Assistant addon infrastructure.
-- Consider these addon components: `garmincoach/config.json`,
-  `garmincoach/rootfs/etc/s6-overlay/s6-rc.d/`, `garmincoach/Dockerfile`,
+- Consider these addon components: `pulsecoach/config.json`,
+  `pulsecoach/rootfs/etc/s6-overlay/s6-rc.d/`, `pulsecoach/Dockerfile`,
   and the ingress web panel.
 
 ## Files Referenced
 
 - `.specify/templates/spec-template.md` — spec template
 - `.specify/memory/constitution.md` — project constitution (if exists)
-- `garmincoach/config.json` — current addon configuration
+- `pulsecoach/config.json` — current addon configuration
 - `specs/` — existing spec directories
 
 ## Output

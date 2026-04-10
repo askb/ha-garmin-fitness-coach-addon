@@ -34,11 +34,11 @@ SPDX-License-Identifier: Apache-2.0
 
 | Component | Location | Purpose |
 | --------- | -------- | ------- |
-| Python scripts | `garmincoach/rootfs/app/scripts/` | Core business logic |
-| TypeScript lib | `garmincoach/rootfs/app/lib/` | AI/coaching engine (optional) |
-| s6 services | `garmincoach/rootfs/etc/s6-overlay/s6-rc.d/` | Process management |
-| Dockerfile | `garmincoach/Dockerfile` | Container build |
-| Addon config | `garmincoach/config.json` | HA addon metadata + options |
+| Python scripts | `pulsecoach/rootfs/app/scripts/` | Core business logic |
+| TypeScript lib | `pulsecoach/rootfs/app/lib/` | AI/coaching engine (optional) |
+| s6 services | `pulsecoach/rootfs/etc/s6-overlay/s6-rc.d/` | Process management |
+| Dockerfile | `pulsecoach/Dockerfile` | Container build |
+| Addon config | `pulsecoach/config.json` | HA addon metadata + options |
 | Tests | `tests/` | pytest test suite |
 
 ---
@@ -60,7 +60,7 @@ Before proceeding, verify alignment with `.specify/memory/constitution.md`:
 ### Option A: Python-only (Recommended for data/API features)
 
 ```
-garmincoach/rootfs/app/scripts/
+pulsecoach/rootfs/app/scripts/
 ├── {{feature_module}}.py          # Core logic
 ├── {{feature_module}}_utils.py    # Helpers
 tests/
@@ -70,7 +70,7 @@ tests/
 ### Option B: TypeScript-only (For AI/coaching features)
 
 ```
-garmincoach/rootfs/app/lib/
+pulsecoach/rootfs/app/lib/
 ├── {{feature_module}}.ts          # Core logic
 ├── {{feature_module}}.test.ts     # Unit tests
 ```
@@ -78,17 +78,17 @@ garmincoach/rootfs/app/lib/
 ### Option C: Full-stack addon (Complex features)
 
 ```
-garmincoach/rootfs/app/scripts/
+pulsecoach/rootfs/app/scripts/
 ├── {{feature_module}}.py          # Backend logic
-garmincoach/rootfs/app/lib/
+pulsecoach/rootfs/app/lib/
 ├── {{feature_module}}.ts          # Frontend/AI logic
-garmincoach/rootfs/etc/s6-overlay/s6-rc.d/
+pulsecoach/rootfs/etc/s6-overlay/s6-rc.d/
 ├── {{service_name}}/
 │   ├── type                       # "longrun" or "oneshot"
 │   ├── run                        # Service start script
 │   └── finish                     # Cleanup script (optional)
-garmincoach/config.json            # Updated options/schema
-garmincoach/Dockerfile             # Updated build
+pulsecoach/config.json            # Updated options/schema
+pulsecoach/Dockerfile             # Updated build
 tests/
 ├── test_{{feature_module}}.py     # Integration tests
 ```

@@ -1,4 +1,4 @@
-# Contributing to GarminCoach Addon
+# Contributing to PulseCoach Addon
 
 > For architecture context and AI agent conventions, see [AGENTS.md](AGENTS.md).
 
@@ -6,7 +6,7 @@
 
 ```
 ha-garmin-fitness-coach-addon/  ← This repo (addon wrapper)
-├── garmincoach/                ← HA addon directory
+├── pulsecoach/                ← HA addon directory
 │   ├── config.json             ← Addon manifest
 │   ├── Dockerfile              ← Multi-stage build
 │   ├── build.json              ← Multi-arch config
@@ -93,7 +93,7 @@ network access.
 ### Dockerfile Linting (hadolint)
 
 ```bash
-hadolint garmincoach/Dockerfile
+hadolint pulsecoach/Dockerfile
 ```
 
 ### YAML / Shell / JSON Linting
@@ -101,8 +101,8 @@ hadolint garmincoach/Dockerfile
 ```bash
 yamllint .
 shellcheck -x scripts/build-local.sh
-python3 -m json.tool garmincoach/config.json > /dev/null
-python3 -m json.tool garmincoach/build.json  > /dev/null
+python3 -m json.tool pulsecoach/config.json > /dev/null
+python3 -m json.tool pulsecoach/build.json  > /dev/null
 python3 -m json.tool repository.json         > /dev/null
 ```
 
@@ -188,14 +188,14 @@ git config --global format.signoff true
 
 The addon uses [s6-overlay](https://github.com/just-containers/s6-overlay) to
 manage multiple long-running services inside the container. Service definitions
-live in `garmincoach/rootfs/etc/s6-overlay/s6-rc.d/`.
+live in `pulsecoach/rootfs/etc/s6-overlay/s6-rc.d/`.
 
 ### Services
 
 | Service | Path | Role |
 |---|---|---|
 | `postgresql` | `rootfs/etc/s6-overlay/s6-rc.d/postgresql/` | Starts the embedded PostgreSQL database |
-| `garmincoach` | `rootfs/etc/s6-overlay/s6-rc.d/garmincoach/` | Main service: runs Next.js, Garmin sync, metrics compute, ingress proxy |
+| `pulsecoach` | `rootfs/etc/s6-overlay/s6-rc.d/pulsecoach/` | Main service: runs Next.js, Garmin sync, metrics compute, ingress proxy |
 | `garmin-auth` | `rootfs/etc/s6-overlay/s6-rc.d/garmin-auth/` | Flask server that handles Garmin OAuth from the UI |
 
 Each service directory contains:
@@ -204,7 +204,7 @@ Each service directory contains:
 - `run` — executable script that s6 calls to start the service
 - `dependencies.d/<dep>` — (optional) ensures another service starts first
 
-### How `garmincoach/run` Works
+### How `pulsecoach/run` Works
 
 1. Reads addon options via `bashio::config` (Garmin credentials, AI backend, sync interval)
 2. Waits for PostgreSQL to be ready (`pg_isready`)
@@ -212,7 +212,7 @@ Each service directory contains:
 4. Starts background loops for Garmin sync, metrics compute, and HA sensor push
 5. Starts the Next.js app (`node server.js`) and the ingress proxy (`node ingress-proxy.js`)
 6. Enters a monitoring loop that restarts any child process that exits unexpectedly
-7. On `EXIT`/`INT`/`TERM`, backs up tokens and the database to `/share/garmincoach/`
+7. On `EXIT`/`INT`/`TERM`, backs up tokens and the database to `/share/pulsecoach/`
    before stopping all child processes
 
 ### Adding a New Service
@@ -225,7 +225,7 @@ Each service directory contains:
 
 ## Adding New Garmin Sync Fields
 
-Garmin data is fetched in `garmincoach/rootfs/app/scripts/garmin-sync.py` and
+Garmin data is fetched in `pulsecoach/rootfs/app/scripts/garmin-sync.py` and
 stored in PostgreSQL.
 
 ### Step-by-step
@@ -293,11 +293,11 @@ The abstraction lives in `rootfs/app/lib/ai-backend.ts`.
 
 - **App (standalone)**: PostgreSQL via Drizzle ORM
 - **Addon**: Embedded PostgreSQL via Drizzle (same schema, same driver)
-- Data is persisted in `/data/` and backed up to `/share/garmincoach/` on shutdown
+- Data is persisted in `/data/` and backed up to `/share/pulsecoach/` on shutdown
 
 ## Releasing
 
-1. Update version in `garmincoach/config.json`
+1. Update version in `pulsecoach/config.json`
 2. Update `CHANGELOG.md`
 3. Tag: `git tag v0.1.0 && git push --tags`
 4. CI builds images and creates a GitHub Release

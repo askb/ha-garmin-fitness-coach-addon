@@ -36,11 +36,11 @@ and acceptance criteria.
    - Branch creation, directory scaffolding, dependency declarations.
 
    **Phase 2: Python Logic**
-   - Core business logic in `garmincoach/rootfs/app/scripts/`.
+   - Core business logic in `pulsecoach/rootfs/app/scripts/`.
    - Unit tests in `tests/`.
 
    **Phase 3: TypeScript / AI** (if applicable)
-   - AI/coaching engine in `garmincoach/rootfs/app/lib/`.
+   - AI/coaching engine in `pulsecoach/rootfs/app/lib/`.
 
    **Phase 4: Docker**
    - Dockerfile updates for new packages, build steps, COPY directives.

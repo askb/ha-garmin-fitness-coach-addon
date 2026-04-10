@@ -1,0 +1,15 @@
+{
+  "build_from": {
+    "amd64": "ghcr.io/home-assistant/amd64-base:3.21",
+    "aarch64": "ghcr.io/home-assistant/aarch64-base:3.21"
+  },
+  "args": {
+    "BUILD_ARCH": "{arch}"
+  },
+  "labels": {
+    "org.opencontainers.image.title": "PulseCoach",
+    "org.opencontainers.image.description": "AI-powered sport scientist for Garmin athletes",
+    "org.opencontainers.image.source": "https://github.com/askb/ha-garmin-fitness-coach-addon",
+    "org.opencontainers.image.licenses": "MIT"
+  }
+}

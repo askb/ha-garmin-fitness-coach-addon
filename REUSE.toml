@@ -19,13 +19,19 @@ SPDX-FileCopyrightText = "2025 Anil Belur <askb23@gmail.com>"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
-path = ["garmincoach/Dockerfile", "garmincoach/rootfs/**"]
+path = ["pulsecoach/Dockerfile", "pulsecoach/rootfs/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025 Anil Belur <askb23@gmail.com>"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = [".gitignore", ".editorconfig", ".codespell*", "LICENSES/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2025 Anil Belur <askb23@gmail.com>"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["**/*.png", "**/*.ico", "**/*.svg"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025 Anil Belur <askb23@gmail.com>"
 SPDX-License-Identifier = "Apache-2.0"

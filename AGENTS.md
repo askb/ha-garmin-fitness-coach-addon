@@ -11,7 +11,7 @@ there is any conflict between the two documents.
 
 ## Project Overview
 
-Home Assistant addon that packages the GarminCoach fitness coaching app
+Home Assistant addon that packages the PulseCoach fitness coaching app
 for easy installation on HAOS. Uses s6-overlay for process management,
 embedded PostgreSQL for storage, and HA Conversation API
 (OpenClaw/Claude) for AI.
@@ -20,7 +20,7 @@ embedded PostgreSQL for storage, and HA Conversation API
 
 ```
 .
-├── garmincoach/                    # HA addon directory (slug)
+├── pulsecoach/                    # HA addon directory (slug)
 │   ├── config.json                 # Addon manifest (options, schema, ingress)
 │   ├── build.json                  # Multi-arch build config
 │   ├── Dockerfile                  # Multi-stage: Node.js builder → HA base
@@ -43,7 +43,7 @@ embedded PostgreSQL for storage, and HA Conversation API
 ## Key Conventions
 
 ### HA Addon Structure
-- `garmincoach/` is the addon slug — do NOT rename
+- `pulsecoach/` is the addon slug — do NOT rename
 - `config.json` defines options, schema, and addon metadata
 - `rootfs/` is overlaid onto the container filesystem at runtime
 - s6-overlay manages the service lifecycle (type: longrun)
@@ -139,11 +139,11 @@ Using `--no-verify` is **PROHIBITED**.
 
 ## Important Files
 
-- `garmincoach/config.json` — Addon manifest and option schema
-- `garmincoach/Dockerfile` — Multi-stage build
-- `garmincoach/rootfs/app/lib/ai-backend.ts` — AI abstraction layer
-- `garmincoach/rootfs/app/scripts/garmin-sync.py` — Data sync
-- `garmincoach/rootfs/etc/s6-overlay/s6-rc.d/garmincoach/run` — Service entry
+- `pulsecoach/config.json` — Addon manifest and option schema
+- `pulsecoach/Dockerfile` — Multi-stage build
+- `pulsecoach/rootfs/app/lib/ai-backend.ts` — AI abstraction layer
+- `pulsecoach/rootfs/app/scripts/garmin-sync.py` — Data sync
+- `pulsecoach/rootfs/etc/s6-overlay/s6-rc.d/pulsecoach/run` — Service entry
 - `repository.json` — Addon store manifest
 
 

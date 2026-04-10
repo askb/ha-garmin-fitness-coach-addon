@@ -23,7 +23,7 @@ jobs:
         run: pip install pytest psycopg2-binary garminconnect
 
       - name: Run tests
-        run: pytest garmincoach/rootfs/app/tests/ -v
+        run: pytest pulsecoach/rootfs/app/tests/ -v
 
   docker-build:
     runs-on: ubuntu-latest
@@ -34,15 +34,15 @@ jobs:
         id: config
         run: |
           BUILD_FROM=$(python3 -c \
-            "import json; print(json.load(open('garmincoach/build.json'))['build_from']['amd64'])")
+            "import json; print(json.load(open('pulsecoach/build.json'))['build_from']['amd64'])")
           echo "build_from=${BUILD_FROM}" >> "$GITHUB_OUTPUT"
 
       - name: Build Docker image
-        run: docker build --build-arg BUILD_FROM=${{ steps.config.outputs.build_from }} -t garmincoach-test garmincoach/
+        run: docker build --build-arg BUILD_FROM=${{ steps.config.outputs.build_from }} -t pulsecoach-test pulsecoach/
 
       - name: Smoke test container
         run: |
-          docker run --rm garmincoach-test python3 -c "
+          docker run --rm pulsecoach-test python3 -c "
           import sys
           sys.path.insert(0, '/app/scripts')
           # Verify scripts are importable

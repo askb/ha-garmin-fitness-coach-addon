@@ -98,11 +98,11 @@ constitution serves as the authoritative reference for all speckit agents.
 ## Files Referenced
 
 - `.specify/memory/constitution.md` — the constitution (read/write)
-- `garmincoach/config.json` — addon configuration
-- `garmincoach/Dockerfile` — build configuration
+- `pulsecoach/config.json` — addon configuration
+- `pulsecoach/Dockerfile` — build configuration
 - `.pre-commit-config.yaml` — code quality rules
 - `pyproject.toml` — Python project configuration
-- `garmincoach/rootfs/etc/s6-overlay/` — service structure
+- `pulsecoach/rootfs/etc/s6-overlay/` — service structure
 
 ## Output
 

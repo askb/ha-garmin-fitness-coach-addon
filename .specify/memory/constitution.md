@@ -7,12 +7,12 @@ SPDX-License-Identifier: Apache-2.0
 Previous version: 0.0.0
 Current version:  1.0.0
 Impact level:     MAJOR — initial ratification
-Summary:          First constitution for the GarminCoach HA addon repository.
+Summary:          First constitution for the PulseCoach HA addon repository.
                   Establishes all foundational principles, development standards,
                   and governance procedures.
 -->
 
-# GarminCoach HA Addon — Repository Constitution
+# PulseCoach HA Addon — Repository Constitution
 
 **Version:** 1.0.0
 **Ratified:** 2026-03-25
@@ -24,7 +24,7 @@ Summary:          First constitution for the GarminCoach HA addon repository.
 
 ### Principle I: HA Addon Conventions (NON-NEGOTIABLE)
 
-- `garmincoach/` is the addon slug — NEVER rename.
+- `pulsecoach/` is the addon slug — NEVER rename.
 - `config.json` defines all options, schema, and metadata. It is the single
   source of truth for addon configuration.
 - `rootfs/` overlays the container filesystem at runtime.
@@ -84,7 +84,7 @@ Summary:          First constitution for the GarminCoach HA addon repository.
 ### Principle VII: Data Persistence & Privacy
 
 - All user data stays local — never sent to external services.
-- PostgreSQL/SQLite is backed up to `/share/garmincoach/` after every sync.
+- PostgreSQL/SQLite is backed up to `/share/pulsecoach/` after every sync.
 - Garmin tokens are cached in `/data/garmin-tokens/` (persistent across
   container restarts).
 - AI backends: `ha_conversation`, `ollama`, or `none` — all local-first.

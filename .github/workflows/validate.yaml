@@ -74,7 +74,7 @@ jobs:
       - name: 'Lint Dockerfile'
         uses: hadolint/hadolint-action@v3.3.0
         with:
-          dockerfile: garmincoach/Dockerfile
+          dockerfile: pulsecoach/Dockerfile
           failure-threshold: error
 
   lint-json:
@@ -92,6 +92,6 @@ jobs:
 
       - name: 'Validate addon config'
         run: |
-          python3 -m json.tool garmincoach/config.json > /dev/null
-          python3 -m json.tool garmincoach/build.json > /dev/null
+          python3 -m json.tool pulsecoach/config.json > /dev/null
+          python3 -m json.tool pulsecoach/build.json > /dev/null
           python3 -m json.tool repository.json > /dev/null

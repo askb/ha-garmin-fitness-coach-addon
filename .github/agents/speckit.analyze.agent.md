@@ -41,12 +41,12 @@ missing coverage, and potential issues WITHOUT modifying any files.
 5. **Addon-specific checks**:
 
    **config.json consistency**:
-   - Options in `garmincoach/config.json` match what specs describe.
+   - Options in `pulsecoach/config.json` match what specs describe.
    - Schema entries exist for every option.
    - Defaults are sensible.
 
    **s6 services consistency**:
-   - Services in `garmincoach/rootfs/etc/s6-overlay/s6-rc.d/` match
+   - Services in `pulsecoach/rootfs/etc/s6-overlay/s6-rc.d/` match
      what the Dockerfile COPY directives expect.
    - Each longrun service has a `run` script.
    - Services registered in `user/contents.d/`.
@@ -103,9 +103,9 @@ missing coverage, and potential issues WITHOUT modifying any files.
 - `specs/*/spec.md` — all specifications
 - `specs/*/plan.md` — all plans
 - `specs/*/tasks.md` — all task lists
-- `garmincoach/config.json` — addon configuration
-- `garmincoach/Dockerfile` — container build
-- `garmincoach/rootfs/etc/s6-overlay/s6-rc.d/` — s6 services
+- `pulsecoach/config.json` — addon configuration
+- `pulsecoach/Dockerfile` — container build
+- `pulsecoach/rootfs/etc/s6-overlay/s6-rc.d/` — s6 services
 
 ## Output
 

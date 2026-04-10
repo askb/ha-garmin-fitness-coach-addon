@@ -35,14 +35,14 @@ jobs:
 
       - name: 'Validate JSON configs'
         run: |
-          python3 -m json.tool garmincoach/config.json > /dev/null
-          python3 -m json.tool garmincoach/build.json > /dev/null
+          python3 -m json.tool pulsecoach/config.json > /dev/null
+          python3 -m json.tool pulsecoach/build.json > /dev/null
           python3 -m json.tool repository.json > /dev/null
 
       - name: 'Lint Dockerfile'
         uses: hadolint/hadolint-action@v3.3.0
         with:
-          dockerfile: garmincoach/Dockerfile
+          dockerfile: pulsecoach/Dockerfile
 
   build-push:
     name: 'Build & Push (${{ matrix.arch }})'
@@ -88,17 +88,17 @@ jobs:
       - name: 'Build and push arch image'
         uses: docker/build-push-action@v7
         with:
-          context: garmincoach
+          context: pulsecoach
           push: true
           platforms: ${{ matrix.platform }}
           build-args: |
             BUILD_FROM=${{ matrix.build_from }}
             BUILD_ARCH=${{ matrix.arch }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/garmincoach-addon-${{ matrix.arch }}:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/garmincoach-addon-${{ matrix.arch }}:latest
+            ghcr.io/${{ github.repository_owner }}/pulsecoach-addon-${{ matrix.arch }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/pulsecoach-addon-${{ matrix.arch }}:latest
           labels: |
-            org.opencontainers.image.title=GarminCoach HA Addon
+            org.opencontainers.image.title=PulseCoach HA Addon
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha
@@ -133,7 +133,7 @@ jobs:
       - name: 'Generate SBOM from image'
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/${{ github.repository_owner }}/garmincoach-addon-amd64:${{ steps.version.outputs.version }}
+          image: ghcr.io/${{ github.repository_owner }}/pulsecoach-addon-amd64:${{ steps.version.outputs.version }}
           format: cyclonedx-json
           output-file: sbom-cyclonedx.json
 

@@ -1,5 +1,5 @@
 ---
-description: Development guidelines for the GarminCoach Home Assistant addon.
+description: Development guidelines for the PulseCoach Home Assistant addon.
 applyTo: '**'
 ---
 
@@ -8,7 +8,7 @@ SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# GarminCoach Addon Development Guidelines
+# PulseCoach Addon Development Guidelines
 
 Auto-generated from feature plans. Last updated: 2026-03-25
 
@@ -24,7 +24,7 @@ Auto-generated from feature plans. Last updated: 2026-03-25
 ## Project Structure
 
 ```text
-garmincoach/                    # HA addon directory (slug)
+pulsecoach/                    # HA addon directory (slug)
 ├── config.json                 # Addon manifest & schema
 ├── Dockerfile                  # Multi-stage build
 ├── build.json                  # Multi-arch config

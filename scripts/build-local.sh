@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
-# Local build and test script for GarminCoach HA addon
+# Local build and test script for PulseCoach HA addon
 #
 # Usage:
 #   ./scripts/build-local.sh          # Build the addon image
@@ -37,13 +37,13 @@ if [ ! -d "${APP_SOURCE}" ]; then
 fi
 
 log "Copying app source from ${APP_SOURCE}..."
-rm -rf "${ADDON_DIR}/garmincoach/ha-garmin-fitness-coach-app"
+rm -rf "${ADDON_DIR}/pulsecoach/ha-garmin-fitness-coach-app"
 rsync -a --exclude=node_modules --exclude=.next --exclude=.git \
-    "${APP_SOURCE}/" "${ADDON_DIR}/garmincoach/ha-garmin-fitness-coach-app/"
+    "${APP_SOURCE}/" "${ADDON_DIR}/pulsecoach/ha-garmin-fitness-coach-app/"
 ok "App source copied."
 
 # ─── Step 2: Build the Docker image ──────────────────────────────────────────
-BUILD_FROM=$(python3 -c "import json; print(json.load(open('${ADDON_DIR}/garmincoach/build.json'))['build_from']['${ARCH}'])")
+BUILD_FROM=$(python3 -c "import json; print(json.load(open('${ADDON_DIR}/pulsecoach/build.json'))['build_from']['${ARCH}'])")
 
 log "Building addon image (${ARCH})..."
 log "  BUILD_FROM: ${BUILD_FROM}"
@@ -52,13 +52,13 @@ docker build \
     --build-arg "BUILD_FROM=${BUILD_FROM}" \
     --build-arg "BUILD_ARCH=${ARCH}" \
     -t "${IMAGE_NAME}" \
-    -f "${ADDON_DIR}/garmincoach/Dockerfile" \
-    "${ADDON_DIR}/garmincoach"
+    -f "${ADDON_DIR}/pulsecoach/Dockerfile" \
+    "${ADDON_DIR}/pulsecoach"
 
 ok "Image built: ${IMAGE_NAME}"
 
 # ─── Cleanup build context ───────────────────────────────────────────────────
-rm -rf "${ADDON_DIR}/garmincoach/ha-garmin-fitness-coach-app"
+rm -rf "${ADDON_DIR}/pulsecoach/ha-garmin-fitness-coach-app"
 ok "Cleaned up build context."
 
 # ─── Step 3: Optionally run it ────────────────────────────────────────────────
@@ -74,7 +74,7 @@ if [ "${1:-}" = "--run" ]; then
         -e "AI_BACKEND=none" \
         -e "GARMIN_EMAIL=" \
         -e "GARMIN_PASSWORD=" \
-        -e "DATABASE_URL=file:/data/garmincoach.db" \
+        -e "DATABASE_URL=file:/data/pulsecoach.db" \
         -e "NODE_ENV=production" \
         -e "AUTH_SECRET=local-test-secret" \
         -e "AUTH_DISCORD_ID=unused" \

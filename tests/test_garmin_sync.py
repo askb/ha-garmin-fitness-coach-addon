@@ -28,7 +28,7 @@ import pytest
 
 SCRIPT_PATH = (
     Path(__file__).resolve().parents[1]
-    / "garmincoach"
+    / "pulsecoach"
     / "rootfs"
     / "app"
     / "scripts"

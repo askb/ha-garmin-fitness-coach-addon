@@ -14,7 +14,7 @@ SPDX-License-Identifier: Apache-2.0
 - Type hints required for all functions
 - SPDX headers on all files
 
-## Garmin Sync (`garmincoach/rootfs/app/scripts/garmin-sync.py`)
+## Garmin Sync (`pulsecoach/rootfs/app/scripts/garmin-sync.py`)
 - Uses `garminconnect` Python package
 - Tokens cached in `/data/garmin-tokens/`
 - Rate limiting: respect Garmin API limits

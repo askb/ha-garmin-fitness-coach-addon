@@ -17,16 +17,16 @@ safe-outputs:
     max: 1
 ---
 
-# Daily GarminCoach Addon Health Report
+# Daily PulseCoach Addon Health Report
 
-Generate a daily health report for the GarminCoach Home Assistant addon repository.
+Generate a daily health report for the PulseCoach Home Assistant addon repository.
 
 ## Context
 
 This is a Home Assistant addon that syncs Garmin fitness data into PostgreSQL
 and serves an AI coaching dashboard. Key components:
 - **Dockerfile** — Multi-stage build: clones app repo, builds Next.js standalone, installs Python deps
-- **s6-overlay services** — postgresql, garmin-auth, garmincoach (main orchestrator)
+- **s6-overlay services** — postgresql, garmin-auth, pulsecoach (main orchestrator)
 - **Python scripts** — garmin-sync.py (data sync), metrics-compute.py (EWMA/CTL/ATL/TSB), ha-notify.py (HA sensors)
 - **ingress-proxy.js** — Node.js proxy rewriting paths for HA ingress compatibility
 - **Next.js standalone** — Bundled app served on port 3001, proxied via ingress on port 3000
@@ -44,10 +44,10 @@ Create a concise daily health report as a GitHub issue covering:
 
 ### 2. Addon Structure Health
 - Verify Dockerfile builds correctly (check for deprecated instructions)
-- Check s6-overlay service definitions in `garmincoach/rootfs/etc/s6-overlay/`
-- Verify `garmincoach/config.json` version matches latest git tag (if any)
-- Count Python scripts in `garmincoach/rootfs/app/scripts/`
-- Count test files in `garmincoach/rootfs/app/tests/`
+- Check s6-overlay service definitions in `pulsecoach/rootfs/etc/s6-overlay/`
+- Verify `pulsecoach/config.json` version matches latest git tag (if any)
+- Count Python scripts in `pulsecoach/rootfs/app/scripts/`
+- Count test files in `pulsecoach/rootfs/app/tests/`
 
 ### 3. Python Code Quality
 - Check all Python scripts for `set -euo pipefail` equivalent (proper error handling)
@@ -69,7 +69,7 @@ Create a concise daily health report as a GitHub issue covering:
 
 ### 5. HA Integration Health
 - Verify all 7 sensors are defined in ha-notify.py
-- Check sensor naming convention (should be `sensor.garmincoach_*`)
+- Check sensor naming convention (should be `sensor.pulsecoach_*`)
 - Verify cleanup traps exist in s6 run scripts
 - Check process monitoring loop is active in main run script
 
