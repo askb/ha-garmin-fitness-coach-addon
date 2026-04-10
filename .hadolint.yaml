@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+---
+ignored:
+  # Alpine packages don't have stable pinnable versions
+  - DL3018
+  # pip install from requirements.txt handles pinning
+  - DL3013
+  # pip cache is useful in multi-stage builds
+  - DL3042
+  # npm install pinning handled in package.json
+  - DL3016
+  # WORKDIR vs cd is a style choice in multi-stage builds
+  - DL3003
