@@ -16,6 +16,7 @@ your local network.
 - [Configuration](#configuration)
 - [Garmin Authentication](#garmin-authentication)
 - [AI Backend Options](#ai-backend-options)
+- [Automation Blueprints & Templates](#automation-blueprints--templates)
 - [Known Issues](#known-issues)
 - [Development](#development)
 - [Contributing](#contributing)
@@ -217,9 +218,28 @@ GarminCoach authenticates with Garmin Connect using a **web-based auth flow**:
 | `sensor.garmincoach_body_battery` | Current Garmin Body Battery value |
 | `sensor.garmincoach_sleep_debt` | Accumulated sleep debt (hours) |
 
-## Automation Templates
+## Automation Blueprints & Templates
 
-Seven ready-to-paste HA automations are provided in
+### HA Blueprints (importable)
+
+Five ready-to-import Home Assistant blueprints are included in
+`garmincoach/rootfs/app/blueprints/`. Import them via **Settings → Automations
+→ Blueprints → Import Blueprint** using the raw GitHub URL:
+
+| Blueprint | Trigger | What It Does |
+|-----------|---------|--------------|
+| **Low Body Battery Recovery** | Body Battery < threshold | Dims lights, activates recovery scene, sends push notification |
+| **Morning Training Briefing** | Configurable time (default 7 AM) | TTS announcement + push with ACWR, form, and workout recommendation |
+| **Injury Risk Alert** | Risk level → high or critical | Urgent push notification, optional DND toggle |
+| **Training Freshness Reminder** | TSB (form) > threshold | Push notification to train when body is fresh |
+| **Weekly Training Summary** | Configurable day/time | Weekly CTL, ATL, TSB, ACWR, risk, body battery summary |
+
+All blueprints use configurable inputs (thresholds, notification targets,
+scenes) with sensible defaults for GarminCoach sensor entities.
+
+### Copy-Paste Automations
+
+Seven additional ready-to-paste automations are provided in
 [`HA_AUTOMATIONS.md`](garmincoach/HA_AUTOMATIONS.md):
 
 1. **Low Body Battery Recovery Mode** — dim lights, enable DND
@@ -232,8 +252,15 @@ Seven ready-to-paste HA automations are provided in
 
 ## Testing
 
-- **19 pytest tests** covering Garmin auth flow, token handling, daily stats
-  sync, activity sync, TRIMP calculation, and ingress proxy path rewriting
+- **28 passing pytest tests** (+ 59 pre-existing errors in legacy sync tests)
+  covering:
+  - Garmin auth flow, token handling, daily stats sync, activity sync
+  - TRIMP calculation, ingress proxy path rewriting
+  - AI workout recommendation logic (rest triggers, optimal signals)
+  - Injury risk computation (ACWR, TSB, ramp rate thresholds)
+  - EWMA decay constant validation (7-day ATL, 42-day CTL)
+  - Confidence degradation with missing/extreme data
+  - Scientific reference accuracy (VO2max, Cooper, Riegel)
 - **CI:** GitHub Actions builds the Docker image and runs `pytest -v` on every
   PR
 
