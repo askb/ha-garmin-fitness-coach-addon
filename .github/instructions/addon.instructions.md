@@ -1,5 +1,5 @@
 ---
-applyTo: "garmincoach/**"
+applyTo: "pulsecoach/**"
 ---
 
 <!--
@@ -10,7 +10,7 @@ SPDX-License-Identifier: Apache-2.0
 # HA Addon Instructions
 
 ## Addon Structure (NON-NEGOTIABLE)
-- `garmincoach/` is the addon slug — do NOT rename
+- `pulsecoach/` is the addon slug — do NOT rename
 - `config.json` is the single source of truth for addon options
 - `rootfs/` is overlaid onto the container at runtime
 

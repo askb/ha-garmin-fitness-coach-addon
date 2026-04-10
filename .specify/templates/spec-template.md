@@ -108,7 +108,7 @@ infrastructure.
 ### config.json Changes
 
 ```json
-// New or modified options in garmincoach/config.json
+// New or modified options in pulsecoach/config.json
 {
   "options": {
     "{{OPTION_NAME}}": "{{default_value}}"

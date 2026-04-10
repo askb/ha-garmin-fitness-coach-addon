@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2025 Anil Belur <askb23@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
-"""Shared pytest fixtures for garmincoach tests."""
+"""Shared pytest fixtures for pulsecoach tests."""
 
 import json
 import os
@@ -13,7 +13,7 @@ import pytest
 @pytest.fixture()
 def tmp_data_dir(tmp_path):
     """Provide a temporary data directory and set DATABASE_URL."""
-    db_path = str(tmp_path / "garmincoach.db")
+    db_path = str(tmp_path / "pulsecoach.db")
     with patch.dict(os.environ, {"DATABASE_URL": f"file:{db_path}"}):
         yield tmp_path, db_path
 

@@ -43,7 +43,7 @@ async function run() {
   });
   await new Promise(r=>mock.listen(MP,r));
   const {execFile}=require("child_process");
-  const pp=path.join(__dirname,"../../garmincoach/rootfs/app/ingress-proxy.js");
+  const pp=path.join(__dirname,"../../pulsecoach/rootfs/app/ingress-proxy.js");
   const proc=execFile("node",[pp],{env:{...process.env,NEXT_INTERNAL_PORT:String(MP),PORT:String(PP)}});
   await new Promise(r=>setTimeout(r,500));
   try {

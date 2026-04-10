@@ -1,4 +1,4 @@
-# GarminCoach — Home Assistant Addon
+# PulseCoach — Home Assistant Addon
 
 [![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Faskb%2Fha-garmin-fitness-coach-addon)
 
@@ -17,10 +17,12 @@ your local network.
 - [Garmin Authentication](#garmin-authentication)
 - [AI Backend Options](#ai-backend-options)
 - [Automation Blueprints & Templates](#automation-blueprints--templates)
+- [Garmin Watch Compatibility](#garmin-watch-compatibility)
 - [Known Issues](#known-issues)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Contributing](#contributing)
+- [Disclaimer](#disclaimer)
 - [License](#license)
 
 ## Features
@@ -46,11 +48,11 @@ your local network.
 ```mermaid
 graph TD
     subgraph "Home Assistant OS"
-        subgraph "GarminCoach Addon (s6-overlay)"
+        subgraph "PulseCoach Addon (s6-overlay)"
             S6["s6-overlay init"]
             PG["postgresql<br/>(longrun)"]
             Auth["garmin-auth<br/>(longrun, Flask :8099)"]
-            GC["garmincoach orchestrator<br/>(longrun)"]
+            GC["pulsecoach orchestrator<br/>(longrun)"]
             Sync["garmin-sync.py<br/>(loop, every N min)"]
             Metrics["metrics-compute.py<br/>(120s delay, every 60 min)"]
             Notify["ha-notify.py<br/>(180s delay, every 30 min)"]
@@ -88,7 +90,7 @@ graph TD
 
 ```text
 Startup order:
-  postgresql → garmin-auth (parallel) → garmincoach orchestrator
+  postgresql → garmin-auth (parallel) → pulsecoach orchestrator
     → garmin-sync (background loop, waits for tokens)
     → metrics-compute (120s delay, then every 60 min)
     → ha-notify (180s delay, then every 30 min)
@@ -107,7 +109,7 @@ Click the button at the top of this README, or:
 
 [![Add Repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Faskb%2Fha-garmin-fitness-coach-addon)
 
-Then install **GarminCoach** from the add-on store and start it.
+Then install **PulseCoach** from the add-on store and start it.
 
 ### Manual Install
 
@@ -117,13 +119,13 @@ Then install **GarminCoach** from the add-on store and start it.
    ```
    https://github.com/askb/ha-garmin-fitness-coach-addon
    ```
-3. Click **Add**, then find **GarminCoach** in the store and click **Install**.
+3. Click **Add**, then find **PulseCoach** in the store and click **Install**.
 4. Wait for the build to complete (~10-15 minutes on aarch64, ~5 min on amd64).
 5. Start the addon — it appears in your sidebar automatically.
 
 ### First-Time Setup
 
-1. **Open the addon** from your HA sidebar (or Settings → Add-ons → GarminCoach → Open Web UI).
+1. **Open the addon** from your HA sidebar (or Settings → Add-ons → PulseCoach → Open Web UI).
 2. **Complete the onboarding wizard** (4 steps):
    - **About You** — age, sex, weight, height
    - **Your Sports** — select sports and goals for each
@@ -161,9 +163,9 @@ Then install **GarminCoach** from the add-on store and start it.
 
 ## Garmin Authentication
 
-GarminCoach authenticates with Garmin Connect using a **web-based auth flow**:
+PulseCoach authenticates with Garmin Connect using a **web-based auth flow**:
 
-1. Open the addon **Web UI** (sidebar → GarminCoach).
+1. Open the addon **Web UI** (sidebar → PulseCoach).
 2. Navigate to **Settings → Connect Garmin**.
 3. Enter your **email** and **password**. If your account has MFA enabled you
    will be prompted for the one-time code during the same flow.
@@ -211,20 +213,20 @@ GarminCoach authenticates with Garmin Connect using a **web-based auth flow**:
 
 | Entity ID | Description |
 |-----------|-------------|
-| `sensor.garmincoach_ctl` | Chronic Training Load (42-day fitness) |
-| `sensor.garmincoach_atl` | Acute Training Load (7-day fatigue) |
-| `sensor.garmincoach_form` | Training Stress Balance (TSB = CTL − ATL) |
-| `sensor.garmincoach_acwr` | Acute:Chronic Workload Ratio (injury risk) |
-| `sensor.garmincoach_injury_risk` | Risk level: Low / Moderate / High / Very High |
-| `sensor.garmincoach_body_battery` | Current Garmin Body Battery value |
-| `sensor.garmincoach_sleep_debt` | Accumulated sleep debt (hours) |
+| `sensor.pulsecoach_ctl` | Chronic Training Load (42-day fitness) |
+| `sensor.pulsecoach_atl` | Acute Training Load (7-day fatigue) |
+| `sensor.pulsecoach_form` | Training Stress Balance (TSB = CTL − ATL) |
+| `sensor.pulsecoach_acwr` | Acute:Chronic Workload Ratio (injury risk) |
+| `sensor.pulsecoach_injury_risk` | Risk level: Low / Moderate / High / Very High |
+| `sensor.pulsecoach_body_battery` | Current Garmin Body Battery value |
+| `sensor.pulsecoach_sleep_debt` | Accumulated sleep debt (hours) |
 
 ## Automation Blueprints & Templates
 
 ### HA Blueprints (importable)
 
 Five ready-to-import Home Assistant blueprints are included in
-`garmincoach/rootfs/app/blueprints/`. Import them via **Settings → Automations
+`pulsecoach/rootfs/app/blueprints/`. Import them via **Settings → Automations
 → Blueprints → Import Blueprint** using the raw GitHub URL:
 
 | Blueprint | Trigger | What It Does |
@@ -236,12 +238,12 @@ Five ready-to-import Home Assistant blueprints are included in
 | **Weekly Training Summary** | Configurable day/time | Weekly CTL, ATL, TSB, ACWR, risk, body battery summary |
 
 All blueprints use configurable inputs (thresholds, notification targets,
-scenes) with sensible defaults for GarminCoach sensor entities.
+scenes) with sensible defaults for PulseCoach sensor entities.
 
 ### Copy-Paste Automations
 
 Seven additional ready-to-paste automations are provided in
-[`HA_AUTOMATIONS.md`](garmincoach/HA_AUTOMATIONS.md):
+[`HA_AUTOMATIONS.md`](pulsecoach/HA_AUTOMATIONS.md):
 
 1. **Low Body Battery Recovery Mode** — dim lights, enable DND
 2. **Morning Training Briefing** — daily notification with readiness + plan
@@ -264,6 +266,50 @@ Seven additional ready-to-paste automations are provided in
   - Scientific reference accuracy (VO2max, Cooper, Riegel)
 - **CI:** GitHub Actions builds the Docker image and runs `pytest -v` on every
   PR
+
+## Garmin Watch Compatibility
+
+PulseCoach connects to the **Garmin Connect web API** — not directly to your
+watch. Any Garmin watch that syncs to Garmin Connect will work, but the depth
+of coaching features depends on which sensors your watch has.
+
+### Full Feature Support
+
+Watches with Body Battery, HRV, VO2 Max, and Training Status:
+
+- **Forerunner** 165, 255, 265, 955, 965
+- **Fenix** 7, 7X, 8, 8X
+- **Epix** (Gen 2), Epix Pro
+- **Enduro** 2, 3
+- **MARQ** (Gen 2)
+
+All metrics available: training load (CTL/ATL/TSB), ACWR injury-risk, HR zone
+polarization, recovery scores, sleep staging, Body Battery trends, HRV status.
+
+### Partial Feature Support
+
+Watches with HR + sleep but limited/no Body Battery or HRV:
+
+- **Vivoactive** 4, 5
+- **Venu** 2, 2 Plus, 3, Sq, Sq 2
+- **Instinct** 2, 2X, Crossover, Solar
+
+Most coaching works. Body Battery and HRV-based recovery may show as
+unavailable. Training load still calculates from HR zones.
+
+### Basic Support
+
+Watches with steps + HR only (no advanced physiology):
+
+- **Vivosmart** 4, 5
+- **Vivofit** 4, Jr. 3
+- **Lily** (Gen 1, 2)
+
+Steps, heart rate, and sleep duration are available. Advanced training metrics
+(VO2 Max, Training Status, Body Battery) will not be populated.
+
+> **Note:** PulseCoach handles missing data gracefully — sensors for
+> unavailable metrics simply show as "Unknown" in Home Assistant.
 
 ## Known Issues
 
@@ -301,10 +347,10 @@ automatically after token loss. Instead, startup logs will show
 
 **How to fix:**
 
-1. **Stop the addon** — Settings → Add-ons → GarminCoach → Stop
+1. **Stop the addon** — Settings → Add-ons → PulseCoach → Stop
 2. **Wait 15–30 minutes** for the Garmin rate limit window to expire
 3. **Start the addon** — it will attempt one clean login
-4. **Verify authentication succeeded** — Settings → Add-ons → GarminCoach →
+4. **Verify authentication succeeded** — Settings → Add-ons → PulseCoach →
    Log tab, look for either `Authenticated with credentials, tokens saved` or
    `Tokens saved to /data/garmin-tokens`
 5. **If logs are unclear, verify token files exist** — confirm both
@@ -321,7 +367,7 @@ subsequent syncs use token refresh (not counted as a login attempt).
 
 - Keep `sync_interval_minutes` at **30 or above** (default: 60)
 - Avoid frequent uninstall/reinstall cycles — use **Restart** instead
-- Tokens are backed up to `/share/garmincoach/garmin-tokens/` and auto-restored
+- Tokens are backed up to `/share/pulsecoach/garmin-tokens/` and auto-restored
   on reinstall, so a normal uninstall → reinstall should not trigger fresh login
 - If you change your Garmin password, you must re-authenticate via the addon's
   Settings → Connect Garmin flow
@@ -349,16 +395,16 @@ authentication errors. Re-authenticate from **Settings → Connect Garmin**.
 ## Data Persistence & Backup
 
 All data is stored in PostgreSQL at `/data/postgresql/` and automatically
-backed up to `/share/garmincoach/` (survives addon uninstalls).
+backed up to `/share/pulsecoach/` (survives addon uninstalls).
 
 ### What Gets Saved
 
 | Data | Location | Backup Path |
 |---|---|---|
-| Daily metrics, activities, VO2max | PostgreSQL `/data/` | `/share/garmincoach/garmincoach.sql.gz` |
-| Athlete Profile & Health info | PostgreSQL `/data/` (profile table) | `/share/garmincoach/garmincoach.sql.gz` |
-| Readiness scores, chat history | PostgreSQL `/data/` | `/share/garmincoach/garmincoach.sql.gz` |
-| Garmin OAuth tokens | `/data/garmin-tokens/` | `/share/garmincoach/garmin-tokens/` |
+| Daily metrics, activities, VO2max | PostgreSQL `/data/` | `/share/pulsecoach/pulsecoach.sql.gz` |
+| Athlete Profile & Health info | PostgreSQL `/data/` (profile table) | `/share/pulsecoach/pulsecoach.sql.gz` |
+| Readiness scores, chat history | PostgreSQL `/data/` | `/share/pulsecoach/pulsecoach.sql.gz` |
+| Garmin OAuth tokens | `/data/garmin-tokens/` | `/share/pulsecoach/garmin-tokens/` |
 
 ### When Backups Happen
 
@@ -368,8 +414,8 @@ backed up to `/share/garmincoach/` (survives addon uninstalls).
 ### Restore on Reinstall
 
 When the addon starts with an empty database:
-1. Checks `/share/garmincoach/garmincoach.sql.gz` — restores full DB if found
-2. Checks `/share/garmincoach/garmin-tokens/` — restores auth tokens if found
+1. Checks `/share/pulsecoach/pulsecoach.sql.gz` — restores full DB if found
+2. Checks `/share/pulsecoach/garmin-tokens/` — restores auth tokens if found
 
 No manual steps needed — data is restored automatically.
 
@@ -434,7 +480,7 @@ identical to what Garmin Connect shows.
 ## Development
 
 This addon packages the
-[GarminCoach App](https://github.com/askb/ha-garmin-fitness-coach-app) for
+[PulseCoach App](https://github.com/askb/ha-garmin-fitness-coach-app) for
 Home Assistant. See the app repo for the full Next.js / tRPC / Drizzle
 codebase.
 
@@ -474,6 +520,15 @@ Tagged releases create GitHub Releases automatically.
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for
 repository structure, local development setup, AI backend details, and the
 release process.
+
+## Disclaimer
+
+This project is **not affiliated with, endorsed by, or connected to Garmin
+Ltd. or any of its subsidiaries**. "Garmin", "Garmin Connect", "Body Battery",
+"Training Status", and related trademarks are the property of Garmin Ltd.
+
+PulseCoach is an independent, community-developed project that reads publicly
+available user data from the Garmin Connect API. Use at your own risk.
 
 ## License
 

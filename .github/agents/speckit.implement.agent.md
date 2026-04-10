@@ -70,7 +70,7 @@ pytest tests/ -v
 pre-commit run --all-files
 
 # Shellcheck (for bash scripts)
-shellcheck garmincoach/rootfs/etc/s6-overlay/s6-rc.d/*/run 2>/dev/null || true
+shellcheck pulsecoach/rootfs/etc/s6-overlay/s6-rc.d/*/run 2>/dev/null || true
 ```
 
 ## Rules

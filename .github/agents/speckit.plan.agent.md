@@ -42,11 +42,11 @@ addon's technical architecture.
    - **Constitution Check**: Verify against `.specify/memory/constitution.md`.
    - **Project Structure**: Select and justify the option.
    - **Package Mapping**:
-     - Python scripts → `garmincoach/rootfs/app/scripts/`
-     - TypeScript lib → `garmincoach/rootfs/app/lib/`
-     - s6 services → `garmincoach/rootfs/etc/s6-overlay/s6-rc.d/`
-     - Docker → `garmincoach/Dockerfile`
-     - Config → `garmincoach/config.json`
+     - Python scripts → `pulsecoach/rootfs/app/scripts/`
+     - TypeScript lib → `pulsecoach/rootfs/app/lib/`
+     - s6 services → `pulsecoach/rootfs/etc/s6-overlay/s6-rc.d/`
+     - Docker → `pulsecoach/Dockerfile`
+     - Config → `pulsecoach/config.json`
    - **Architecture Decisions**: Document each decision with context, options,
      and rationale.
    - **Implementation Phases**: Break into 3-4 phases.
@@ -68,9 +68,9 @@ addon's technical architecture.
 - `specs/NNN-name/spec.md` — feature specification
 - `.specify/templates/plan-template.md` — plan template
 - `.specify/memory/constitution.md` — project constitution
-- `garmincoach/config.json` — current addon config
-- `garmincoach/Dockerfile` — current Dockerfile
-- `garmincoach/rootfs/etc/s6-overlay/s6-rc.d/` — existing s6 services
+- `pulsecoach/config.json` — current addon config
+- `pulsecoach/Dockerfile` — current Dockerfile
+- `pulsecoach/rootfs/etc/s6-overlay/s6-rc.d/` — existing s6 services
 
 ## Output
 

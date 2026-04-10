@@ -22,11 +22,11 @@ SPDX-License-Identifier: Apache-2.0
 
 | Component | Path | Notes |
 | --------- | ---- | ----- |
-| Python scripts | `garmincoach/rootfs/app/scripts/` | Core business logic |
-| TypeScript lib | `garmincoach/rootfs/app/lib/` | AI/coaching engine |
-| s6 services | `garmincoach/rootfs/etc/s6-overlay/s6-rc.d/` | Process management |
-| Dockerfile | `garmincoach/Dockerfile` | Container build |
-| Addon config | `garmincoach/config.json` | HA addon metadata |
+| Python scripts | `pulsecoach/rootfs/app/scripts/` | Core business logic |
+| TypeScript lib | `pulsecoach/rootfs/app/lib/` | AI/coaching engine |
+| s6 services | `pulsecoach/rootfs/etc/s6-overlay/s6-rc.d/` | Process management |
+| Dockerfile | `pulsecoach/Dockerfile` | Container build |
+| Addon config | `pulsecoach/config.json` | HA addon metadata |
 | Tests | `tests/` | pytest suite |
 
 ---
@@ -48,7 +48,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ### Task 2.1: {{TASK_TITLE}}
 
-- **File(s):** `garmincoach/rootfs/app/scripts/{{module}}.py`
+- **File(s):** `pulsecoach/rootfs/app/scripts/{{module}}.py`
 - **Action:** Create
 - **Description:** {{what to do}}
 - **Depends on:** Task 1.x
@@ -70,7 +70,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ### Task 3.1: {{TASK_TITLE}}
 
-- **File(s):** `garmincoach/rootfs/app/lib/{{module}}.ts`
+- **File(s):** `pulsecoach/rootfs/app/lib/{{module}}.ts`
 - **Action:** Create
 - **Description:** {{what to do}}
 - **Depends on:** Task 2.x
@@ -83,11 +83,11 @@ SPDX-License-Identifier: Apache-2.0
 
 ### Task 4.1: Update Dockerfile
 
-- **File(s):** `garmincoach/Dockerfile`
+- **File(s):** `pulsecoach/Dockerfile`
 - **Action:** Modify
 - **Description:** {{add new packages, build steps, or COPY directives}}
 - **Depends on:** Phase 2, Phase 3
-- **Acceptance:** `docker build garmincoach/` succeeds on amd64
+- **Acceptance:** `docker build pulsecoach/` succeeds on amd64
 - **Status:** 🔲 Not Started
 
 ---
@@ -96,7 +96,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ### Task 5.1: {{SERVICE_NAME}} service
 
-- **File(s):** `garmincoach/rootfs/etc/s6-overlay/s6-rc.d/{{service}}/`
+- **File(s):** `pulsecoach/rootfs/etc/s6-overlay/s6-rc.d/{{service}}/`
 - **Action:** Create
 - **Description:** {{define service type, run script, dependencies}}
 - **Depends on:** Task 4.1
@@ -109,7 +109,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ### Task 6.1: Update config.json
 
-- **File(s):** `garmincoach/config.json`
+- **File(s):** `pulsecoach/config.json`
 - **Action:** Modify
 - **Description:** {{add new options, update schema}}
 - **Depends on:** Phase 2–5

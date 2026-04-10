@@ -18,7 +18,7 @@ import pytest
 # The sync script lives outside the normal package tree; import it by path.
 SCRIPT_PATH = (
     Path(__file__).resolve().parents[2]
-    / "garmincoach"
+    / "pulsecoach"
     / "rootfs"
     / "app"
     / "scripts"

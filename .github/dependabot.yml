@@ -13,7 +13,7 @@ updates:
     open-pull-requests-limit: 15
 
   - package-ecosystem: "docker"
-    directory: "/garmincoach"
+    directory: "/pulsecoach"
     schedule:
       interval: "weekly"
     commit-message:

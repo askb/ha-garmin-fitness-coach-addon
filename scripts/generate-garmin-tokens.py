@@ -153,7 +153,7 @@ def _offer_deploy():
              "-p", HAOS_PORT, f"{HAOS_USER}@{HAOS_HOST}",
              f"curl -s -X POST -H 'Content-Type: application/json' "
              f"-d '{payload}' "
-             f"'http://ecfdb23d-garmincoach:3000/api/garmin/auth-import'"],
+             f"'http://ecfdb23d-pulsecoach:3000/api/garmin/auth-import'"],
             capture_output=True, text=True
         )
 
@@ -166,7 +166,7 @@ def _offer_deploy():
              "-p", HAOS_PORT, f"{HAOS_USER}@{HAOS_HOST}",
              f"curl -s -X POST -H 'Content-Type: application/json' "
              f"-d '{payload}' "
-             f"'http://ecfdb23d-garmincoach:8099/auth/import-tokens'"],
+             f"'http://ecfdb23d-pulsecoach:8099/auth/import-tokens'"],
             capture_output=True, text=True
         )
 

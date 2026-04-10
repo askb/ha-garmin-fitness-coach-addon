@@ -16,7 +16,7 @@ import pytest
 # The sync script lives outside the normal package tree; import it by path.
 SCRIPT_PATH = (
     Path(__file__).resolve().parents[2]
-    / "garmincoach"
+    / "pulsecoach"
     / "rootfs"
     / "app"
     / "scripts"
@@ -335,7 +335,7 @@ class TestDbPath:
         with patch.dict(os.environ, {"DATABASE_URL": "file:/data/test.db"}):
             # Re-evaluate at module level
             result = os.environ.get(
-                "DATABASE_URL", "file:/data/garmincoach.db"
+                "DATABASE_URL", "file:/data/pulsecoach.db"
             ).replace("file:", "")
             assert result == "/data/test.db"
 
@@ -344,6 +344,6 @@ class TestDbPath:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("DATABASE_URL", None)
             result = os.environ.get(
-                "DATABASE_URL", "file:/data/garmincoach.db"
+                "DATABASE_URL", "file:/data/pulsecoach.db"
             ).replace("file:", "")
-            assert result == "/data/garmincoach.db"
+            assert result == "/data/pulsecoach.db"

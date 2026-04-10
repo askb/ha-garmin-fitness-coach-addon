@@ -23,7 +23,7 @@ import pytest
 # Import helpers — load production modules without psycopg2 at import time
 # ---------------------------------------------------------------------------
 
-SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "garmincoach" / "rootfs" / "app" / "scripts"
+SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "pulsecoach" / "rootfs" / "app" / "scripts"
 
 
 def _load_module(name: str, filename: str) -> types.ModuleType:

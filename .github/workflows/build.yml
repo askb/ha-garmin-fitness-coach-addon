@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GARMIN_COACH_REPO: askb/ha-garmin-fitness-coach-app
+  PULSECOACH_APP_REPO: askb/ha-garmin-fitness-coach-app
   GARMIN_COACH_REF: main
 
 jobs:
@@ -42,9 +42,9 @@ jobs:
       - name: Checkout garmin-coach app
         uses: actions/checkout@v6
         with:
-          repository: ${{ env.GARMIN_COACH_REPO }}
+          repository: ${{ env.PULSECOACH_APP_REPO }}
           ref: ${{ env.GARMIN_COACH_REF }}
-          path: garmincoach/garmin-coach
+          path: pulsecoach/garmin-coach
 
       - name: Set up QEMU (for cross-compilation)
         if: matrix.arch == 'aarch64'
@@ -64,20 +64,20 @@ jobs:
       - name: Read build config
         id: config
         run: |
-          BUILD_FROM=$(jq -r ".build_from.${{ matrix.arch }}" garmincoach/build.json)
-          VERSION=$(jq -r '.version' garmincoach/config.json)
+          BUILD_FROM=$(jq -r ".build_from.${{ matrix.arch }}" pulsecoach/build.json)
+          VERSION=$(jq -r '.version' pulsecoach/config.json)
           echo "build_from=${BUILD_FROM}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Build image
         uses: docker/build-push-action@v7
         with:
-          context: garmincoach
-          file: garmincoach/Dockerfile
+          context: pulsecoach
+          file: pulsecoach/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/garmincoach-addon-${{ matrix.arch }}:${{ steps.config.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/garmincoach-addon-${{ matrix.arch }}:latest
+            ghcr.io/${{ github.repository_owner }}/pulsecoach-addon-${{ matrix.arch }}:${{ steps.config.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/pulsecoach-addon-${{ matrix.arch }}:latest
           build-args: |
             BUILD_FROM=${{ steps.config.outputs.build_from }}
             BUILD_ARCH=${{ matrix.arch }}

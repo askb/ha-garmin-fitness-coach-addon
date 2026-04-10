@@ -1,0 +1,345 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# SPDX-License-Identifier: MIT
+# ==============================================================================
+# PulseCoach — s6-overlay run script (formerly GarminCoach)
+# ==============================================================================
+
+declare -r DATA_DIR="/data"
+declare -r LOG_DIR="/app/logs"
+declare -r SHARE_BACKUP="/share/pulsecoach"
+
+mkdir -p "${LOG_DIR}" "${DATA_DIR}" "${SHARE_BACKUP}"
+
+# ─── Migration: move old /share/garmincoach/ data to /share/pulsecoach/ ──────
+if [ -d "/share/garmincoach" ] && [ ! -f "${SHARE_BACKUP}/.migrated" ]; then
+    bashio::log.info "Migrating data from /share/garmincoach/ to /share/pulsecoach/..."
+    cp -a /share/garmincoach/* "${SHARE_BACKUP}/" 2>/dev/null || true
+    touch "${SHARE_BACKUP}/.migrated"
+    bashio::log.info "Migration complete. Old data preserved in /share/garmincoach/"
+fi
+
+# ─── Restore tokens & database from /share/ (survives uninstall) ─────────────
+restore_from_share() {
+    # Restore Garmin tokens
+    if [ -d "${SHARE_BACKUP}/garmin-tokens" ] && [ ! -f "/data/garmin-tokens/oauth1_token.json" ]; then
+        bashio::log.info "Restoring Garmin tokens from /share/ backup..."
+        mkdir -p /data/garmin-tokens
+        cp -a "${SHARE_BACKUP}/garmin-tokens/"* /data/garmin-tokens/ 2>/dev/null || true
+    fi
+    # Restore PostgreSQL dump (after DB is ready, called later)
+}
+
+restore_database() {
+    if [ -f "${SHARE_BACKUP}/pulsecoach.sql.gz" ] && [ -n "$1" ]; then
+        # Only restore if the database is empty (fresh install)
+        local row_count
+        row_count=$(psql -h 127.0.0.1 -U postgres -d pulsecoach -tAc \
+            "SELECT COUNT(*) FROM daily_metric;" 2>/dev/null || echo "0")
+        if [ "${row_count}" = "0" ] || [ "${row_count}" = "" ]; then
+            bashio::log.info "Restoring database from /share/ backup..."
+            gunzip -c "${SHARE_BACKUP}/pulsecoach.sql.gz" | \
+                psql -h 127.0.0.1 -U postgres -d pulsecoach -q 2>/dev/null || \
+                bashio::log.warning "Database restore had warnings (may be OK)"
+            # Clean stale computed VO2max — will be re-synced from Garmin API
+            psql -h 127.0.0.1 -U postgres -d pulsecoach -qc \
+                "DELETE FROM vo2max_estimate WHERE source IN ('running_pace_hr', 'uth_method');" 2>/dev/null || true
+            bashio::log.info "Database restore complete (stale VO2max cleared)"
+        fi
+    fi
+}
+
+backup_to_share() {
+    bashio::log.info "Backing up tokens & database to /share/..."
+    mkdir -p "${SHARE_BACKUP}/garmin-tokens"
+    # Backup tokens
+    if [ -d "/data/garmin-tokens" ]; then
+        cp -a /data/garmin-tokens/* "${SHARE_BACKUP}/garmin-tokens/" 2>/dev/null || true
+    fi
+    # Backup database (compressed)
+    if pg_isready -h 127.0.0.1 -p 5432 -q 2>/dev/null; then
+        pg_dump -h 127.0.0.1 -U postgres pulsecoach 2>/dev/null | \
+            gzip > "${SHARE_BACKUP}/pulsecoach.sql.gz.tmp" && \
+            mv "${SHARE_BACKUP}/pulsecoach.sql.gz.tmp" "${SHARE_BACKUP}/pulsecoach.sql.gz"
+    fi
+    bashio::log.info "Backup complete → /share/pulsecoach/"
+}
+
+# Restore tokens early (before DB starts)
+restore_from_share
+
+# ─── PID tracking & cleanup ──────────────────────────────────────────────────
+SYNC_PID=""
+COMPUTE_PID=""
+NOTIFY_PID=""
+NEXTJS_PID=""
+INGRESS_PID=""
+SHUTTING_DOWN=false
+
+cleanup() {
+    SHUTTING_DOWN=true
+    bashio::log.info "Shutting down PulseCoach services..."
+    # Backup before shutdown
+    backup_to_share
+    for pid in $SYNC_PID $COMPUTE_PID $NOTIFY_PID $NEXTJS_PID $INGRESS_PID; do
+        if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null
+        fi
+    done
+    wait
+    bashio::log.info "All services stopped."
+}
+trap cleanup EXIT INT TERM
+
+# ─── Read addon configuration ─────────────────────────────────────────────────
+GARMIN_EMAIL=$(bashio::config 'garmin_email')
+GARMIN_PASSWORD=$(bashio::config 'garmin_password')
+AI_BACKEND=$(bashio::config 'ai_backend' || echo "ha_conversation")
+OLLAMA_URL=$(bashio::config 'ollama_url' || echo "")
+OPENCLAW_AGENT_ID=$(bashio::config 'openclaw_agent_id' || echo "01KJ1JD2A3GHH2HP4B6DN6MVJ5")
+SYNC_INTERVAL=$(bashio::config 'sync_interval_minutes' || echo "60")
+
+export GARMIN_EMAIL GARMIN_PASSWORD
+export AI_BACKEND
+export OLLAMA_URL
+export OPENCLAW_AGENT_ID
+export OLLAMA_MODEL="${OLLAMA_MODEL:-gpt-oss:20b}"
+export DATABASE_URL="postgresql://postgres@127.0.0.1:5432/pulsecoach"
+export POSTGRES_URL="postgresql://postgres@127.0.0.1:5432/pulsecoach"
+export DEV_BYPASS_AUTH="true"
+export NODE_ENV="production"
+export AUTH_SECRET="ha-addon-local-secret-$(cat /proc/sys/kernel/random/boot_id)"
+export AUTH_DISCORD_ID="unused"
+export AUTH_DISCORD_SECRET="unused"
+
+# HA Supervisor API token (auto-injected by Supervisor for addons with homeassistant_api: true)
+export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN:-}"
+export HA_BASE_URL="http://supervisor/core"
+
+# ─── Wait for PostgreSQL and initialize database ─────────────────────────────
+bashio::log.info "Waiting for PostgreSQL..."
+for i in $(seq 1 30); do
+    if pg_isready -h 127.0.0.1 -p 5432 -q; then
+        break
+    fi
+    sleep 1
+done
+
+# Ensure token directory exists (needed for migration marker)
+mkdir -p /data/garmin-tokens
+
+# Create database if it doesn't exist
+if ! psql -h 127.0.0.1 -U postgres -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw pulsecoach; then
+    bashio::log.info "Creating pulsecoach database..."
+    createdb -h 127.0.0.1 -U postgres pulsecoach 2>/dev/null || true
+fi
+
+# Push schema to database (creates tables if missing)
+bashio::log.info "Pushing database schema..."
+cd /app/packages/db && POSTGRES_URL="${POSTGRES_URL}" npx drizzle-kit push --force 2>&1 || bashio::log.warning "Schema push had warnings"
+
+# Restore database from /share/ backup if this is a fresh install
+restore_database "check"
+
+# ─── Data migration v0.4.0: fix userId + force full resync from 2019 ─────────
+MIGRATION_MARKER="/data/garmin-tokens/.migration_v040_done"
+if [ ! -f "${MIGRATION_MARKER}" ]; then
+    bashio::log.info "Running v0.4.0 migration: fix userId + reset sync marker..."
+    psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+      "UPDATE daily_metric SET user_id = 'seed-user-001' WHERE user_id = 'addon-user';" 2>/dev/null
+    psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+      "UPDATE activity SET user_id = 'seed-user-001' WHERE user_id = 'addon-user';" 2>/dev/null
+    # Deduplicate
+    psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+      "DELETE FROM daily_metric a USING daily_metric b
+       WHERE a.id < b.id AND a.user_id = b.user_id AND a.date = b.date;" 2>/dev/null
+    psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+      "DELETE FROM activity a USING activity b
+       WHERE a.id < b.id AND a.garmin_activity_id = b.garmin_activity_id;" 2>/dev/null
+    # Force full resync from 2019
+    rm -f /data/garmin-tokens/.initial_sync_done
+    touch "${MIGRATION_MARKER}"
+    bashio::log.info "Migration complete — full resync from 2019 will start"
+fi
+
+# ─── Start Garmin sync in background ──────────────────────────────────────────
+TOKEN_DIR="/data/garmin-tokens"
+if [ -n "${GARMIN_EMAIL}" ] && [ -n "${GARMIN_PASSWORD}" ]; then
+    bashio::log.info "Starting Garmin sync (every ${SYNC_INTERVAL} minutes)..."
+    (
+        while true; do
+            bashio::log.info "Syncing Garmin data..."
+            python3 /app/scripts/garmin-sync.py 2>&1 || bashio::log.warning "Garmin sync failed"
+            backup_to_share
+            sleep "$((SYNC_INTERVAL * 60))"
+        done
+    ) &
+    SYNC_PID=$!
+elif [ -f "${TOKEN_DIR}/oauth1_token.json" ] && [ -f "${TOKEN_DIR}/oauth2_token.json" ]; then
+    bashio::log.info "Found saved Garmin tokens in ${TOKEN_DIR}"
+    bashio::log.info "Starting Garmin sync from saved tokens (every ${SYNC_INTERVAL} minutes)..."
+    (
+        while true; do
+            bashio::log.info "Syncing Garmin data..."
+            python3 /app/scripts/garmin-sync.py 2>&1 || bashio::log.warning "Garmin sync failed"
+            backup_to_share
+            sleep "$((SYNC_INTERVAL * 60))"
+        done
+    ) &
+    SYNC_PID=$!
+else
+    bashio::log.warning "No Garmin credentials or saved tokens — skipping auto-sync"
+    bashio::log.info "Use Settings page to log in, or run scripts/generate-garmin-tokens.py locally"
+fi
+
+# ─── Start metrics compute in background ─────────────────────────────────────
+bashio::log.info "Starting advanced metrics compute service..."
+export COMPUTE_INTERVAL_MINUTES="${SYNC_INTERVAL}"
+(
+    # Wait for initial sync to complete before first compute (120s grace period)
+    sleep 120
+    while true; do
+        bashio::log.info "Computing advanced metrics..."
+        python3 /app/scripts/metrics-compute.py --once 2>&1 || bashio::log.warning "Metrics compute failed"
+        sleep "$((COMPUTE_INTERVAL_MINUTES * 60))"
+    done
+) &
+COMPUTE_PID=$!
+
+# ─── Start HA notification service ───────────────────────────────────────────
+if [ -n "${SUPERVISOR_TOKEN}" ]; then
+    bashio::log.info "Starting HA notification service..."
+    export NOTIFY_INTERVAL_MINUTES="${SYNC_INTERVAL}"
+    (
+        sleep 180  # Wait for initial sync + metrics compute (3 min)
+        while true; do
+            bashio::log.info "Pushing PulseCoach sensors to HA..."
+            python3 /app/scripts/ha-notify.py --once 2>&1 || bashio::log.warning "HA notify failed"
+            sleep "$((NOTIFY_INTERVAL_MINUTES * 60))"
+        done
+    ) &
+    NOTIFY_PID=$!
+else
+    bashio::log.info "No Supervisor token — skipping HA sensor push (add-on needs homeassistant_api: true)"
+fi
+
+# ─── Configure AI backend ─────────────────────────────────────────────────────
+case "${AI_BACKEND}" in
+    ha_conversation)
+        if [ -n "${SUPERVISOR_TOKEN}" ]; then
+            bashio::log.info "AI backend: HA Conversation API (OpenClaw/Claude)"
+            if [ -n "${OPENCLAW_AGENT_ID}" ] && [ "${OPENCLAW_AGENT_ID}" != "01KJ1JD2A3GHH2HP4B6DN6MVJ5" ]; then
+                bashio::log.info "  Agent ID: ${OPENCLAW_AGENT_ID}"
+            else
+                bashio::log.info "  Agent ID: auto-detect (will discover from HA)"
+            fi
+            bashio::log.info "  Using Supervisor token for HA API access"
+        else
+            bashio::log.warning "AI backend set to ha_conversation but no Supervisor token — falling back to rules-based"
+            export AI_BACKEND="none"
+        fi
+        ;;
+    ollama)
+        if [ -n "${OLLAMA_URL}" ]; then
+            if curl -s -o /dev/null -w "%{http_code}" "${OLLAMA_URL}/api/tags" | grep -q "200"; then
+                bashio::log.info "AI backend: Ollama at ${OLLAMA_URL}"
+            else
+                bashio::log.warning "Ollama not reachable at ${OLLAMA_URL} — falling back to rules-based"
+                export AI_BACKEND="none"
+            fi
+        else
+            bashio::log.warning "AI backend set to ollama but no URL configured — falling back to rules-based"
+            export AI_BACKEND="none"
+        fi
+        ;;
+    none|*)
+        bashio::log.info "AI backend: rules-based (no LLM)"
+        export AI_BACKEND="none"
+        ;;
+esac
+
+# ─── Start Next.js ────────────────────────────────────────────────────────────
+bashio::log.info "Starting PulseCoach..."
+cd /app/apps/nextjs
+
+# Start Next.js on internal port (not exposed to ingress)
+export HOSTNAME="127.0.0.1"
+export PORT="3001"
+node server.js &
+NEXTJS_PID=$!
+
+# Wait for Next.js to be ready
+bashio::log.info "Waiting for Next.js..."
+for i in $(seq 1 30); do
+    if curl -s -o /dev/null http://127.0.0.1:3001/; then
+        break
+    fi
+    sleep 1
+done
+
+# Start ingress proxy on port 3000 (HA ingress connects here)
+# Rewrites HTML asset paths to work behind /api/hassio_ingress/<token>/
+bashio::log.info "Starting ingress proxy..."
+export PORT="3000"
+export NEXT_INTERNAL_PORT="3001"
+node /app/ingress-proxy.js &
+INGRESS_PID=$!
+
+# ─── Process monitoring loop ─────────────────────────────────────────────────
+bashio::log.info "All services started — entering monitoring loop"
+while true; do
+    if [ "$SHUTTING_DOWN" = true ]; then
+        break
+    fi
+
+    if [ -n "$SYNC_PID" ] && ! kill -0 "$SYNC_PID" 2>/dev/null; then
+        bashio::log.warning "Garmin sync died, restarting..."
+        (
+            while true; do
+                bashio::log.info "Syncing Garmin data..."
+                python3 /app/scripts/garmin-sync.py 2>&1 || bashio::log.warning "Garmin sync failed"
+                sleep "$((SYNC_INTERVAL * 60))"
+            done
+        ) &
+        SYNC_PID=$!
+    fi
+
+    if [ -n "$COMPUTE_PID" ] && ! kill -0 "$COMPUTE_PID" 2>/dev/null; then
+        bashio::log.warning "Metrics compute died, restarting..."
+        (
+            while true; do
+                bashio::log.info "Computing advanced metrics..."
+                python3 /app/scripts/metrics-compute.py --once 2>&1 || bashio::log.warning "Metrics compute failed"
+                sleep "$((COMPUTE_INTERVAL_MINUTES * 60))"
+            done
+        ) &
+        COMPUTE_PID=$!
+    fi
+
+    if [ -n "$NOTIFY_PID" ] && ! kill -0 "$NOTIFY_PID" 2>/dev/null; then
+        bashio::log.warning "HA notify died, restarting..."
+        (
+            while true; do
+                bashio::log.info "Pushing PulseCoach sensors to HA..."
+                python3 /app/scripts/ha-notify.py --once 2>&1 || bashio::log.warning "HA notify failed"
+                sleep "$((NOTIFY_INTERVAL_MINUTES * 60))"
+            done
+        ) &
+        NOTIFY_PID=$!
+    fi
+
+    if ! kill -0 "$NEXTJS_PID" 2>/dev/null; then
+        bashio::log.warning "Next.js died, restarting..."
+        cd /app/apps/nextjs
+        HOSTNAME="127.0.0.1" PORT="3001" node server.js &
+        NEXTJS_PID=$!
+    fi
+
+    if ! kill -0 "$INGRESS_PID" 2>/dev/null; then
+        bashio::log.warning "Ingress proxy died, restarting..."
+        PORT="3000" NEXT_INTERNAL_PORT="3001" node /app/ingress-proxy.js &
+        INGRESS_PID=$!
+    fi
+
+    sleep 60
+done
