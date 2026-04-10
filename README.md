@@ -18,6 +18,7 @@ your local network.
 - [AI Backend Options](#ai-backend-options)
 - [Automation Blueprints & Templates](#automation-blueprints--templates)
 - [Known Issues](#known-issues)
+- [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
@@ -269,10 +270,81 @@ Seven additional ready-to-paste automations are provided in
 | Issue | Details |
 |---|---|
 | **First sync is slow** | The initial sync pulls up to 6+ years of Garmin history (daily stats, activities, HR zones). This takes **30-45 minutes** due to API rate limits. Use the 🔄 Sync Now button in Settings to monitor progress. Subsequent syncs take ~30 seconds. |
-| **Garmin MFA prompt** | If MFA is enabled on your Garmin account the addon will request the code during the web-based Settings flow. Enter the code promptly — Garmin's MFA session expires quickly. Re-authenticate from Settings if the MFA step times out. |
-| **Token expiry (~1 year)** | Garmin session tokens expire after approximately one year. The addon will show an alert; re-authenticate from **Settings → Connect Garmin**. |
-| **Rate limiting** | Garmin may temporarily block requests if the sync interval is too aggressive. Keep `sync_interval_minutes` at 30 or above. |
 | **Rebuild vs reinstall** | If changes aren't appearing after a rebuild, do a full **uninstall → install**. Docker may cache stale layers during rebuild. |
+
+## Troubleshooting
+
+### Garmin 429 "Too Many Requests"
+
+**Symptoms:** Addon logs show `Login failed`, `429`, or `Rate limit` errors when
+syncing with Garmin Connect.
+
+**Root cause:** Garmin aggressively rate-limits OAuth login attempts. The addon
+authenticates in two ways:
+
+| Method | When Used | Rate-Limited? |
+|--------|-----------|---------------|
+| **Token refresh** | Saved `oauth1_token.json` + `oauth2_token.json` exist | Rarely — high limit |
+| **Email + password login** | Fresh install, tokens lost, or tokens expired | **Yes — low limit** |
+
+After a fresh install (or reinstall that lost `/data/garmin-tokens/`), the addon
+only falls back to email+password login automatically if `garmin_email` and
+`garmin_password` are configured in the addon options. If that credential login
+fails, the sync loop retries every `sync_interval_minutes` (default: 60), and
+each retry is another login attempt that compounds the rate limit.
+
+If you authenticated only through the web UI and do **not** have
+`garmin_email`/`garmin_password` configured, the addon does **not** keep retrying
+automatically after token loss. Instead, startup logs will show
+`No Garmin credentials or saved tokens — skipping auto-sync`, and you must run
+**Settings → Connect Garmin** again to re-authenticate.
+
+**How to fix:**
+
+1. **Stop the addon** — Settings → Add-ons → GarminCoach → Stop
+2. **Wait 15–30 minutes** for the Garmin rate limit window to expire
+3. **Start the addon** — it will attempt one clean login
+4. **Verify authentication succeeded** — Settings → Add-ons → GarminCoach →
+   Log tab, look for either `Authenticated with credentials, tokens saved` or
+   `Tokens saved to /data/garmin-tokens`
+5. **If logs are unclear, verify token files exist** — confirm both
+   `oauth1_token.json` and `oauth2_token.json` are present under
+   `/data/garmin-tokens/`
+
+If Garmin still returns a rate-limit error after that first retry, stop the
+addon again and wait longer (up to 1–2 hours) before retrying.
+
+Once authentication succeeds, tokens are saved to `/data/garmin-tokens/` and all
+subsequent syncs use token refresh (not counted as a login attempt).
+
+**Prevention:**
+
+- Keep `sync_interval_minutes` at **30 or above** (default: 60)
+- Avoid frequent uninstall/reinstall cycles — use **Restart** instead
+- Tokens are backed up to `/share/garmincoach/garmin-tokens/` and auto-restored
+  on reinstall, so a normal uninstall → reinstall should not trigger fresh login
+- If you change your Garmin password, you must re-authenticate via the addon's
+  Settings → Connect Garmin flow
+
+### Garmin MFA Timeout
+
+If MFA is enabled on your Garmin account, the addon prompts for the code during
+the web-based Settings flow. Enter the code promptly — Garmin's MFA session
+expires in about 60 seconds. If it times out, go to **Settings → Connect
+Garmin** and start the flow again.
+
+### Addon Starts but Dashboard is Empty
+
+1. Check the **Log** tab for errors
+2. If you see `No Garmin credentials or saved tokens — skipping auto-sync`,
+   go to the addon's **Settings → Connect Garmin** to authenticate
+3. The initial sync pulls 6+ years of history and takes **30–45 minutes**.
+   Use the 🔄 Sync Now button to monitor progress
+
+### Token Expiry (~1 Year)
+
+Garmin OAuth tokens expire after approximately one year. The addon will log
+authentication errors. Re-authenticate from **Settings → Connect Garmin**.
 
 ## Data Persistence & Backup
 
