@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] — 2026-04-11
+
+### Fixed
+
+- **PulseCoach branding in app UI** — Frontend now shows "PulseCoach" instead
+  of "GarminCoach" in page titles, navigation menu, onboarding, and settings.
+- Scripts use `docker compose exec` instead of hardcoded container names.
+- PORT env var supports backward-compatible fallback chain
+  (`PORT → PULSECOACH_PORT → GARMINCOACH_PORT`).
+
 ## [0.11.0] — 2026-04-13
 
 ### ⚠️ Breaking Changes
