@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-04-10
+
+### Added
+
+- **HA Automation Blueprints** — 5 ready-to-import blueprints:
+  - Low Body Battery Recovery (scene activation)
+  - Morning Training Briefing (TTS with ACWR/form/workout)
+  - Injury Risk Alert (push notification + optional DND)
+  - Training Freshness Reminder (TSB threshold notification)
+  - Weekly Training Summary (comprehensive metrics digest)
+- **AI Trend Tests** — 21 new unit tests covering workout recommendations,
+  injury risk assessment, EWMA constants, and confidence degradation.
+
+### Fixed
+
+- **Release workflow** — per-arch image naming to match HA addon conventions
+  (`garmincoach-addon-{arch}:version`). Removed unnecessary multi-arch
+  manifest job since HA handles arch selection via config.json `image` field.
+- **Hadolint config** — added `.hadolint.yaml` to suppress non-critical
+  Dockerfile lint rules (DL3018, DL3013, DL3042, DL3016, DL3003).
+
 ## [0.9.0] — 2026-04-03
 
 ### Fixed

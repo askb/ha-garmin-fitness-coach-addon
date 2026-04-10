@@ -85,28 +85,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  release:
-    name: Create Release
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    timeout-minutes: 10
-    steps:
-      - uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@v6
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          body: |
-            ## Installation
-            Add this repository URL to your Home Assistant addon store:
-            ```
-            https://github.com/${{ github.repository }}
-            ```
+  # NOTE: Release creation is handled by .github/workflows/release.yaml
+  # which includes SBOM scanning and per-arch image builds.
+  # This job is intentionally disabled to avoid duplicate releases.
+  # release:
+  #   name: Create Release
+  #   needs: build
+  #   if: startsWith(github.ref, 'refs/tags/v')
+  #   ...
