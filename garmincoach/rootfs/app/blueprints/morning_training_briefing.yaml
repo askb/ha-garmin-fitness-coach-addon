@@ -1,0 +1,98 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Anil Belur
+---
+blueprint:
+  name: "GarminCoach: Morning Training Briefing"
+  description: >
+    Delivers a TTS morning briefing with readiness, ACWR, form (TSB),
+    and today's workout recommendation. Fires at a configurable time.
+  domain: automation
+  author: askb
+  source_url: >-
+    https://github.com/askb/ha-garmin-fitness-coach-addon/blob/main/garmincoach/rootfs/app/blueprints/morning_training_briefing.yaml
+  input:
+    briefing_time:
+      name: Briefing Time
+      description: Time to deliver the morning briefing.
+      default: "06:30:00"
+      selector:
+        time: {}
+    tts_service:
+      name: TTS Service
+      description: >
+        Text-to-speech service (e.g., tts.google_translate_say,
+        tts.cloud_say).
+      default: tts.speak
+      selector:
+        text: {}
+    tts_target:
+      name: TTS Media Player
+      description: Media player entity for TTS output.
+      default: media_player.living_room
+      selector:
+        entity:
+          domain: media_player
+    acwr_sensor:
+      name: ACWR Sensor
+      default: sensor.garmincoach_acwr
+      selector:
+        entity:
+          domain: sensor
+    form_sensor:
+      name: Form (TSB) Sensor
+      default: sensor.garmincoach_form
+      selector:
+        entity:
+          domain: sensor
+    injury_risk_sensor:
+      name: Injury Risk Sensor
+      default: sensor.garmincoach_injury_risk
+      selector:
+        entity:
+          domain: sensor
+    workout_sensor:
+      name: Workout Recommendation Sensor
+      default: sensor.garmincoach_workout_recommendation
+      selector:
+        entity:
+          domain: sensor
+    notify_service:
+      name: Notification Service (optional)
+      description: Also send as a push notification.
+      default: notify.persistent_notification
+      selector:
+        text: {}
+
+trigger:
+  - platform: time
+    at: !input briefing_time
+
+condition:
+  - condition: state
+    entity_id: !input acwr_sensor
+    state: "unavailable"
+    match: "not"
+
+action:
+  - variables:
+      acwr: "{{ states(acwr_sensor) }}"
+      form: "{{ states(form_sensor) }}"
+      risk: "{{ states(injury_risk_sensor) }}"
+      workout: "{{ states(workout_sensor) }}"
+      briefing: >-
+        Good morning. Your training status:
+        ACWR is {{ acwr }},
+        form is {{ form }},
+        injury risk is {{ risk }}.
+        Today's recommendation: {{ workout }}.
+  - service: !input tts_service
+    target:
+      entity_id: !input tts_target
+    data:
+      message: "{{ briefing }}"
+  - service: !input notify_service
+    data:
+      title: "🏃 Morning Training Briefing"
+      message: "{{ briefing }}"
+
+mode: single
