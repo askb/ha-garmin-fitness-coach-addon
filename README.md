@@ -156,8 +156,7 @@ Then install **PulseCoach** from the add-on store and start it.
 |---|---|---|---|---|
 | `garmin_email` | email | — | No | Your Garmin Connect email (or use web-based login in Settings) |
 | `garmin_password` | password | — | No | Your Garmin Connect password (or use web-based login in Settings) |
-| `ai_backend` | list | `ha_conversation` | No | AI coaching backend (`ha_conversation`, `ollama`, or `none`) |
-| `openclaw_agent_id` | string | — | No | OpenClaw agent ID for HA Conversation API (auto-detected if not set) |
+| `ai_backend` | list | `none` | No | AI coaching backend (`ha_conversation`, `ollama`, or `none`) |
 | `ollama_url` | url | — | No | Ollama server URL (only when `ai_backend` is `ollama`) |
 | `sync_interval_minutes` | integer | `60` | No | How often to pull new data from Garmin (5 – 1440 minutes) |
 

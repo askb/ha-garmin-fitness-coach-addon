@@ -94,15 +94,13 @@ trap cleanup EXIT INT TERM
 # ─── Read addon configuration ─────────────────────────────────────────────────
 GARMIN_EMAIL=$(bashio::config 'garmin_email')
 GARMIN_PASSWORD=$(bashio::config 'garmin_password')
-AI_BACKEND=$(bashio::config 'ai_backend' || echo "ha_conversation")
+AI_BACKEND=$(bashio::config 'ai_backend' || echo "none")
 OLLAMA_URL=$(bashio::config 'ollama_url' || echo "")
-OPENCLAW_AGENT_ID=$(bashio::config 'openclaw_agent_id' || echo "01KJ1JD2A3GHH2HP4B6DN6MVJ5")
 SYNC_INTERVAL=$(bashio::config 'sync_interval_minutes' || echo "60")
 
 export GARMIN_EMAIL GARMIN_PASSWORD
 export AI_BACKEND
 export OLLAMA_URL
-export OPENCLAW_AGENT_ID
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gpt-oss:20b}"
 export DATABASE_URL="postgresql://postgres@127.0.0.1:5432/pulsecoach"
 export POSTGRES_URL="postgresql://postgres@127.0.0.1:5432/pulsecoach"
@@ -227,12 +225,8 @@ fi
 case "${AI_BACKEND}" in
     ha_conversation)
         if [ -n "${SUPERVISOR_TOKEN}" ]; then
-            bashio::log.info "AI backend: HA Conversation API (OpenClaw/Claude)"
-            if [ -n "${OPENCLAW_AGENT_ID}" ] && [ "${OPENCLAW_AGENT_ID}" != "01KJ1JD2A3GHH2HP4B6DN6MVJ5" ]; then
-                bashio::log.info "  Agent ID: ${OPENCLAW_AGENT_ID}"
-            else
-                bashio::log.info "  Agent ID: auto-detect (will discover from HA)"
-            fi
+            bashio::log.info "AI backend: HA Conversation API"
+            bashio::log.info "  Requires a conversation agent configured in HA (Settings → Voice Assistants)"
             bashio::log.info "  Using Supervisor token for HA API access"
         else
             bashio::log.warning "AI backend set to ha_conversation but no Supervisor token — falling back to rules-based"

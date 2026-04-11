@@ -2,7 +2,7 @@
  * AI backend abstraction for PulseCoach addon.
  *
  * Supports three backends:
- * 1. ha_conversation — Uses HA Conversation API (OpenClaw/Claude/etc)
+ * 1. ha_conversation — Uses HA Conversation API (requires a conversation agent in HA)
  * 2. ollama — Direct Ollama HTTP API (local LLM)
  * 3. none — Rules-based fallback (no LLM)
  *
@@ -49,14 +49,23 @@ export function isAiAvailable(): boolean {
 
 // ─── HA Conversation API ─────────────────────────────────────────────────────
 // Uses the Home Assistant Conversation API which routes to whatever
-// conversation agent is configured (OpenClaw, Google, OpenAI, etc.)
+// conversation agent is configured (OpenAI, Google, Claude, local LLM, etc.)
 // Docs: https://developers.home-assistant.io/docs/api/rest/#post-apiconversationprocess
+//
+// NOTE: Requires a conversation agent to be configured in Home Assistant.
+// If no agent is available, the function returns a friendly error message
+// instead of throwing, so callers can degrade gracefully.
 
 async function haConversationChat(messages: ChatMessage[]): Promise<string> {
   const token = process.env.SUPERVISOR_TOKEN;
   const baseUrl = process.env.HA_BASE_URL ?? "http://supervisor/core";
 
-  if (!token) throw new Error("No SUPERVISOR_TOKEN available");
+  if (!token) {
+    console.warn("[ai-backend] No SUPERVISOR_TOKEN available — AI chat unavailable");
+    return "AI coaching is not available: No Home Assistant Supervisor token found. " +
+      "Please ensure the addon has 'homeassistant_api: true' in config.json. " +
+      "Rules-based insights on the Insights page are always available.";
+  }
 
   // The HA Conversation API takes a single text input (not a message array).
   // We combine the system prompt + user messages into one structured prompt.
@@ -92,7 +101,7 @@ async function haConversationChat(messages: ChatMessage[]): Promise<string> {
       body: JSON.stringify({
         text: prompt,
         language: "en",
-        // Use the default conversation agent (OpenClaw in your case)
+        // Use the default conversation agent configured in HA
         agent_id: null,
       }),
       signal: controller.signal,
@@ -100,7 +109,11 @@ async function haConversationChat(messages: ChatMessage[]): Promise<string> {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`HA API ${response.status}: ${text}`);
+      console.error(`[ai-backend] HA Conversation API error ${response.status}: ${text}`);
+      return "AI coaching is temporarily unavailable. " +
+        "Please check that a conversation agent (e.g. OpenAI, Claude, or a local LLM) " +
+        "is configured in Home Assistant under Settings → Voice Assistants. " +
+        "Rules-based insights on the Insights page are always available.";
     }
 
     const data = (await response.json()) as {
@@ -110,10 +123,28 @@ async function haConversationChat(messages: ChatMessage[]): Promise<string> {
       };
     };
 
+    if (data.response?.response_type === "error") {
+      console.warn("[ai-backend] HA Conversation returned an error response — no agent may be configured");
+      return "AI coaching is not available: No conversation agent is configured in Home Assistant. " +
+        "To enable AI coaching, install a conversation agent (e.g. OpenAI, Claude, or a local LLM) " +
+        "under Settings → Voice Assistants. " +
+        "Rules-based insights on the Insights page are always available.";
+    }
+
     return (
       data.response?.speech?.plain?.speech ??
       "I couldn't generate a response. Please try again."
     );
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      console.error("[ai-backend] HA Conversation API request timed out");
+      return "AI coaching request timed out. The conversation agent may be slow or unavailable. " +
+        "Rules-based insights on the Insights page are always available.";
+    }
+    console.error("[ai-backend] HA Conversation API request failed:", err);
+    return "AI coaching is temporarily unavailable. " +
+      "Please check that a conversation agent is configured in Home Assistant. " +
+      "Rules-based insights on the Insights page are always available.";
   } finally {
     clearTimeout(timeout);
   }
