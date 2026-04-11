@@ -84,8 +84,12 @@ pushes 7 HA sensors via the Supervisor REST API.
 - If the PR modifies files related to a spec, check that `tasks.md` is being updated
 - For any new features (not bug fixes), suggest creating a spec if none exists
 
-3. **Post a single review comment** summarizing:
+3. **Post your review** using the `add_comment` safe output tool on the pull request:
    - ✅ What looks good
    - ⚠️ Warnings (non-blocking suggestions)
    - ❌ Errors (things that will break)
    - Keep it concise — only flag real issues, not style nitpicks
+4. If no issues are found and the PR looks good, you **must** still use the
+   `add_comment` tool to post a short approval comment. If you truly have
+   nothing to report (e.g., the diff is empty or contains only non-reviewable
+   files), call the `noop` tool to confirm the workflow completed.
