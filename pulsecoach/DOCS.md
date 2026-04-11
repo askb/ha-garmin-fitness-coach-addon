@@ -55,9 +55,9 @@ In the addon **Configuration** tab, set `ai_backend` to one of:
 
 | Backend | Description |
 |---|---|
-| `ha_conversation` **(default)** | Uses your existing HA Conversation agent (OpenAI, Claude, local LLM, etc.) — zero extra setup if you already have one configured. |
+| `ha_conversation` | Uses your existing HA Conversation agent (OpenAI, Claude, local LLM, etc.). Requires a conversation agent to be configured in HA under Settings → Voice Assistants. |
 | `ollama` | Direct connection to a local [Ollama](https://ollama.com/) instance. Set `ollama_url` to the server address (e.g., `http://homeassistant.local:11434`). Fully private. |
-| `none` | Rules-based coaching only. No LLM required — still provides all data-driven insights. |
+| `none` **(default)** | Rules-based coaching only. No LLM required — still provides all data-driven insights. |
 
 ### 4. Data Sync
 
@@ -71,7 +71,7 @@ fetches up to 6 years of historical data.
 |---|---|---|---|---|
 | `garmin_email` | email | — | **Yes** | Garmin Connect login email |
 | `garmin_password` | password | — | **Yes** | Garmin Connect password |
-| `ai_backend` | list | `ha_conversation` | No | AI coaching backend: `ha_conversation`, `ollama`, or `none` |
+| `ai_backend` | list | `none` | No | AI coaching backend: `ha_conversation`, `ollama`, or `none` |
 | `ollama_url` | url | — | No | Ollama server URL (required only when `ai_backend` is `ollama`) |
 | `sync_interval_minutes` | integer | `60` | No | Garmin data sync frequency in minutes (5 – 1440) |
 

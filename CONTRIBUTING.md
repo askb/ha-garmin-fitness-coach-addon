@@ -283,7 +283,7 @@ The addon supports 3 AI backends:
 
 | Backend | How it works |
 |---|---|
-| `ha_conversation` | Calls HA Conversation API → routes to your configured agent (OpenClaw, Claude, etc.) |
+| `ha_conversation` | Calls HA Conversation API → routes to your configured agent (OpenAI, Claude, local LLM, etc.) |
 | `ollama` | Direct HTTP to local Ollama instance |
 | `none` | Rules-based coaching (no LLM) |
 
