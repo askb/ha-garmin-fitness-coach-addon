@@ -10,7 +10,7 @@
     },
     "ai_backend": {
       "name": "AI Backend",
-      "description": "AI engine: 'ha_conversation' (OpenClaw/Claude), 'ollama' (local), 'none' (rules-based)"
+      "description": "AI engine: 'ha_conversation' (requires a conversation agent in HA), 'ollama' (local), 'none' (rules-based)"
     },
     "ollama_url": {
       "name": "Ollama URL",

@@ -168,7 +168,7 @@ Available sensors:
 
 ## 7. Voice Query via Google/Alexa
 
-Add to your conversation agent triggers (OpenClaw/Google Home):
+Add to your conversation agent triggers (Google Home, etc.):
 
 ```yaml
 - alias: "Voice — ACWR Query"
