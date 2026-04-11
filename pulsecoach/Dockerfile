@@ -55,7 +55,7 @@ RUN apk add --no-cache \
 RUN mkdir -p /data/postgresql && chown -R postgres:postgres /data/postgresql
 
 # Install garminconnect Python package for direct Garmin API sync
-RUN pip3 install --break-system-packages garminconnect flask psycopg2-binary
+RUN pip3 install --break-system-packages garminconnect garth flask psycopg2-binary
 
 WORKDIR /app
 

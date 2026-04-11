@@ -22,7 +22,7 @@ fi
 # ─── Restore tokens & database from /share/ (survives uninstall) ─────────────
 restore_from_share() {
     # Restore Garmin tokens
-    if [ -d "${SHARE_BACKUP}/garmin-tokens" ] && [ ! -f "/data/garmin-tokens/oauth1_token.json" ]; then
+    if [ -d "${SHARE_BACKUP}/garmin-tokens" ] && [ ! -f "/data/garmin-tokens/garmin_tokens.json" ] && [ ! -f "/data/garmin-tokens/oauth1_token.json" ]; then
         bashio::log.info "Restoring Garmin tokens from /share/ backup..."
         mkdir -p /data/garmin-tokens
         cp -a "${SHARE_BACKUP}/garmin-tokens/"* /data/garmin-tokens/ 2>/dev/null || true
@@ -175,7 +175,7 @@ if [ -n "${GARMIN_EMAIL}" ] && [ -n "${GARMIN_PASSWORD}" ]; then
         done
     ) &
     SYNC_PID=$!
-elif [ -f "${TOKEN_DIR}/oauth1_token.json" ] && [ -f "${TOKEN_DIR}/oauth2_token.json" ]; then
+elif [ -f "${TOKEN_DIR}/garmin_tokens.json" ] || { [ -f "${TOKEN_DIR}/oauth1_token.json" ] && [ -f "${TOKEN_DIR}/oauth2_token.json" ]; }; then
     bashio::log.info "Found saved Garmin tokens in ${TOKEN_DIR}"
     bashio::log.info "Starting Garmin sync from saved tokens (every ${SYNC_INTERVAL} minutes)..."
     (
