@@ -199,6 +199,18 @@ def sync_daily_stats(client, db, date_str):
         hrv = client.get_hrv_data(date_str)
         stress = client.get_stress_data(date_str)
 
+        # Fetch SpO2 and respiration data (gracefully handle API errors)
+        spo2_data = None
+        respiration_data = None
+        try:
+            spo2_data = client.get_spo2_data(date_str)
+        except Exception as e:
+            print(f"  SpO2 data unavailable for {date_str}: {e}")
+        try:
+            respiration_data = client.get_respiration_data(date_str)
+        except Exception as e:
+            print(f"  Respiration data unavailable for {date_str}: {e}")
+
         # Debug: log stress field names so we can verify data extraction
         stress_val = None
         if stress:
@@ -209,6 +221,22 @@ def sync_daily_stats(client, db, date_str):
             print(f"  Stress score for {date_str}: {stress_val}")
 
         sleep_dto = sleep_data.get("dailySleepDTO", {}) if sleep_data else {}
+
+        # Extract SpO2: prefer dedicated API, fall back to stats/sleep
+        spo2_val = None
+        if spo2_data:
+            spo2_val = spo2_data.get("averageSpO2") or spo2_data.get("averageSpo2")
+        if spo2_val is None and stats:
+            spo2_val = stats.get("avgSpo2") or stats.get("averageSpo2")
+        if spo2_val is None:
+            spo2_val = sleep_dto.get("averageSpO2Value") if sleep_data else None
+
+        # Extract respiration rate
+        respiration_val = None
+        if respiration_data:
+            respiration_val = respiration_data.get("avgWakingRespirationValue") or respiration_data.get("avgSleepRespirationValue")
+        if respiration_val is None and stats:
+            respiration_val = stats.get("respirationAvg")
 
         # Ensure unique constraint exists for upsert
         cur.execute("""
@@ -232,8 +260,9 @@ def sync_daily_stats(client, db, date_str):
                 hrv, stress_score, body_battery_start, body_battery_end,
                 floors_climbed, intensity_minutes,
                 sleep_start_time, sleep_end_time, sleep_need_minutes, sleep_debt_minutes,
+                spo2, respiration_rate,
                 synced_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, date) DO UPDATE SET
                 steps = EXCLUDED.steps,
                 calories = EXCLUDED.calories,
@@ -255,6 +284,8 @@ def sync_daily_stats(client, db, date_str):
                 sleep_end_time = COALESCE(EXCLUDED.sleep_end_time, daily_metric.sleep_end_time),
                 sleep_need_minutes = COALESCE(EXCLUDED.sleep_need_minutes, daily_metric.sleep_need_minutes),
                 sleep_debt_minutes = COALESCE(EXCLUDED.sleep_debt_minutes, daily_metric.sleep_debt_minutes),
+                spo2 = COALESCE(EXCLUDED.spo2, daily_metric.spo2),
+                respiration_rate = COALESCE(EXCLUDED.respiration_rate, daily_metric.respiration_rate),
                 synced_at = EXCLUDED.synced_at
         """, (
             USER_ID,
@@ -279,6 +310,8 @@ def sync_daily_stats(client, db, date_str):
             _extract_sleep_time(sleep_dto, "sleepEndTimestampLocal"),
             sleep_dto.get("sleepNeedInMinutes"),
             _compute_sleep_debt(sleep_dto),
+            spo2_val,
+            respiration_val,
             datetime.now(timezone.utc).isoformat(),
         ))
         db.commit()
