@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.4] — 2026-04-13
+
+### Fixed
+
+- **AI agent cannot query SpO2 data (#73)** — `garmin-sync.py` now fetches
+  SpO2 (pulse oximetry) and respiration rate from the Garmin Connect API and
+  writes them to the `daily_metric` table. SpO2 cascades through three sources:
+  dedicated `get_spo2_data()` API → `stats.avgSpo2` → `sleep.averageSpO2Value`.
+  Respiration cascades: `get_respiration_data()` → `stats.respirationAvg`.
+
 ## [0.11.2] — 2026-04-11
 
 ### Fixed
