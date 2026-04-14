@@ -94,6 +94,7 @@ jobs:
           build-args: |
             BUILD_FROM=${{ matrix.build_from }}
             BUILD_ARCH=${{ matrix.arch }}
+            CACHEBUST=${{ github.sha }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/pulsecoach-addon-${{ matrix.arch }}:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/pulsecoach-addon-${{ matrix.arch }}:latest
