@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.15.1] — 2026-04-14
 
 ### Fixed
-- **readiness_score table schema bug** — column `readiness_score` conflicted with table name in PostgreSQL; renamed to `score`
-- **daily_athlete_summary matview** — now references correct column `rs.score`; matview was failing to create on v0.14.0
+- **readiness_score table schema bug** — INSERT referenced column `readiness_score` which matched the table name, causing PostgreSQL error; renamed column to `score`
+- **daily_athlete_summary matview** — updated to alias `rs.score AS readiness_score`; matview was failing to create on v0.14.0
 - **Migration** — auto-renames column for users upgrading from v0.14.0
 
 ## [0.15.0] — 2026-04-14

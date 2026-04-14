@@ -200,7 +200,7 @@ psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
 # Fix readiness_score table: rename column readiness_score→score (v0.14.0 bug)
 psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
   "ALTER TABLE readiness_score RENAME COLUMN readiness_score TO score;" 2>/dev/null
-# Drop and recreate if rename failed (table might not exist or column name was already fixed)
+# Ensure score column exists (for fresh installs or if rename was a no-op)
 psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
   "ALTER TABLE readiness_score ADD COLUMN IF NOT EXISTS score INTEGER;" 2>/dev/null
 
