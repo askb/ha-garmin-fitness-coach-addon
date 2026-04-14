@@ -19,6 +19,10 @@
     "sync_interval_minutes": {
       "name": "Sync Interval",
       "description": "How often to sync data from Garmin Connect (in minutes)"
+    },
+    "user_timezone": {
+      "name": "Timezone",
+      "description": "Your local timezone for date boundaries (e.g., 'Australia/Brisbane', 'America/New_York'). Defaults to UTC."
     }
   }
 }

@@ -9,7 +9,7 @@ functions correctly process Garmin API data.
 
 import importlib
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -90,11 +90,15 @@ class TestSafeSleepMinutes:
 
 @pytest.mark.unit
 class TestExtractSleepTime:
-    """Tests for _extract_sleep_time() — epoch-ms to minutes-from-midnight."""
+    """Tests for _extract_sleep_time() — epoch-ms to minutes-from-midnight.
+
+    Garmin 'Local' timestamps encode local wall-clock time as if it were UTC,
+    so test fixtures construct epoch ms using UTC-aware datetimes.
+    """
 
     def test_extract_sleep_time_2230(self, garmin_sync):
         """22:30 local time = 1350 minutes from midnight."""
-        dt = datetime(2026, 3, 24, 22, 30, 0)
+        dt = datetime(2026, 3, 24, 22, 30, 0, tzinfo=timezone.utc)
         ts_ms = int(dt.timestamp() * 1000)
         result = garmin_sync._extract_sleep_time(
             {"sleepStartTimestampLocal": ts_ms}, "sleepStartTimestampLocal"
@@ -103,7 +107,7 @@ class TestExtractSleepTime:
 
     def test_extract_sleep_time_0600(self, garmin_sync):
         """06:00 local time = 360 minutes from midnight."""
-        dt = datetime(2026, 3, 25, 6, 0, 0)
+        dt = datetime(2026, 3, 25, 6, 0, 0, tzinfo=timezone.utc)
         ts_ms = int(dt.timestamp() * 1000)
         result = garmin_sync._extract_sleep_time(
             {"sleepEndTimestampLocal": ts_ms}, "sleepEndTimestampLocal"
@@ -112,7 +116,7 @@ class TestExtractSleepTime:
 
     def test_extract_sleep_time_midnight(self, garmin_sync):
         """00:00 (midnight) = 0 minutes from midnight."""
-        dt = datetime(2026, 3, 25, 0, 0, 0)
+        dt = datetime(2026, 3, 25, 0, 0, 0, tzinfo=timezone.utc)
         ts_ms = int(dt.timestamp() * 1000)
         result = garmin_sync._extract_sleep_time(
             {"sleepStartTimestampLocal": ts_ms}, "sleepStartTimestampLocal"

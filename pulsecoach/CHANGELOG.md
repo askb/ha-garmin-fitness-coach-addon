@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] — 2026-04-14
+
+### Added
+
+- **Timezone configuration** — New `user_timezone` option in addon config
+  (e.g., `Australia/Brisbane`). All date boundary calculations now use
+  the user's local timezone instead of UTC, fixing sync/display mismatches
+  for non-UTC users.
+- **Sensor attributes** — All 7 HA sensors now include `timezone` and
+  `last_computed` timestamp in their attributes for debugging.
+- **Timezone tests** — New test cases for sleep time extraction and
+  timezone-aware date boundaries.
+
+### Fixed
+
+- **Sleep time extraction** — `_extract_sleep_time()` now uses explicit
+  `utcfromtimestamp()` for Garmin Local timestamps instead of system-dependent
+  `fromtimestamp()`, ensuring correct wall-clock time regardless of container TZ.
+- **Date boundary drift** — Sync, metrics compute, and HA notification services
+  all use the configured timezone for "today" calculations, preventing
+  off-by-one date errors in UTC+10 and similar timezones.
+
 ## [0.11.4] — 2026-04-13
 
 ### Fixed

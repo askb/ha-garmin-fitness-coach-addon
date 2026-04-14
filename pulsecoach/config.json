@@ -1,6 +1,6 @@
 {
   "name": "PulseCoach",
-  "version": "0.11.4",
+  "version": "0.12.0",
   "slug": "pulsecoach",
   "image": "ghcr.io/askb/pulsecoach-addon-{arch}",
   "description": "AI-powered sport scientist \u2014 training analysis, coaching, and recovery optimization from your Garmin data",
@@ -28,14 +28,16 @@
     "garmin_email": "",
     "garmin_password": "",
     "ai_backend": "none",
-    "sync_interval_minutes": 60
+    "sync_interval_minutes": 60,
+    "user_timezone": "UTC"
   },
   "schema": {
     "garmin_email": "str?",
     "garmin_password": "password?",
     "ai_backend": "list(ha_conversation|ollama|none)",
     "ollama_url": "str?",
-    "sync_interval_minutes": "int(5,1440)?"
+    "sync_interval_minutes": "int(5,1440)?",
+    "user_timezone": "str?"
   },
   "environment": {
     "DATABASE_URL": "postgresql://postgres@127.0.0.1:5432/pulsecoach",
