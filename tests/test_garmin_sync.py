@@ -655,3 +655,4 @@ class TestMatviewRefresh:
 
         db.rollback.assert_called_once()
         db.commit.assert_not_called()
+        cur.close.assert_called_once()

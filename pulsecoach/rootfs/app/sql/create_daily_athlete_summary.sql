@@ -91,11 +91,9 @@ LEFT JOIN LATERAL (
         ELSE 3
     END
     LIMIT 1
-) ve ON true
+) ve ON true;
 
-ORDER BY dm.date DESC;
-
--- Unique index required for REFRESH CONCURRENTLY
+-- Unique index required for REFRESH CONCURRENTLY (future upgrade path)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_das_user_date
     ON daily_athlete_summary (user_id, date);
 
@@ -105,11 +103,12 @@ CREATE INDEX IF NOT EXISTS idx_das_date
 CREATE INDEX IF NOT EXISTS idx_das_user_date_range
     ON daily_athlete_summary (user_id, date DESC);
 
--- Refresh function (safe to call repeatedly, uses CONCURRENTLY)
+-- Refresh function (safe to call repeatedly)
 CREATE OR REPLACE FUNCTION refresh_daily_athlete_summary()
 RETURNS void AS $$
 BEGIN
-    -- CONCURRENTLY allows reads during refresh (requires unique index)
-    REFRESH MATERIALIZED VIEW CONCURRENTLY daily_athlete_summary;
+    -- Use standard refresh because REFRESH MATERIALIZED VIEW CONCURRENTLY
+    -- cannot run inside a PostgreSQL function/transaction block.
+    REFRESH MATERIALIZED VIEW daily_athlete_summary;
 END;
 $$ LANGUAGE plpgsql;

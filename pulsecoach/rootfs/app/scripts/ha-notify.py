@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 try:
     import psycopg2
     import psycopg2.extras
+    import psycopg2.errors
 except ImportError:
     print("ERROR: psycopg2 not installed", file=sys.stderr)
     sys.exit(1)
@@ -114,9 +115,14 @@ def get_latest_metrics(cur, user_id: str) -> dict:
                 "advanced": row,
                 "consecutive_hard_days": hard_days,
             }
-    except Exception:
+    except psycopg2.errors.UndefinedTable:
         # Matview doesn't exist yet — fall back to separate queries
-        pass
+        db = cur.connection
+        db.rollback()
+    except Exception as e:
+        print(f"[ha-notify] Matview query failed: {e}", file=sys.stderr)
+        db = cur.connection
+        db.rollback()
 
     # Fallback: query tables directly (pre-matview compatibility)
     cur.execute("""

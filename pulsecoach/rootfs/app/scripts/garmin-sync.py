@@ -88,17 +88,20 @@ def _clear_sync_status():
         pass
 
 
-def _refresh_matview(db):
+def _refresh_matview(db) -> None:
     """Refresh the daily_athlete_summary materialized view after sync."""
+    cur = None
     try:
         cur = db.cursor()
         cur.execute("SELECT refresh_daily_athlete_summary()")
         db.commit()
-        cur.close()
         print("  Refreshed daily_athlete_summary materialized view")
     except Exception as e:
         db.rollback()
         print(f"  Matview refresh skipped: {e}", file=sys.stderr)
+    finally:
+        if cur is not None:
+            cur.close()
 
 
 def get_client():
