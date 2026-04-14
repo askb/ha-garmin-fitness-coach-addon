@@ -237,9 +237,10 @@ def sync_daily_stats(client, db, date_str):
         hrv = client.get_hrv_data(date_str)
         stress = client.get_stress_data(date_str)
 
-        # Fetch SpO2 and respiration data (gracefully handle API errors)
+        # Fetch SpO2, respiration, and body composition (gracefully handle API errors)
         spo2_data = None
         respiration_data = None
+        body_comp_data = None
         try:
             spo2_data = client.get_spo2_data(date_str)
         except Exception as e:
@@ -248,6 +249,10 @@ def sync_daily_stats(client, db, date_str):
             respiration_data = client.get_respiration_data(date_str)
         except Exception as e:
             print(f"  Respiration data unavailable for {date_str}: {e}")
+        try:
+            body_comp_data = client.get_body_composition(date_str)
+        except Exception as e:
+            print(f"  Body composition data unavailable for {date_str}: {e}")
 
         # Debug: log stress field names so we can verify data extraction
         stress_val = None
@@ -276,13 +281,25 @@ def sync_daily_stats(client, db, date_str):
         if respiration_val is None and stats:
             respiration_val = stats.get("respirationAvg")
 
+        # Extract weight (kg) from body composition data
+        weight_kg = None
+        body_fat_pct = None
+        if body_comp_data:
+            # Garmin returns weight in grams; convert to kg
+            weight_g = body_comp_data.get("weight")
+            if weight_g and weight_g > 0:
+                weight_kg = round(weight_g / 1000.0, 1)
+            body_fat_pct = body_comp_data.get("bodyFat")
+            if weight_kg:
+                print(f"  Weight for {date_str}: {weight_kg} kg")
+
         # Compute data quality flag (percentage of key fields present)
         quality_fields = [
             stats.get("totalSteps"), stats.get("restingHeartRate"),
             _safe_sleep_minutes(sleep_dto, "sleepTimeSeconds"),
             sleep_dto.get("sleepScores", {}).get("overall", {}).get("value"),
             hrv.get("hrvSummary", {}).get("weeklyAvg") if hrv else None,
-            stress_val, spo2_val,
+            stress_val, spo2_val, weight_kg,
         ]
         present = sum(1 for f in quality_fields if f is not None)
         data_quality = round(present / len(quality_fields) * 100)
@@ -310,8 +327,9 @@ def sync_daily_stats(client, db, date_str):
                 floors_climbed, intensity_minutes,
                 sleep_start_time, sleep_end_time, sleep_need_minutes, sleep_debt_minutes,
                 spo2, respiration_rate,
+                weight_kg, body_fat_pct,
                 synced_at, data_quality
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, date) DO UPDATE SET
                 steps = EXCLUDED.steps,
                 calories = EXCLUDED.calories,
@@ -335,6 +353,8 @@ def sync_daily_stats(client, db, date_str):
                 sleep_debt_minutes = COALESCE(EXCLUDED.sleep_debt_minutes, daily_metric.sleep_debt_minutes),
                 spo2 = COALESCE(EXCLUDED.spo2, daily_metric.spo2),
                 respiration_rate = COALESCE(EXCLUDED.respiration_rate, daily_metric.respiration_rate),
+                weight_kg = COALESCE(EXCLUDED.weight_kg, daily_metric.weight_kg),
+                body_fat_pct = COALESCE(EXCLUDED.body_fat_pct, daily_metric.body_fat_pct),
                 synced_at = EXCLUDED.synced_at,
                 data_quality = EXCLUDED.data_quality
         """, (
@@ -362,6 +382,8 @@ def sync_daily_stats(client, db, date_str):
             _compute_sleep_debt(sleep_dto),
             spo2_val,
             respiration_val,
+            weight_kg,
+            body_fat_pct,
             datetime.now(timezone.utc).isoformat(),
             data_quality,
         ))

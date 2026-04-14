@@ -43,6 +43,10 @@ SELECT
     dm.garmin_training_load,
     dm.data_quality,
 
+    -- Body composition (from Garmin body composition API)
+    dm.weight_kg,
+    dm.body_fat_pct,
+
     -- Garmin Training Readiness (native scores from Garmin API)
     dm.garmin_training_readiness,
     dm.garmin_training_readiness_level,

@@ -52,6 +52,9 @@ class TestSyncDailyStats:
         client.get_sleep_data.return_value = sample_sleep
         client.get_hrv_data.return_value = sample_hrv
         client.get_stress_data.return_value = {}
+        client.get_spo2_data.return_value = None
+        client.get_respiration_data.return_value = None
+        client.get_body_composition.return_value = {"weight": 75000, "bodyFat": 18.5}
 
         module = _load_sync_module()
 
@@ -70,6 +73,9 @@ class TestSyncDailyStats:
         client.get_sleep_data.return_value = {}  # empty sleep response
         client.get_hrv_data.return_value = {}
         client.get_stress_data.return_value = {}
+        client.get_spo2_data.return_value = None
+        client.get_respiration_data.return_value = None
+        client.get_body_composition.return_value = None
 
         module = _load_sync_module()
 

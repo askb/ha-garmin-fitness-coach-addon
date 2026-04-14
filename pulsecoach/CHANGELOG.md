@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] — 2026-04-14
+
+### Added
+- **Garmin weight/body composition sync** — auto-syncs weight (kg) and body fat % from Garmin daily
+- **New HA sensor**: `sensor.pulsecoach_weight` with body fat attribute
+- **Strava OAuth2 integration** — sync activities from Strava as secondary data source
+  - Config options: `strava_client_id`, `strava_client_secret`, `strava_refresh_token`
+  - Activities stored alongside Garmin with `source_platform` tracking
+  - TRIMP computation for Strava activities (Banister simplified)
+  - Incremental sync (7-day window) after initial full sync
+- Weight and body fat columns in materialized view for dashboard access
+
+### Changed
+- Data quality score now includes weight as a quality indicator
+- Activity table extended with `strava_activity_id` and `source_platform` columns
+
 ## [0.14.0] — 2026-04-14
 
 ### Added

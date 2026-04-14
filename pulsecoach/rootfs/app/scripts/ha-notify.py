@@ -487,6 +487,17 @@ def run_notifications(user_id: str):
                         "load_focus": dm.get('garmin_load_focus') if dm else None,
                     })
 
+        # sensor.pulsecoach_weight
+        weight = dm.get('weight_kg') if dm else None
+        push_sensor("sensor.pulsecoach_weight",
+                    round(weight, 1) if weight else "unknown",
+                    {
+                        "friendly_name": "PulseCoach Weight",
+                        "unit_of_measurement": "kg",
+                        "icon": "mdi:scale-bathroom",
+                        "body_fat_pct": dm.get('body_fat_pct') if dm else None,
+                    })
+
         # sensor.pulsecoach_workout_recommendation
         # AI-informed workout suggestion using readiness + all recovery signals
         hard_days = data["consecutive_hard_days"]
