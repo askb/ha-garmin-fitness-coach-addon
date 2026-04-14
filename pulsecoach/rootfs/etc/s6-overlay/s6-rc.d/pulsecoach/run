@@ -206,21 +206,21 @@ BEGIN
     -- Rename readiness_score → score if old column exists
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'readiness_score' AND column_name = 'readiness_score'
+        WHERE table_schema = 'public' AND table_name = 'readiness_score' AND column_name = 'readiness_score'
     ) THEN
         ALTER TABLE readiness_score RENAME COLUMN readiness_score TO score;
     END IF;
     -- Rename readiness_zone → zone if old column exists
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'readiness_score' AND column_name = 'readiness_zone'
+        WHERE table_schema = 'public' AND table_name = 'readiness_score' AND column_name = 'readiness_zone'
     ) THEN
         ALTER TABLE readiness_score RENAME COLUMN readiness_zone TO zone;
     END IF;
     -- Rename readiness_explanation → explanation if old column exists
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'readiness_score' AND column_name = 'readiness_explanation'
+        WHERE table_schema = 'public' AND table_name = 'readiness_score' AND column_name = 'readiness_explanation'
     ) THEN
         ALTER TABLE readiness_score RENAME COLUMN readiness_explanation TO explanation;
     END IF;
