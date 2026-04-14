@@ -183,8 +183,11 @@ def _safe_sleep_minutes(sleep_dto, key):
 def _extract_sleep_time(sleep_dto, key):
     """Extract sleep timestamp and convert to minutes-from-midnight string.
 
-    Garmin's *Local timestamps are epoch-ms adjusted to the user's local time,
-    so utcfromtimestamp gives the local wall-clock hours/minutes directly.
+    Garmin *TimestampLocal fields store epoch milliseconds where the encoded
+    UTC datetime represents the user's local wall-clock time. For example,
+    a bedtime of 22:30 AEST is stored as the epoch-ms for 22:30 UTC (not
+    the actual UTC instant). Using utcfromtimestamp recovers the intended
+    hours and minutes without any system timezone dependency.
     """
     ts = sleep_dto.get(key)
     if ts is None:

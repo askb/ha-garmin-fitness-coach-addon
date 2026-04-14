@@ -601,12 +601,26 @@ class TestTimezone:
         assert garmin_sync._extract_sleep_time({"sleepStartTimestampLocal": None}, "sleepStartTimestampLocal") is None
 
     def test_user_today_respects_timezone(self, garmin_sync):
-        """_user_today returns date in the configured timezone."""
-        from datetime import date
-        today = garmin_sync._user_today()
-        assert isinstance(today, date)
+        """_user_today returns a date consistent with the configured timezone.
+
+        For the default UTC config, _user_today() should match UTC date.
+        We also verify it shifts correctly for a non-UTC timezone by
+        temporarily patching USER_TZ.
+        """
+        from datetime import date, datetime, timezone as tz
+        from zoneinfo import ZoneInfo
+        from unittest.mock import patch
+
+        # Default: UTC — should match UTC date
+        utc_today = datetime.now(tz.utc).date()
+        assert garmin_sync._user_today() == utc_today
+
+        # Patch to a far-ahead timezone and verify date can differ from UTC
+        with patch.object(garmin_sync, 'USER_TZ', ZoneInfo("Pacific/Auckland")):
+            nz_today = datetime.now(ZoneInfo("Pacific/Auckland")).date()
+            assert garmin_sync._user_today() == nz_today
 
     def test_user_tz_defaults_to_utc(self, garmin_sync):
         """USER_TZ defaults to UTC when no environment variable is set."""
-        from zoneinfo import ZoneInfo
-        assert garmin_sync.USER_TZ == ZoneInfo("UTC")
+        # Compare by key name rather than identity (ZoneInfo caching not guaranteed)
+        assert str(garmin_sync.USER_TZ) == "UTC"

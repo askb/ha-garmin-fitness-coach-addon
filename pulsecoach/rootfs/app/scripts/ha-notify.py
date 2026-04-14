@@ -68,7 +68,7 @@ def ha_request(method: str, path: str, data: dict | None = None) -> dict | None:
 
 def push_sensor(entity_id: str, state: str | float | int, attributes: dict) -> bool:
     """Push a sensor state to HA."""
-    # Include timezone and last_updated in all sensor attributes
+    # Include timezone and last_computed in all sensor attributes
     attributes["timezone"] = str(USER_TZ)
     attributes["last_computed"] = datetime.now(USER_TZ).isoformat()
     result = ha_request("POST", f"states/{entity_id}", {
