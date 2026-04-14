@@ -138,6 +138,10 @@ fi
 bashio::log.info "Pushing database schema..."
 cd /app/packages/db && POSTGRES_URL="${POSTGRES_URL}" npx drizzle-kit push --force 2>&1 || bashio::log.warning "Schema push had warnings"
 
+# Create/refresh materialized view for single source of truth
+bashio::log.info "Creating daily_athlete_summary materialized view..."
+psql -h 127.0.0.1 -U postgres -d pulsecoach -f /app/sql/create_daily_athlete_summary.sql 2>&1 || bashio::log.warning "Matview creation had warnings (tables may not exist yet)"
+
 # Restore database from /share/ backup if this is a fresh install
 restore_database "check"
 

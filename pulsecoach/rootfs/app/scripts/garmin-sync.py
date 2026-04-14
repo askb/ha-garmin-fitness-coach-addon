@@ -88,6 +88,19 @@ def _clear_sync_status():
         pass
 
 
+def _refresh_matview(db):
+    """Refresh the daily_athlete_summary materialized view after sync."""
+    try:
+        cur = db.cursor()
+        cur.execute("SELECT refresh_daily_athlete_summary()")
+        db.commit()
+        cur.close()
+        print("  Refreshed daily_athlete_summary materialized view")
+    except Exception as e:
+        db.rollback()
+        print(f"  Matview refresh skipped: {e}", file=sys.stderr)
+
+
 def get_client():
     """Authenticate with Garmin Connect, preferring saved tokens."""
     os.makedirs(TOKEN_DIR, exist_ok=True)
@@ -824,6 +837,10 @@ def main():
 
     _write_sync_status("vo2max", "Computing VO2max estimates...", 90)
     sync_vo2max(client, db, days=sync_days)
+
+    # Refresh materialized view so all downstream queries see fresh data
+    _write_sync_status("refresh", "Refreshing summary view...", 95)
+    _refresh_matview(db)
 
     db.close()
 

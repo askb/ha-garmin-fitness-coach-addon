@@ -328,6 +328,15 @@ def run_compute(user_id: str):
             f"{len(vo2max_by_date)} VO2max points, "
             f"{'CP computed' if cp_data else 'no CP data'}"
         )
+
+        # Refresh materialized view for consistent downstream queries
+        try:
+            cur.execute("SELECT refresh_daily_athlete_summary()")
+            db.commit()
+            print("[metrics-compute] Refreshed daily_athlete_summary view")
+        except Exception as refresh_err:
+            db.rollback()
+            print(f"[metrics-compute] Matview refresh skipped: {refresh_err}", file=sys.stderr)
     except Exception as e:
         db.rollback()
         print(f"[metrics-compute] ERROR: {e}", file=sys.stderr)

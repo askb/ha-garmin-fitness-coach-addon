@@ -624,3 +624,34 @@ class TestTimezone:
         """USER_TZ defaults to UTC when no environment variable is set."""
         # Compare by key name rather than identity (ZoneInfo caching not guaranteed)
         assert str(garmin_sync.USER_TZ) == "UTC"
+
+
+class TestMatviewRefresh:
+    """Tests for materialized view refresh integration."""
+
+    def test_refresh_matview_success(self, garmin_sync):
+        """_refresh_matview calls the refresh function and commits."""
+        from unittest.mock import MagicMock
+        db = MagicMock()
+        cur = MagicMock()
+        db.cursor.return_value = cur
+
+        garmin_sync._refresh_matview(db)
+
+        cur.execute.assert_called_once_with("SELECT refresh_daily_athlete_summary()")
+        db.commit.assert_called_once()
+        cur.close.assert_called_once()
+
+    def test_refresh_matview_error_rolls_back(self, garmin_sync):
+        """_refresh_matview rolls back on error without raising."""
+        from unittest.mock import MagicMock
+        db = MagicMock()
+        cur = MagicMock()
+        db.cursor.return_value = cur
+        cur.execute.side_effect = Exception("relation does not exist")
+
+        # Should not raise
+        garmin_sync._refresh_matview(db)
+
+        db.rollback.assert_called_once()
+        db.commit.assert_not_called()
