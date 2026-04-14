@@ -94,7 +94,7 @@ def ensure_advanced_metric_table(cur):
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id TEXT NOT NULL,
             date DATE NOT NULL,
-            readiness_score INTEGER,
+            score INTEGER,
             readiness_zone TEXT,
             readiness_explanation TEXT,
             computed_at TIMESTAMP DEFAULT NOW(),
@@ -402,11 +402,11 @@ def upsert_readiness_scores(cur, user_id: str, readiness_data: dict):
     for d_str, data in sorted(readiness_data.items()):
         cur.execute("""
             INSERT INTO readiness_score (
-                user_id, date, readiness_score, readiness_zone,
+                user_id, date, score, readiness_zone,
                 readiness_explanation, computed_at
             ) VALUES (%s, %s, %s, %s, %s, NOW())
             ON CONFLICT (user_id, date) DO UPDATE SET
-                readiness_score = EXCLUDED.readiness_score,
+                score = EXCLUDED.score,
                 readiness_zone = EXCLUDED.readiness_zone,
                 readiness_explanation = EXCLUDED.readiness_explanation,
                 computed_at = NOW()

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.1] — 2026-04-14
+
+### Fixed
+- **readiness_score table schema bug** — column `readiness_score` conflicted with table name in PostgreSQL; renamed to `score`
+- **daily_athlete_summary matview** — now references correct column `rs.score`; matview was failing to create on v0.14.0
+- **Migration** — auto-renames column for users upgrading from v0.14.0
+
 ## [0.15.0] — 2026-04-14
 
 ### Added
