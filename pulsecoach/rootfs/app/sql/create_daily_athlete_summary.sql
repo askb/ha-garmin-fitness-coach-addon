@@ -41,6 +41,7 @@ SELECT
     dm.spo2,
     dm.respiration_rate,
     dm.garmin_training_load,
+    dm.data_quality,
 
     -- Advanced metrics (from metrics-compute.py EWMA)
     am.ctl,
