@@ -88,6 +88,20 @@ def ensure_advanced_metric_table(cur):
         END $$;
     """)
 
+    # Ensure readiness_score table exists for computed readiness
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS readiness_score (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id TEXT NOT NULL,
+            date DATE NOT NULL,
+            readiness_score INTEGER,
+            readiness_zone TEXT,
+            readiness_explanation TEXT,
+            computed_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(user_id, date)
+        );
+    """)
+
 
 def fetch_daily_loads(cur, user_id):
     """Fetch training load scores per date.
@@ -259,6 +273,149 @@ def compute_critical_power(cur, user_id) -> dict:
     return result
 
 
+def compute_readiness_score(cur, user_id: str) -> dict:
+    """Compute Buchheit-style readiness score per day.
+
+    Uses Garmin's native training readiness when available, otherwise
+    computes a weighted composite from HRV, sleep, load, stress, resting HR.
+
+    Weights (Buchheit 2014 adapted):
+      HRV: 35%, Sleep: 25%, Training Load: 20%, Resting HR: 10%, Stress: 10%
+
+    Returns {date_str: {score, zone, explanation, source}}.
+    """
+    cur.execute("""
+        SELECT date, hrv, sleep_score, stress_score, resting_hr,
+               body_battery_end, garmin_training_readiness,
+               garmin_training_readiness_level
+        FROM daily_metric
+        WHERE user_id = %s
+        ORDER BY date
+    """, (user_id,))
+    rows = cur.fetchall()
+    if not rows:
+        return {}
+
+    # Build rolling averages for z-score-like normalization
+    hrv_history = []
+    rhr_history = []
+    results = {}
+
+    for row in rows:
+        d = str(row["date"])
+        garmin_readiness = row.get("garmin_training_readiness")
+
+        # If Garmin native readiness exists, use it directly
+        if garmin_readiness is not None:
+            score = int(garmin_readiness)
+            zone = _readiness_zone(score)
+            results[d] = {
+                "score": score,
+                "zone": zone,
+                "explanation": f"Garmin Training Readiness: {score}/100 ({zone})",
+                "source": "garmin_native",
+            }
+        else:
+            # Compute Buchheit-style composite
+            hrv_val = row.get("hrv")
+            sleep_val = row.get("sleep_score")
+            stress_val = row.get("stress_score")
+            rhr_val = row.get("resting_hr")
+            bb_val = row.get("body_battery_end")
+
+            if hrv_val:
+                hrv_history.append(hrv_val)
+            if rhr_val:
+                rhr_history.append(rhr_val)
+
+            components = []
+            total_weight = 0
+
+            # HRV component (35%): higher is better, z-score vs 14-day avg
+            if hrv_val and len(hrv_history) >= 7:
+                avg_hrv = sum(hrv_history[-14:]) / len(hrv_history[-14:])
+                hrv_pct = min(100, max(0, (hrv_val / max(1, avg_hrv)) * 50 + 25))
+                components.append(("hrv", hrv_pct, 0.35))
+                total_weight += 0.35
+
+            # Sleep component (25%): direct score 0-100
+            if sleep_val is not None:
+                components.append(("sleep", min(100, sleep_val), 0.25))
+                total_weight += 0.25
+
+            # Training load component (20%): Body Battery as proxy
+            if bb_val is not None:
+                components.append(("load", min(100, bb_val), 0.20))
+                total_weight += 0.20
+
+            # Resting HR component (10%): lower is better vs baseline
+            if rhr_val and len(rhr_history) >= 7:
+                avg_rhr = sum(rhr_history[-14:]) / len(rhr_history[-14:])
+                rhr_pct = min(100, max(0, (2 - rhr_val / max(1, avg_rhr)) * 50 + 25))
+                components.append(("rhr", rhr_pct, 0.10))
+                total_weight += 0.10
+
+            # Stress component (10%): lower is better (invert)
+            if stress_val is not None:
+                stress_pct = max(0, 100 - stress_val)
+                components.append(("stress", stress_pct, 0.10))
+                total_weight += 0.10
+
+            if total_weight > 0:
+                score = round(sum(v * w for _, v, w in components) / total_weight)
+                score = min(100, max(0, score))
+                zone = _readiness_zone(score)
+                parts = ", ".join(f"{n}={v:.0f}" for n, v, _ in components)
+                results[d] = {
+                    "score": score,
+                    "zone": zone,
+                    "explanation": f"Buchheit composite: {score}/100 ({parts})",
+                    "source": "buchheit_composite",
+                }
+            else:
+                continue
+
+        # Update HRV/RHR history regardless
+        if row.get("hrv") and garmin_readiness is not None:
+            hrv_history.append(row["hrv"])
+        if row.get("resting_hr") and garmin_readiness is not None:
+            rhr_history.append(row["resting_hr"])
+
+    return results
+
+
+def _readiness_zone(score: int) -> str:
+    """Map readiness score to zone label."""
+    if score >= 80:
+        return "prime"
+    elif score >= 60:
+        return "good"
+    elif score >= 40:
+        return "moderate"
+    elif score >= 20:
+        return "low"
+    return "poor"
+
+
+def upsert_readiness_scores(cur, user_id: str, readiness_data: dict):
+    """Upsert readiness scores into readiness_score table."""
+    for d_str, data in sorted(readiness_data.items()):
+        cur.execute("""
+            INSERT INTO readiness_score (
+                user_id, date, readiness_score, readiness_zone,
+                readiness_explanation, computed_at
+            ) VALUES (%s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (user_id, date) DO UPDATE SET
+                readiness_score = EXCLUDED.readiness_score,
+                readiness_zone = EXCLUDED.readiness_zone,
+                readiness_explanation = EXCLUDED.readiness_explanation,
+                computed_at = NOW()
+        """, (
+            user_id, d_str, data["score"], data["zone"],
+            data["explanation"],
+        ))
+
+
 def upsert_advanced_metrics(
     cur, user_id: str, load_metrics: dict, vo2max_by_date: dict, cp_data: dict
 ):
@@ -320,6 +477,12 @@ def run_compute(user_id: str):
         cp_data = compute_critical_power(cur, user_id)
 
         upsert_advanced_metrics(cur, user_id, load_metrics, vo2max_by_date, cp_data)
+
+        # Compute and upsert readiness scores
+        readiness_data = compute_readiness_score(cur, user_id)
+        if readiness_data:
+            upsert_readiness_scores(cur, user_id, readiness_data)
+
         db.commit()
 
         dates_computed = len(load_metrics)
@@ -353,6 +516,7 @@ def run_compute(user_id: str):
         print(
             f"[metrics-compute] Done — {dates_computed} dates, "
             f"{len(vo2max_by_date)} VO2max points, "
+            f"{len(readiness_data)} readiness scores, "
             f"{'CP computed' if cp_data else 'no CP data'}"
         )
 
