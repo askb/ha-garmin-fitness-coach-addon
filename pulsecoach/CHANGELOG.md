@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] — 2026-04-14
+
+### Added
+
+- **Materialized view** — `daily_athlete_summary` PostgreSQL materialized
+  view joins `daily_metric`, `advanced_metric`, `readiness_score`, and
+  `vo2max_estimate` into a 60-column single source of truth. Refreshed
+  non-concurrently after every sync and compute cycle.
+- **Data quality flags** — Each synced day now gets a `data_quality`
+  percentage (0-100) based on key field presence (steps, HR, sleep, HRV,
+  stress, SpO2). Available in the matview for UI display.
+- **Drift detection** — `metrics-compute.py` logs a WARNING if computed
+  metrics lag behind synced data by more than 1 day.
+- **Test suite** — 12 new metrics-compute tests covering EWMA properties,
+  decay constants, injury risk levels, and edge cases. 90-day synthetic
+  fixture data for deterministic validation.
+- **Docker cachebust fix** — Replaced GitHub API `ADD` (403 rate-limited)
+  with `CACHEBUST` build arg across all CI/release workflows.
+
+### Changed
+
+- **TRIMP formula** — Upgraded from simplified HR-ratio formula to Banister
+  (1991) with resting HR delta ratio: `duration × ΔHR × e^(k × ΔHR)`.
+  More accurate for aerobic activities where HR is closer to resting.
+- **Matview startup order** — Created after schema push + restore + migrations
+  (not before) for deterministic first-boot behavior.
+- **ha-notify fallback** — Catches specific `psycopg2.errors.UndefinedTable`
+  instead of blanket exception; logs unexpected errors to stderr.
+
+### Fixed
+
+- **Cursor leak** — `_refresh_matview()` now uses `finally` block to ensure
+  cursor is always closed, even on error.
+- **REFRESH CONCURRENTLY** — Switched to standard `REFRESH MATERIALIZED VIEW`
+  inside PL/pgSQL function (CONCURRENTLY cannot run inside transaction blocks).
+
 ## [0.12.1] — 2026-04-15
 
 ### Added

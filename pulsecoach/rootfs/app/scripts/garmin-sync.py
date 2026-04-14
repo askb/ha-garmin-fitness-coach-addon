@@ -11,6 +11,7 @@ Supports two auth modes:
 """
 
 import json
+import math
 import os
 import sys
 from datetime import datetime, timedelta, timezone
@@ -275,6 +276,17 @@ def sync_daily_stats(client, db, date_str):
         if respiration_val is None and stats:
             respiration_val = stats.get("respirationAvg")
 
+        # Compute data quality flag (percentage of key fields present)
+        quality_fields = [
+            stats.get("totalSteps"), stats.get("restingHeartRate"),
+            _safe_sleep_minutes(sleep_dto, "sleepTimeSeconds"),
+            sleep_dto.get("sleepScores", {}).get("overall", {}).get("value"),
+            hrv.get("hrvSummary", {}).get("weeklyAvg") if hrv else None,
+            stress_val, spo2_val,
+        ]
+        present = sum(1 for f in quality_fields if f is not None)
+        data_quality = round(present / len(quality_fields) * 100)
+
         # Ensure unique constraint exists for upsert
         cur.execute("""
             DO $$ BEGIN
@@ -298,8 +310,8 @@ def sync_daily_stats(client, db, date_str):
                 floors_climbed, intensity_minutes,
                 sleep_start_time, sleep_end_time, sleep_need_minutes, sleep_debt_minutes,
                 spo2, respiration_rate,
-                synced_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                synced_at, data_quality
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, date) DO UPDATE SET
                 steps = EXCLUDED.steps,
                 calories = EXCLUDED.calories,
@@ -323,7 +335,8 @@ def sync_daily_stats(client, db, date_str):
                 sleep_debt_minutes = COALESCE(EXCLUDED.sleep_debt_minutes, daily_metric.sleep_debt_minutes),
                 spo2 = COALESCE(EXCLUDED.spo2, daily_metric.spo2),
                 respiration_rate = COALESCE(EXCLUDED.respiration_rate, daily_metric.respiration_rate),
-                synced_at = EXCLUDED.synced_at
+                synced_at = EXCLUDED.synced_at,
+                data_quality = EXCLUDED.data_quality
         """, (
             USER_ID,
             date_str,
@@ -350,6 +363,7 @@ def sync_daily_stats(client, db, date_str):
             spo2_val,
             respiration_val,
             datetime.now(timezone.utc).isoformat(),
+            data_quality,
         ))
         db.commit()
         print(f"  Synced daily stats for {date_str}")
@@ -501,6 +515,20 @@ def backfill_from_raw_json(db):
             return
 
         updated = 0
+        # Pre-fetch latest resting HR to avoid N+1 query in activity loop
+        cached_resting_hr = 60  # fallback
+        try:
+            cur.execute("""
+                SELECT resting_hr FROM daily_metric
+                WHERE user_id = %s AND resting_hr IS NOT NULL
+                ORDER BY date DESC LIMIT 1
+            """, (USER_ID,))
+            rhr_row = cur.fetchone()
+            if rhr_row:
+                cached_resting_hr = rhr_row[0] if isinstance(rhr_row, tuple) else rhr_row.get("resting_hr")
+        except Exception:
+            pass
+
         for row_id, raw_json, avg_hr, duration_min in rows:
             act = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
 
@@ -519,11 +547,15 @@ def backfill_from_raw_json(db):
             # Garmin training load
             strain = act.get("activityTrainingLoad")
 
-            # Compute TRIMP if we have HR data
+            # Compute TRIMP using Banister (1991) formula with resting HR
             trimp = None
             if avg_hr and duration_min and duration_min > 0:
-                hr_ratio = avg_hr / 200.0
-                trimp = round(duration_min * hr_ratio * 0.64 * (1.92 ** hr_ratio), 1)
+                resting_hr = cached_resting_hr
+                max_hr = 220 - 30  # conservative estimate; user profile ideal
+                delta_ratio = (avg_hr - resting_hr) / max(1, max_hr - resting_hr)
+                delta_ratio = max(0, min(1, delta_ratio))
+                k = 1.92  # male constant (Banister)
+                trimp = round(duration_min * delta_ratio * math.exp(k * delta_ratio), 1)
 
             if hr_zones or strain or trimp:
                 cur.execute("""

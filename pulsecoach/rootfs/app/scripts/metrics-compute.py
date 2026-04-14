@@ -323,6 +323,33 @@ def run_compute(user_id: str):
         db.commit()
 
         dates_computed = len(load_metrics)
+        latest_sync = None
+        latest_compute = None
+        if load_metrics:
+            latest_compute = max(load_metrics.keys())
+        try:
+            cur.execute("""
+                SELECT MAX(date) as latest_date FROM daily_metric WHERE user_id = %s
+            """, (user_id,))
+            row = cur.fetchone()
+            if row and row.get("latest_date"):
+                latest_sync = str(row["latest_date"])
+        except Exception:
+            pass
+
+        # Drift detection: warn if compute lags behind sync
+        if latest_sync and latest_compute and latest_sync > latest_compute:
+            from datetime import datetime
+            sync_d = datetime.fromisoformat(latest_sync).date() if "T" not in latest_sync else date.fromisoformat(latest_sync[:10])
+            comp_d = date.fromisoformat(latest_compute)
+            drift_days = (sync_d - comp_d).days
+            if drift_days > 1:
+                print(
+                    f"[metrics-compute] WARNING: compute lags sync by {drift_days} days "
+                    f"(sync: {latest_sync}, compute: {latest_compute})",
+                    file=sys.stderr,
+                )
+
         print(
             f"[metrics-compute] Done — {dates_computed} dates, "
             f"{len(vo2max_by_date)} VO2max points, "
