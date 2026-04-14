@@ -11,6 +11,7 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 try:
     import psycopg2
@@ -30,6 +31,14 @@ USER_ID = os.environ.get("GARMIN_USER_ID", "seed-user-001")
 HA_BASE_URL = os.environ.get("HA_BASE_URL", "http://supervisor/core")
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
 NOTIFY_INTERVAL_MINUTES = int(os.environ.get("NOTIFY_INTERVAL_MINUTES", "30"))
+
+# Timezone for date boundary calculations
+_tz_name = os.environ.get("USER_TIMEZONE", "UTC")
+try:
+    USER_TZ = ZoneInfo(_tz_name)
+except (KeyError, ValueError):
+    print(f"[ha-notify] WARNING: Invalid timezone '{_tz_name}', using UTC", file=sys.stderr)
+    USER_TZ = ZoneInfo("UTC")
 
 
 def ha_request(method: str, path: str, data: dict | None = None) -> dict | None:
@@ -59,6 +68,9 @@ def ha_request(method: str, path: str, data: dict | None = None) -> dict | None:
 
 def push_sensor(entity_id: str, state: str | float | int, attributes: dict) -> bool:
     """Push a sensor state to HA."""
+    # Include timezone and last_computed in all sensor attributes
+    attributes["timezone"] = str(USER_TZ)
+    attributes["last_computed"] = datetime.now(USER_TZ).isoformat()
     result = ha_request("POST", f"states/{entity_id}", {
         "state": str(state),
         "attributes": attributes,
@@ -460,7 +472,7 @@ def run_notifications(user_id: str):
 
 def main():
     once_mode = "--once" in sys.argv
-    print(f"[ha-notify] Starting. Mode: {'once' if once_mode else f'loop every {NOTIFY_INTERVAL_MINUTES}m'}")
+    print(f"[ha-notify] Starting. Mode: {'once' if once_mode else f'loop every {NOTIFY_INTERVAL_MINUTES}m'} (timezone: {USER_TZ})")
 
     run_notifications(USER_ID)
 

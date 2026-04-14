@@ -13,6 +13,7 @@ import sys
 import time
 from collections import defaultdict
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 
 try:
     import psycopg2
@@ -26,6 +27,14 @@ DATABASE_URL = os.environ.get(
 )
 USER_ID = os.environ.get("GARMIN_USER_ID", "seed-user-001")
 COMPUTE_INTERVAL_MINUTES = int(os.environ.get("COMPUTE_INTERVAL_MINUTES", "60"))
+
+# Timezone for date boundary calculations
+_tz_name = os.environ.get("USER_TIMEZONE", "UTC")
+try:
+    USER_TZ = ZoneInfo(_tz_name)
+except (KeyError, ValueError):
+    print(f"[metrics-compute] WARNING: Invalid timezone '{_tz_name}', using UTC", file=sys.stderr)
+    USER_TZ = ZoneInfo("UTC")
 
 # EWMA decay constants
 ATL_DECAY = 1 - math.exp(-1 / 7)   # 7-day time constant
@@ -333,7 +342,8 @@ def main():
     once_mode = "--once" in sys.argv
     print(
         f"[metrics-compute] Starting. "
-        f"Mode: {'once' if once_mode else f'loop every {COMPUTE_INTERVAL_MINUTES}m'}"
+        f"Mode: {'once' if once_mode else f'loop every {COMPUTE_INTERVAL_MINUTES}m'} "
+        f"(timezone: {USER_TZ})"
     )
     run_compute(USER_ID)
     if not once_mode:

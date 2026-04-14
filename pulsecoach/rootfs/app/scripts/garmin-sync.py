@@ -15,6 +15,7 @@ import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 try:
     from garminconnect import Garmin
@@ -35,6 +36,19 @@ GARMIN_PASSWORD = os.environ.get("GARMIN_PASSWORD", "")
 TOKEN_DIR = "/data/garmin-tokens"
 # Must match the userId used by the Next.js app (DEV_BYPASS_AUTH seed user)
 USER_ID = os.environ.get("GARMIN_USER_ID", "seed-user-001")
+
+# Timezone for date boundary calculations (e.g., "Australia/Brisbane")
+_tz_name = os.environ.get("USER_TIMEZONE", "UTC")
+try:
+    USER_TZ = ZoneInfo(_tz_name)
+except (KeyError, ValueError):
+    print(f"WARNING: Invalid timezone '{_tz_name}', falling back to UTC", file=sys.stderr)
+    USER_TZ = ZoneInfo("UTC")
+
+
+def _user_today():
+    """Get today's date in the user's configured timezone."""
+    return datetime.now(USER_TZ).date()
 
 SYNC_STATUS_FILE = os.path.join(TOKEN_DIR, ".sync_status")
 
@@ -167,13 +181,20 @@ def _safe_sleep_minutes(sleep_dto, key):
 
 
 def _extract_sleep_time(sleep_dto, key):
-    """Extract sleep timestamp and convert to minutes-from-midnight string."""
+    """Extract sleep timestamp and convert to minutes-from-midnight string.
+
+    Garmin *TimestampLocal fields store epoch milliseconds where the encoded
+    UTC datetime represents the user's local wall-clock time. For example,
+    a bedtime of 22:30 AEST is stored as the epoch-ms for 22:30 UTC (not
+    the actual UTC instant). Using utcfromtimestamp recovers the intended
+    hours and minutes without any system timezone dependency.
+    """
     ts = sleep_dto.get(key)
     if ts is None:
         return None
     try:
-        # Garmin returns epoch milliseconds (local time)
-        dt = datetime.fromtimestamp(ts / 1000)
+        # Garmin "Local" timestamps encode local wall-clock time as UTC epoch
+        dt = datetime.utcfromtimestamp(ts / 1000)
         minutes = dt.hour * 60 + dt.minute
         return str(minutes)
     except (ValueError, TypeError, OSError):
@@ -597,8 +618,8 @@ def sync_vo2max(client, db, days=7):
         # historical dates outside the current sync window.
         db.commit()
 
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date()
-        today = datetime.now(timezone.utc).date()
+        cutoff = (_user_today() - timedelta(days=days))
+        today = _user_today()
 
         # --- Primary: Garmin's official VO2max from max-metrics API ---
         garmin_count = 0
@@ -762,7 +783,7 @@ def main():
         _clear_sync_status()
         return
 
-    print(f"Starting Garmin sync at {datetime.now(timezone.utc).isoformat()}")
+    print(f"Starting Garmin sync at {datetime.now(timezone.utc).isoformat()} (timezone: {USER_TZ})")
     _write_sync_status("starting", "Authenticating with Garmin...")
     client = get_client()
     if client is None:
@@ -777,13 +798,13 @@ def main():
     else:
         # Calculate days from 2019-01-01 to today
         epoch = datetime(2019, 1, 1, tzinfo=timezone.utc).date()
-        today = datetime.now(timezone.utc).date()
+        today = _user_today()
         sync_days = (today - epoch).days
         print(f"First sync — pulling {sync_days} days of history (from 2019-01-01)...")
 
     db = get_db()
 
-    today = datetime.now(timezone.utc).date()
+    today = _user_today()
     for days_ago in range(sync_days):
         date_str = (today - timedelta(days=days_ago)).isoformat()
         _write_sync_status("daily_stats", f"Syncing {date_str}",

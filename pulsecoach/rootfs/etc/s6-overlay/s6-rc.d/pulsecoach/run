@@ -97,11 +97,13 @@ GARMIN_PASSWORD=$(bashio::config 'garmin_password')
 AI_BACKEND=$(bashio::config 'ai_backend' || echo "none")
 OLLAMA_URL=$(bashio::config 'ollama_url' || echo "")
 SYNC_INTERVAL=$(bashio::config 'sync_interval_minutes' || echo "60")
+USER_TIMEZONE=$(bashio::config 'user_timezone' || echo "UTC")
 
 export GARMIN_EMAIL GARMIN_PASSWORD
 export AI_BACKEND
 export OLLAMA_URL
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gpt-oss:20b}"
+export USER_TIMEZONE
 export DATABASE_URL="postgresql://postgres@127.0.0.1:5432/pulsecoach"
 export POSTGRES_URL="postgresql://postgres@127.0.0.1:5432/pulsecoach"
 export DEV_BYPASS_AUTH="true"

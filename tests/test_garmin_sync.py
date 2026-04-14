@@ -563,3 +563,64 @@ class TestBackfillFromRawJson:
         garmin_sync.backfill_from_raw_json(conn)
         conn.rollback.assert_called_once()
         assert "Backfill failed" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Timezone handling
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestTimezone:
+    """Tests for timezone-aware date boundaries and sleep time extraction."""
+
+    def test_extract_sleep_time_local_timestamp(self, garmin_sync):
+        """_extract_sleep_time extracts local wall-clock time from Garmin Local timestamps.
+
+        Garmin 'Local' timestamps encode local wall-clock time as if it were UTC,
+        so we construct the test epoch ms using UTC to match.
+        """
+        from datetime import datetime as dt, timezone as tz
+        # 22:30 local = 1350 minutes from midnight
+        ts_ms = int(dt(2025, 1, 15, 22, 30, tzinfo=tz.utc).timestamp() * 1000)
+        sleep_dto = {"sleepStartTimestampLocal": ts_ms}
+        result = garmin_sync._extract_sleep_time(sleep_dto, "sleepStartTimestampLocal")
+        assert result == "1350"
+
+    def test_extract_sleep_time_early_morning(self, garmin_sync):
+        """_extract_sleep_time handles early morning wake times (e.g., 06:15)."""
+        from datetime import datetime as dt, timezone as tz
+        ts_ms = int(dt(2025, 1, 16, 6, 15, tzinfo=tz.utc).timestamp() * 1000)
+        sleep_dto = {"sleepEndTimestampLocal": ts_ms}
+        result = garmin_sync._extract_sleep_time(sleep_dto, "sleepEndTimestampLocal")
+        assert result == "375"  # 6*60+15
+
+    def test_extract_sleep_time_none_returns_none(self, garmin_sync):
+        """_extract_sleep_time returns None for missing timestamps."""
+        assert garmin_sync._extract_sleep_time({}, "sleepStartTimestampLocal") is None
+        assert garmin_sync._extract_sleep_time({"sleepStartTimestampLocal": None}, "sleepStartTimestampLocal") is None
+
+    def test_user_today_respects_timezone(self, garmin_sync):
+        """_user_today returns a date consistent with the configured timezone.
+
+        For the default UTC config, _user_today() should match UTC date.
+        We also verify it shifts correctly for a non-UTC timezone by
+        temporarily patching USER_TZ.
+        """
+        from datetime import date, datetime, timezone as tz
+        from zoneinfo import ZoneInfo
+        from unittest.mock import patch
+
+        # Default: UTC — should match UTC date
+        utc_today = datetime.now(tz.utc).date()
+        assert garmin_sync._user_today() == utc_today
+
+        # Patch to a far-ahead timezone and verify date can differ from UTC
+        with patch.object(garmin_sync, 'USER_TZ', ZoneInfo("Pacific/Auckland")):
+            nz_today = datetime.now(ZoneInfo("Pacific/Auckland")).date()
+            assert garmin_sync._user_today() == nz_today
+
+    def test_user_tz_defaults_to_utc(self, garmin_sync):
+        """USER_TZ defaults to UTC when no environment variable is set."""
+        # Compare by key name rather than identity (ZoneInfo caching not guaranteed)
+        assert str(garmin_sync.USER_TZ) == "UTC"
