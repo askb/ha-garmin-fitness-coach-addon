@@ -102,6 +102,11 @@ def ensure_advanced_metric_table(cur):
             UNIQUE(user_id, date)
         );
     """)
+    # Drizzle may create the table without our UNIQUE constraint — ensure it exists
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS readiness_score_user_id_date_idx
+        ON readiness_score (user_id, date);
+    """)
 
 
 def fetch_daily_loads(cur, user_id):
