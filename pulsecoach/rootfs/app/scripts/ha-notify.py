@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 try:
     import psycopg2
     import psycopg2.extras
+    import psycopg2.errors
 except ImportError:
     print("ERROR: psycopg2 not installed", file=sys.stderr)
     sys.exit(1)
@@ -88,7 +89,42 @@ def create_notification(title: str, message: str, notification_id: str) -> bool:
 
 
 def get_latest_metrics(cur, user_id: str) -> dict:
-    """Get latest daily_metric and advanced_metric rows."""
+    """Get latest metrics from daily_athlete_summary materialized view.
+
+    Falls back to separate table queries if the matview doesn't exist yet.
+    """
+    try:
+        cur.execute("""
+            SELECT * FROM daily_athlete_summary
+            WHERE user_id = %s
+            ORDER BY date DESC LIMIT 1
+        """, (user_id,))
+        row = cur.fetchone()
+        if row:
+            # Check consecutive hard days (still from raw table for recency)
+            cur.execute("""
+                SELECT COUNT(*) as count FROM daily_metric
+                WHERE user_id = %s AND date >= CURRENT_DATE - INTERVAL '3 days'
+                  AND garmin_training_load > 50
+            """, (user_id,))
+            hard_days_row = cur.fetchone()
+            hard_days = hard_days_row['count'] if hard_days_row else 0
+
+            return {
+                "daily": row,
+                "advanced": row,
+                "consecutive_hard_days": hard_days,
+            }
+    except psycopg2.errors.UndefinedTable:
+        # Matview doesn't exist yet — fall back to separate queries
+        db = cur.connection
+        db.rollback()
+    except Exception as e:
+        print(f"[ha-notify] Matview query failed: {e}", file=sys.stderr)
+        db = cur.connection
+        db.rollback()
+
+    # Fallback: query tables directly (pre-matview compatibility)
     cur.execute("""
         SELECT date, hrv, resting_hr, body_battery_end, stress_score,
                sleep_debt_minutes, body_battery_start

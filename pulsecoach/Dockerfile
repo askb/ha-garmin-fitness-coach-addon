@@ -12,11 +12,12 @@ RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /build
 
 # Clone the app source from GitHub
-# ADD fetches latest commit ref — Docker busts cache when it changes
+# Use build arg timestamp for cache busting instead of GitHub API (avoids 403 rate limits)
 ARG APP_REPO=askb/ha-garmin-fitness-coach-app
 ARG APP_REF=main
-ADD "https://api.github.com/repos/${APP_REPO}/git/refs/heads/${APP_REF}" /tmp/cachebust.json
-RUN git clone --depth=1 --branch="${APP_REF}" \
+ARG CACHEBUST=1
+RUN echo "Cache bust: ${CACHEBUST}" && \
+    git clone --depth=1 --branch="${APP_REF}" \
       "https://github.com/${APP_REPO}.git" .
 
 # Create minimal .env for build (real values injected at runtime by s6 run script)

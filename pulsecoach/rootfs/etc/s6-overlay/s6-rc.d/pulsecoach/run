@@ -162,6 +162,10 @@ if [ ! -f "${MIGRATION_MARKER}" ]; then
     bashio::log.info "Migration complete — full resync from 2019 will start"
 fi
 
+# Create/refresh materialized view after schema push + restore + migrations
+bashio::log.info "Creating daily_athlete_summary materialized view..."
+psql -h 127.0.0.1 -U postgres -d pulsecoach -f /app/sql/create_daily_athlete_summary.sql 2>&1 || bashio::log.warning "Matview creation had warnings (tables may not exist yet)"
+
 # ─── Start Garmin sync in background ──────────────────────────────────────────
 TOKEN_DIR="/data/garmin-tokens"
 if [ -n "${GARMIN_EMAIL}" ] && [ -n "${GARMIN_PASSWORD}" ]; then

@@ -38,7 +38,7 @@ jobs:
           echo "build_from=${BUILD_FROM}" >> "$GITHUB_OUTPUT"
 
       - name: Build Docker image
-        run: docker build --build-arg BUILD_FROM=${{ steps.config.outputs.build_from }} -t pulsecoach-test pulsecoach/
+        run: docker build --build-arg BUILD_FROM=${{ steps.config.outputs.build_from }} --build-arg CACHEBUST=${{ github.sha }} -t pulsecoach-test pulsecoach/
 
       - name: Smoke test container
         run: |

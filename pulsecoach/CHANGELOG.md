@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] — 2026-04-15
+
+### Added
+
+- **Materialized view** — New `daily_athlete_summary` PostgreSQL materialized
+  view joins `daily_metric`, `advanced_metric`, `readiness_score`, and
+  `vo2max_estimate` into a single 60-column source of truth. Automatically
+  created on startup and refreshed after every sync and metrics compute cycle.
+- **Matview refresh** — `garmin-sync.py` and `metrics-compute.py` both call
+  `refresh_daily_athlete_summary()` (CONCURRENTLY) so downstream queries
+  always see fresh, consistent data without manual intervention.
+- **Fallback queries** — `ha-notify.py` tries the matview first, falls back
+  to separate table queries if the view doesn't exist yet (first-boot safety).
+
 ## [0.12.0] — 2026-04-14
 
 ### Added
