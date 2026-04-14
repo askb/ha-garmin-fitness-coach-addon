@@ -94,12 +94,16 @@ trap cleanup EXIT INT TERM
 # ─── Read addon configuration ─────────────────────────────────────────────────
 GARMIN_EMAIL=$(bashio::config 'garmin_email')
 GARMIN_PASSWORD=$(bashio::config 'garmin_password')
+STRAVA_CLIENT_ID=$(bashio::config 'strava_client_id' || echo "")
+STRAVA_CLIENT_SECRET=$(bashio::config 'strava_client_secret' || echo "")
+STRAVA_REFRESH_TOKEN=$(bashio::config 'strava_refresh_token' || echo "")
 AI_BACKEND=$(bashio::config 'ai_backend' || echo "none")
 OLLAMA_URL=$(bashio::config 'ollama_url' || echo "")
 SYNC_INTERVAL=$(bashio::config 'sync_interval_minutes' || echo "60")
 USER_TIMEZONE=$(bashio::config 'user_timezone' || echo "UTC")
 
 export GARMIN_EMAIL GARMIN_PASSWORD
+export STRAVA_CLIENT_ID STRAVA_CLIENT_SECRET STRAVA_REFRESH_TOKEN
 export AI_BACKEND
 export OLLAMA_URL
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gpt-oss:20b}"
@@ -187,6 +191,12 @@ psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
 psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
   "ALTER TABLE daily_metric ADD COLUMN IF NOT EXISTS garmin_recovery_hours DOUBLE PRECISION;" 2>/dev/null
 
+# Add body composition columns
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+  "ALTER TABLE daily_metric ADD COLUMN IF NOT EXISTS weight_kg DOUBLE PRECISION;" 2>/dev/null
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+  "ALTER TABLE daily_metric ADD COLUMN IF NOT EXISTS body_fat_pct DOUBLE PRECISION;" 2>/dev/null
+
 bashio::log.info "Creating daily_athlete_summary materialized view..."
 psql -h 127.0.0.1 -U postgres -d pulsecoach -f /app/sql/create_daily_athlete_summary.sql 2>&1 || bashio::log.warning "Matview creation had warnings (tables may not exist yet)"
 
@@ -218,6 +228,23 @@ elif [ -f "${TOKEN_DIR}/garmin_tokens.json" ] || { [ -f "${TOKEN_DIR}/oauth1_tok
 else
     bashio::log.warning "No Garmin credentials or saved tokens — skipping auto-sync"
     bashio::log.info "Use Settings page to log in, or run scripts/generate-garmin-tokens.py locally"
+fi
+
+# ─── Start Strava sync in background (if configured) ─────────────────────────
+if [ -n "${STRAVA_CLIENT_ID}" ] && [ -n "${STRAVA_CLIENT_SECRET}" ] && [ -n "${STRAVA_REFRESH_TOKEN}" ]; then
+    bashio::log.info "Starting Strava sync (every ${SYNC_INTERVAL} minutes)..."
+    (
+        sleep 30
+        while true; do
+            bashio::log.info "Syncing Strava activities..."
+            python3 /app/scripts/strava-sync.py 2>&1 || bashio::log.warning "Strava sync failed"
+            backup_to_share
+            sleep "$((SYNC_INTERVAL * 60))"
+        done
+    ) &
+    STRAVA_SYNC_PID=$!
+else
+    bashio::log.info "No Strava credentials configured — skipping Strava sync"
 fi
 
 # ─── Start metrics compute in background ─────────────────────────────────────
