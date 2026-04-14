@@ -102,6 +102,30 @@ def ensure_advanced_metric_table(cur):
             UNIQUE(user_id, date)
         );
     """)
+    # If the table was created by Drizzle push (without the constraint),
+    # CREATE TABLE IF NOT EXISTS won't add it. Ensure it exists separately.
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'readiness_score_user_date_unique'
+                  AND conrelid = 'readiness_score'::regclass
+            ) AND NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'readiness_score_user_id_date_key'
+                  AND conrelid = 'readiness_score'::regclass
+            ) AND NOT EXISTS (
+                SELECT 1 FROM pg_indexes
+                WHERE tablename = 'readiness_score'
+                  AND indexname = 'readiness_score_user_id_date_idx'
+            ) THEN
+                ALTER TABLE readiness_score
+                    ADD CONSTRAINT readiness_score_user_date_unique
+                    UNIQUE (user_id, date);
+            END IF;
+        END $$;
+    """)
 
 
 def fetch_daily_loads(cur, user_id):
