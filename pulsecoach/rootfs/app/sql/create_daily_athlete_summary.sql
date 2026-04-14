@@ -71,7 +71,7 @@ SELECT
     am.effective_vo2max,
 
     -- Readiness score (from metrics-compute.py Buchheit/Garmin hybrid)
-    rs.readiness_score,
+    rs.score AS readiness_score,
     rs.readiness_zone,
     rs.readiness_explanation,
 

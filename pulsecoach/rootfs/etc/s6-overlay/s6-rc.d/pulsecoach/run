@@ -197,6 +197,13 @@ psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
 psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
   "ALTER TABLE daily_metric ADD COLUMN IF NOT EXISTS body_fat_pct DOUBLE PRECISION;" 2>/dev/null
 
+# Fix readiness_score table: rename column readiness_score→score (v0.14.0 bug)
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+  "ALTER TABLE readiness_score RENAME COLUMN readiness_score TO score;" 2>/dev/null
+# Ensure score column exists (for fresh installs or if rename was a no-op)
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+  "ALTER TABLE readiness_score ADD COLUMN IF NOT EXISTS score INTEGER;" 2>/dev/null
+
 bashio::log.info "Creating daily_athlete_summary materialized view..."
 psql -h 127.0.0.1 -U postgres -d pulsecoach -f /app/sql/create_daily_athlete_summary.sql 2>&1 || bashio::log.warning "Matview creation had warnings (tables may not exist yet)"
 
