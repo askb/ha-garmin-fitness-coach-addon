@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.2] — 2026-04-14
+
+### Fixed
+- **readiness_score schema mismatch** — metrics-compute.py column names (`readiness_zone`, `readiness_explanation`) didn't match Drizzle schema (`zone`, `explanation`); aligned all references
+- **Conditional migration** — uses `information_schema.columns` check to safely rename only if old columns exist
+- **Matview aliases** — `rs.zone AS readiness_zone`, `rs.explanation AS readiness_explanation`
+
 ## [0.15.1] — 2026-04-14
 
 ### Fixed
