@@ -89,14 +89,15 @@ def ensure_advanced_metric_table(cur):
     """)
 
     # Ensure readiness_score table exists for computed readiness
+    # NOTE: Drizzle schema is authoritative — columns: score, zone, explanation
     cur.execute("""
         CREATE TABLE IF NOT EXISTS readiness_score (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id TEXT NOT NULL,
             date DATE NOT NULL,
             score INTEGER,
-            readiness_zone TEXT,
-            readiness_explanation TEXT,
+            zone VARCHAR(20),
+            explanation TEXT,
             computed_at TIMESTAMP DEFAULT NOW(),
             UNIQUE(user_id, date)
         );
@@ -402,13 +403,13 @@ def upsert_readiness_scores(cur, user_id: str, readiness_data: dict):
     for d_str, data in sorted(readiness_data.items()):
         cur.execute("""
             INSERT INTO readiness_score (
-                user_id, date, score, readiness_zone,
-                readiness_explanation, computed_at
+                user_id, date, score, zone,
+                explanation, computed_at
             ) VALUES (%s, %s, %s, %s, %s, NOW())
             ON CONFLICT (user_id, date) DO UPDATE SET
                 score = EXCLUDED.score,
-                readiness_zone = EXCLUDED.readiness_zone,
-                readiness_explanation = EXCLUDED.readiness_explanation,
+                zone = EXCLUDED.zone,
+                explanation = EXCLUDED.explanation,
                 computed_at = NOW()
         """, (
             user_id, d_str, data["score"], data["zone"],

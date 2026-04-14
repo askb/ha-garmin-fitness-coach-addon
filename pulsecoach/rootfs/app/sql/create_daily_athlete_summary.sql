@@ -72,8 +72,8 @@ SELECT
 
     -- Readiness score (from metrics-compute.py Buchheit/Garmin hybrid)
     rs.score AS readiness_score,
-    rs.readiness_zone,
-    rs.readiness_explanation,
+    rs.zone AS readiness_zone,
+    rs.explanation AS readiness_explanation,
 
     -- VO2max (best source per date: official > computed)
     ve.value AS vo2max_value,

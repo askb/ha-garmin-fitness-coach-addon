@@ -197,12 +197,35 @@ psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
 psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
   "ALTER TABLE daily_metric ADD COLUMN IF NOT EXISTS body_fat_pct DOUBLE PRECISION;" 2>/dev/null
 
-# Fix readiness_score table: rename column readiness_score→score (v0.14.0 bug)
-psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
-  "ALTER TABLE readiness_score RENAME COLUMN readiness_score TO score;" 2>/dev/null
-# Ensure score column exists (for fresh installs or if rename was a no-op)
-psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
-  "ALTER TABLE readiness_score ADD COLUMN IF NOT EXISTS score INTEGER;" 2>/dev/null
+# Fix readiness_score table: align columns with Drizzle schema (v0.14.0 bug)
+# Drizzle uses: score, zone, explanation
+# Old metrics-compute.py used: readiness_score, readiness_zone, readiness_explanation
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c "
+DO \$\$
+BEGIN
+    -- Rename readiness_score → score if old column exists
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'readiness_score' AND column_name = 'readiness_score'
+    ) THEN
+        ALTER TABLE readiness_score RENAME COLUMN readiness_score TO score;
+    END IF;
+    -- Rename readiness_zone → zone if old column exists
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'readiness_score' AND column_name = 'readiness_zone'
+    ) THEN
+        ALTER TABLE readiness_score RENAME COLUMN readiness_zone TO zone;
+    END IF;
+    -- Rename readiness_explanation → explanation if old column exists
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'readiness_score' AND column_name = 'readiness_explanation'
+    ) THEN
+        ALTER TABLE readiness_score RENAME COLUMN readiness_explanation TO explanation;
+    END IF;
+END \$\$;
+" 2>/dev/null || true
 
 bashio::log.info "Creating daily_athlete_summary materialized view..."
 psql -h 127.0.0.1 -U postgres -d pulsecoach -f /app/sql/create_daily_athlete_summary.sql 2>&1 || bashio::log.warning "Matview creation had warnings (tables may not exist yet)"
