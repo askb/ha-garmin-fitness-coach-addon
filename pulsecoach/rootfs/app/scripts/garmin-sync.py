@@ -820,6 +820,135 @@ def sync_vo2max(client, db, days=7):
         cur.close()
 
 
+def sync_training_readiness(client, db, days=7):
+    """Sync Garmin Training Readiness score and contributing factors."""
+    cur = db.cursor()
+    try:
+        today = _user_today()
+        synced = 0
+        for days_ago in range(days):
+            date_str = (today - timedelta(days=days_ago)).isoformat()
+            try:
+                data = client.get_training_readiness(date_str)
+                if not data:
+                    continue
+
+                score = data.get("score") or data.get("readinessScore")
+                level = data.get("level") or data.get("readinessLevel", "")
+                if score is None:
+                    continue
+
+                # Extract contributing factors (Garmin's 6-factor breakdown)
+                factors = {}
+                for key in [
+                    "sleepScore", "recoveryTime", "hrvStatus", "acuteLoad",
+                    "stressHistory", "bodyBattery", "sleepHistory",
+                ]:
+                    val = data.get(key)
+                    if val is not None:
+                        factors[key] = val
+
+                cur.execute("""
+                    INSERT INTO daily_metric (user_id, date)
+                    VALUES (%s, %s)
+                    ON CONFLICT (user_id, date) DO NOTHING
+                """, (USER_ID, date_str))
+
+                cur.execute("""
+                    UPDATE daily_metric SET
+                        garmin_training_readiness = %s,
+                        garmin_training_readiness_level = %s,
+                        garmin_readiness_factors = %s
+                    WHERE user_id = %s AND date = %s
+                """, (
+                    round(score),
+                    level.lower() if isinstance(level, str) else str(level),
+                    json.dumps(factors) if factors else None,
+                    USER_ID, date_str,
+                ))
+                synced += 1
+            except Exception as e:
+                print(f"  Training readiness unavailable for {date_str}: {e}")
+                continue
+
+        db.commit()
+        if synced:
+            print(f"  Synced training readiness for {synced} days")
+    except Exception as e:
+        db.rollback()
+        print(f"  Failed to sync training readiness: {e}", file=sys.stderr)
+    finally:
+        cur.close()
+
+
+def sync_training_status(client, db, days=7):
+    """Sync Garmin Training Status (Productive/Peaking/Overreaching etc)."""
+    cur = db.cursor()
+    try:
+        today = _user_today()
+        synced = 0
+        for days_ago in range(days):
+            date_str = (today - timedelta(days=days_ago)).isoformat()
+            try:
+                data = client.get_training_status(date_str)
+                if not data:
+                    continue
+
+                # Training status fields
+                status = data.get("trainingStatus") or data.get("status", "")
+                load_focus = data.get("trainingLoadFocus") or data.get("loadFocus")
+
+                # Extract load distribution (low/high aerobic + anaerobic)
+                load_dist = {}
+                for key in [
+                    "lowAerobicTrainingLoad", "highAerobicTrainingLoad",
+                    "anaerobicTrainingLoad", "lowAerobicTrainingLoadPercentage",
+                    "highAerobicTrainingLoadPercentage", "anaerobicTrainingLoadPercentage",
+                ]:
+                    val = data.get(key)
+                    if val is not None:
+                        load_dist[key] = val
+
+                recovery_hrs = data.get("recoveryTimeInMinutes")
+                if recovery_hrs is not None:
+                    recovery_hrs = round(recovery_hrs / 60, 1)
+
+                if not status and not load_focus and not recovery_hrs:
+                    continue
+
+                cur.execute("""
+                    INSERT INTO daily_metric (user_id, date)
+                    VALUES (%s, %s)
+                    ON CONFLICT (user_id, date) DO NOTHING
+                """, (USER_ID, date_str))
+
+                cur.execute("""
+                    UPDATE daily_metric SET
+                        garmin_training_status = %s,
+                        garmin_load_focus = %s,
+                        garmin_recovery_hours = %s
+                    WHERE user_id = %s AND date = %s
+                """, (
+                    str(status).upper() if status else None,
+                    json.dumps(load_dist) if load_dist else None,
+                    recovery_hrs,
+                    USER_ID, date_str,
+                ))
+                synced += 1
+            except Exception as e:
+                print(f"  Training status unavailable for {date_str}: {e}")
+                continue
+
+        db.commit()
+        if synced:
+            print(f"  Synced training status for {synced} days")
+    except Exception as e:
+        db.rollback()
+        print(f"  Failed to sync training status: {e}", file=sys.stderr)
+    finally:
+        cur.close()
+
+
 def main():
     has_tokens = (
         os.path.exists(os.path.join(TOKEN_DIR, "oauth1_token.json"))
@@ -872,6 +1001,11 @@ def main():
 
     _write_sync_status("vo2max", "Computing VO2max estimates...", 90)
     sync_vo2max(client, db, days=sync_days)
+
+    # Sync Garmin Training Readiness + Training Status (native scores)
+    _write_sync_status("readiness", "Syncing training readiness...", 93)
+    sync_training_readiness(client, db, days=min(sync_days, 30))
+    sync_training_status(client, db, days=min(sync_days, 30))
 
     # Refresh materialized view so all downstream queries see fresh data
     _write_sync_status("refresh", "Refreshing summary view...", 95)

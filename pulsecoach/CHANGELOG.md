@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] — 2026-04-14
+
+### Added
+
+- **Garmin Training Readiness sync** — Syncs Garmin's native Training
+  Readiness score (0-100) and 6-factor breakdown (HRV status, sleep,
+  recovery time, acute load, stress history, Body Battery) via
+  `get_training_readiness()` API.
+
+- **Garmin Training Status sync** — Syncs Training Status
+  (Productive/Peaking/Overreaching/Recovery/Unproductive), Load Focus
+  distribution (low/high aerobic + anaerobic %), and recovery time
+  via `get_training_status()` API.
+
+- **Readiness HA sensor** — New `sensor.pulsecoach_readiness` (0-100)
+  with zone and source attributes. Prefers Garmin native readiness,
+  falls back to Buchheit composite computation.
+
+- **Training Status HA sensor** — New `sensor.pulsecoach_training_status`
+  showing Garmin's official training status with recovery hours and
+  load focus attributes.
+
+- **Buchheit readiness engine** — Computed readiness score using weighted
+  HRV (35%), sleep (25%), Body Battery (20%), resting HR (10%), and
+  stress (10%) with 14-day rolling baseline normalization.
+
+- **Enhanced workout recommendation** — Coaching engine now uses
+  readiness score and Garmin training status for decisions. Low
+  readiness (<25) and OVERREACHING status trigger rest; PEAKING and
+  PRODUCTIVE enable quality sessions.
+
+- **15 coaching engine tests** — Comprehensive test coverage for rest
+  triggers, active recovery, quality sessions, aerobic workouts, and
+  edge cases.
+
+### Changed
+
+- Workout recommendation rationale now includes readiness score context
+- Recovery signal threshold includes readiness < 40 as additional signal
+- Quality session eligibility considers readiness >= 70 and Garmin
+  PEAKING/PRODUCTIVE status alongside TSB and Body Battery
+
 ## [0.13.0] — 2026-04-14
 
 ### Added

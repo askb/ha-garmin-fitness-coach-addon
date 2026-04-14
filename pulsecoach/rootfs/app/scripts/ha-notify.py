@@ -165,6 +165,8 @@ def recommend_workout(
     stress_score: int | None,
     sleep_debt_minutes: int | None,
     consecutive_hard_days: int,
+    readiness_score: int | None = None,
+    garmin_training_status: str | None = None,
 ) -> dict:
     """Generate an AI-informed workout recommendation based on readiness signals.
 
@@ -185,9 +187,24 @@ def recommend_workout(
     bb = body_battery if body_battery is not None else 50
     sd_hrs = (sleep_debt_minutes / 60) if sleep_debt_minutes else 0
     stress = stress_score if stress_score is not None else 50
+    readiness = readiness_score if readiness_score is not None else 50
+    g_status = garmin_training_status.upper() if garmin_training_status else ""
+    tsb_str = f"{tsb:+.0f}" if tsb is not None else "N/A"
 
     # --- Rest day triggers (any one is sufficient) ---
     rest_reasons: list[str] = []
+
+    if readiness < 25:
+        rest_reasons.append(
+            f"Readiness critically low ({readiness}/100) — "
+            "body needs recovery before quality training"
+        )
+
+    if g_status == "OVERREACHING":
+        rest_reasons.append(
+            "Garmin Training Status: OVERREACHING — "
+            "active recovery or rest recommended"
+        )
 
     if consecutive_hard_days >= 3:
         rest_reasons.append(
@@ -243,6 +260,8 @@ def recommend_workout(
         recovery_signals += 1
     if acwr is not None and acwr > 1.3:
         recovery_signals += 1
+    if readiness < 40:
+        recovery_signals += 1
 
     if recovery_signals >= 3:
         return {
@@ -253,15 +272,20 @@ def recommend_workout(
             "hr_zone_target": 1,
             "rationale": (
                 "Active recovery day — easy effort only. "
-                f"Multiple recovery signals detected (TSB: {tsb}, "
-                f"BB: {bb}%, stress: {stress})."
+                f"Readiness: {readiness}, TSB: {tsb}, "
+                f"BB: {bb}%, stress: {stress}."
             ),
             "all_factors": [],
         }
 
-    # --- Normal training day: select intensity based on form ---
-    if tsb is not None and tsb > 5 and bb >= 70 and (acwr is None or acwr <= 1.2):
+    # --- Normal training day: select intensity based on form + readiness ---
+    is_fresh = tsb is not None and tsb > 5
+    high_readiness = readiness >= 70
+    peaking = g_status in ("PEAKING", "PRODUCTIVE")
+
+    if (is_fresh or high_readiness or peaking) and bb >= 60 and (acwr is None or acwr <= 1.2):
         # Fresh and ready — quality session
+        status_note = f", Garmin: {g_status}" if g_status else ""
         return {
             "is_rest_day": False,
             "workout_type": "quality",
@@ -269,13 +293,15 @@ def recommend_workout(
             "duration_min": 60,
             "hr_zone_target": 4,
             "rationale": (
-                f"Great day for intensity — TSB +{tsb:.0f} (fresh), "
-                f"Body Battery {bb}%. Tempo, intervals, or race-pace work."
+                f"Great day for intensity — Readiness {readiness}, "
+                f"TSB {tsb_str} (fresh), "
+                f"Body Battery {bb}%{status_note}. "
+                "Tempo, intervals, or race-pace work."
             ),
             "all_factors": [],
         }
 
-    if tsb is not None and tsb >= -10 and bb >= 50:
+    if (readiness >= 50 or (tsb is not None and tsb >= -10)) and bb >= 45:
         # Moderate form — aerobic development
         return {
             "is_rest_day": False,
@@ -284,7 +310,8 @@ def recommend_workout(
             "duration_min": 45,
             "hr_zone_target": 2,
             "rationale": (
-                f"Steady aerobic session — TSB {tsb:.0f}, Body Battery {bb}%. "
+                f"Steady aerobic session — Readiness {readiness}, "
+                f"TSB {tsb_str}, Body Battery {bb}%. "
                 "Zone 2 base building or moderate tempo."
             ),
             "all_factors": [],
@@ -427,8 +454,41 @@ def run_notifications(user_id: str):
                     round(sleep_debt / 60, 1) if sleep_debt else 0,
                     {"friendly_name": "PulseCoach Sleep Debt", "unit_of_measurement": "h", "icon": "mdi:sleep"})
 
+        # sensor.pulsecoach_readiness
+        readiness_val = None
+        readiness_zone = None
+        readiness_src = None
+        if dm:
+            # Prefer Garmin native readiness, fall back to computed
+            garmin_r = dm.get('garmin_training_readiness')
+            readiness_val = garmin_r if garmin_r is not None else dm.get('readiness_score')
+            garmin_rl = dm.get('garmin_training_readiness_level')
+            readiness_zone = garmin_rl if garmin_rl is not None else dm.get('readiness_zone')
+            readiness_src = "garmin" if garmin_r is not None else "computed"
+        push_sensor("sensor.pulsecoach_readiness",
+                    readiness_val if readiness_val is not None else "unknown",
+                    {
+                        "friendly_name": "PulseCoach Readiness",
+                        "unit_of_measurement": "/100",
+                        "icon": "mdi:heart-pulse",
+                        "zone": readiness_zone or "unknown",
+                        "source": readiness_src or "unknown",
+                    })
+
+        # sensor.pulsecoach_training_status
+        g_training_status = dm.get('garmin_training_status') if dm else None
+        g_recovery_hrs = dm.get('garmin_recovery_hours') if dm else None
+        push_sensor("sensor.pulsecoach_training_status",
+                    g_training_status if g_training_status else "unknown",
+                    {
+                        "friendly_name": "PulseCoach Training Status",
+                        "icon": "mdi:run-fast",
+                        "recovery_hours": g_recovery_hrs,
+                        "load_focus": dm.get('garmin_load_focus') if dm else None,
+                    })
+
         # sensor.pulsecoach_workout_recommendation
-        # AI-informed workout suggestion replacing PulseCoach rest-day logic
+        # AI-informed workout suggestion using readiness + all recovery signals
         hard_days = data["consecutive_hard_days"]
         workout = recommend_workout(
             acwr=acwr,
@@ -437,6 +497,8 @@ def run_notifications(user_id: str):
             stress_score=dm['stress_score'] if dm else None,
             sleep_debt_minutes=dm['sleep_debt_minutes'] if dm else None,
             consecutive_hard_days=hard_days,
+            readiness_score=readiness_val,
+            garmin_training_status=g_training_status,
         )
         push_sensor("sensor.pulsecoach_workout_recommendation",
                     workout["workout_type"],

@@ -43,6 +43,16 @@ SELECT
     dm.garmin_training_load,
     dm.data_quality,
 
+    -- Garmin Training Readiness (native scores from Garmin API)
+    dm.garmin_training_readiness,
+    dm.garmin_training_readiness_level,
+    dm.garmin_readiness_factors,
+
+    -- Garmin Training Status (Productive/Peaking/Overreaching etc)
+    dm.garmin_training_status,
+    dm.garmin_load_focus,
+    dm.garmin_recovery_hours,
+
     -- Advanced metrics (from metrics-compute.py EWMA)
     am.ctl,
     am.atl,
@@ -56,16 +66,10 @@ SELECT
     am.tte,
     am.effective_vo2max,
 
-    -- Readiness score (from app readiness engine)
-    rs.score AS readiness_score,
-    rs.zone AS readiness_zone,
-    rs.hrv_component,
-    rs.sleep_quantity_component,
-    rs.sleep_quality_component,
-    rs.training_load_component,
-    rs.stress_component,
-    rs.resting_hr_component,
-    rs.explanation AS readiness_explanation,
+    -- Readiness score (from metrics-compute.py Buchheit/Garmin hybrid)
+    rs.readiness_score,
+    rs.readiness_zone,
+    rs.readiness_explanation,
 
     -- VO2max (best source per date: official > computed)
     ve.value AS vo2max_value,
@@ -74,7 +78,7 @@ SELECT
     -- Metadata for debugging / staleness detection
     dm.synced_at AS daily_metric_synced_at,
     am.computed_at AS advanced_metric_computed_at,
-    rs.created_at AS readiness_computed_at
+    rs.computed_at AS readiness_computed_at
 
 FROM daily_metric dm
 LEFT JOIN advanced_metric am

@@ -171,6 +171,22 @@ psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
 psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
   "ALTER TABLE daily_metric ADD COLUMN IF NOT EXISTS garmin_training_load DOUBLE PRECISION;" 2>/dev/null
 
+# Add Garmin Training Readiness columns
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+  "ALTER TABLE daily_metric ADD COLUMN IF NOT EXISTS garmin_training_readiness INTEGER;" 2>/dev/null
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+  "ALTER TABLE daily_metric ADD COLUMN IF NOT EXISTS garmin_training_readiness_level TEXT;" 2>/dev/null
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+  "ALTER TABLE daily_metric ADD COLUMN IF NOT EXISTS garmin_readiness_factors JSONB;" 2>/dev/null
+
+# Add Garmin Training Status columns
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+  "ALTER TABLE daily_metric ADD COLUMN IF NOT EXISTS garmin_training_status TEXT;" 2>/dev/null
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+  "ALTER TABLE daily_metric ADD COLUMN IF NOT EXISTS garmin_load_focus JSONB;" 2>/dev/null
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c \
+  "ALTER TABLE daily_metric ADD COLUMN IF NOT EXISTS garmin_recovery_hours DOUBLE PRECISION;" 2>/dev/null
+
 bashio::log.info "Creating daily_athlete_summary materialized view..."
 psql -h 127.0.0.1 -U postgres -d pulsecoach -f /app/sql/create_daily_athlete_summary.sql 2>&1 || bashio::log.warning "Matview creation had warnings (tables may not exist yet)"
 
