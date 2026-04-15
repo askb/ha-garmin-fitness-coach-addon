@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.4] — 2026-04-15
+
+### Fixed
+- **Refresh Insights button** — clicking "Refresh Insights" now correctly updates existing insights instead of silently skipping (changed `onConflictDoNothing` → `onConflictDoUpdate` in app)
+- Refreshed insights are marked as unread with updated severity, title, body, and action suggestions
+
 ## [0.15.3] — 2026-04-14
 
 ### Fixed
