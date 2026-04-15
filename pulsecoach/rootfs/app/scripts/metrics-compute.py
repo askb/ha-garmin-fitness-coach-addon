@@ -566,7 +566,7 @@ def run_compute(user_id: str):
 
 
 def _clear_recompute_status():
-    """Remove the recompute lock file after completion."""
+    """Mark the recompute status file as completed (running=False)."""
     status_file = os.path.join(
         os.environ.get("TOKEN_DIR", "/data/garmin-tokens"),
         ".recompute_status",
@@ -576,8 +576,8 @@ def _clear_recompute_status():
             import json as _json
             with open(status_file, "w") as f:
                 _json.dump({"running": False, "completed": time.time()}, f)
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[metrics-compute] WARN: failed to update recompute status: {exc}", file=sys.stderr)
 
 
 def main():

@@ -293,6 +293,7 @@ def logout() -> tuple[Response, int] | Response:
 def trigger_recompute() -> tuple[Response, int] | Response:
     """Trigger an immediate metrics recomputation in the background."""
     import subprocess
+    import time
 
     status_file = os.path.join(TOKEN_DIR, ".recompute_status")
     try:
@@ -307,7 +308,7 @@ def trigger_recompute() -> tuple[Response, int] | Response:
     try:
         # Write running status
         with open(status_file, "w") as f:
-            json.dump({"running": True, "started": __import__("time").time()}, f)
+            json.dump({"running": True, "started": time.time()}, f)
 
         env = os.environ.copy()
         env["DATABASE_URL"] = os.environ.get(
@@ -323,6 +324,12 @@ def trigger_recompute() -> tuple[Response, int] | Response:
         log.info("Manual recompute triggered")
         return jsonify(success=True, message="Recompute started")
     except Exception as exc:
+        # Clean up status file on Popen failure
+        try:
+            with open(status_file, "w") as f:
+                json.dump({"running": False, "error": str(exc)}, f)
+        except OSError:
+            pass
         log.error("Failed to trigger recompute: %s", exc)
         return jsonify(success=False, message=f"Failed: {exc}"), 500
 
