@@ -289,5 +289,56 @@ def logout() -> tuple[Response, int] | Response:
         return jsonify(success=False, message=str(exc)), 500
 
 
+@app.route("/auth/recompute", methods=["POST"])
+def trigger_recompute() -> tuple[Response, int] | Response:
+    """Trigger an immediate metrics recomputation in the background."""
+    import subprocess
+
+    status_file = os.path.join(TOKEN_DIR, ".recompute_status")
+    try:
+        if os.path.exists(status_file):
+            with open(status_file) as f:
+                data = json.load(f)
+            if data.get("running"):
+                return jsonify(success=False, message="Recompute already running"), 409
+    except Exception:
+        pass
+
+    try:
+        # Write running status
+        with open(status_file, "w") as f:
+            json.dump({"running": True, "started": __import__("time").time()}, f)
+
+        env = os.environ.copy()
+        env["DATABASE_URL"] = os.environ.get(
+            "DATABASE_URL",
+            "postgresql://postgres@127.0.0.1:5432/pulsecoach",
+        )
+        subprocess.Popen(
+            ["python3", "/app/scripts/metrics-compute.py", "--once"],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        log.info("Manual recompute triggered")
+        return jsonify(success=True, message="Recompute started")
+    except Exception as exc:
+        log.error("Failed to trigger recompute: %s", exc)
+        return jsonify(success=False, message=f"Failed: {exc}"), 500
+
+
+@app.route("/auth/recompute-status", methods=["GET"])
+def recompute_status() -> Response:
+    """Check if metrics recompute is currently running."""
+    status_file = os.path.join(TOKEN_DIR, ".recompute_status")
+    try:
+        if os.path.exists(status_file):
+            with open(status_file) as f:
+                return jsonify(json.load(f))
+    except Exception:
+        pass
+    return jsonify({"running": False})
+
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=8099)

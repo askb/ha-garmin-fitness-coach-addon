@@ -561,6 +561,23 @@ def run_compute(user_id: str):
     finally:
         cur.close()
         db.close()
+        # Clear recompute status file so UI knows we're done
+        _clear_recompute_status()
+
+
+def _clear_recompute_status():
+    """Remove the recompute lock file after completion."""
+    status_file = os.path.join(
+        os.environ.get("TOKEN_DIR", "/data/garmin-tokens"),
+        ".recompute_status",
+    )
+    try:
+        if os.path.exists(status_file):
+            import json as _json
+            with open(status_file, "w") as f:
+                _json.dump({"running": False, "completed": time.time()}, f)
+    except Exception:
+        pass
 
 
 def main():
