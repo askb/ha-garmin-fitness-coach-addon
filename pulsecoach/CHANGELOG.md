@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] — 2026-04-15
+
+### Added
+- **HRV Trend Analysis page** — dedicated page with daily HRV, 7d/14d rolling averages, baseline, CV%, and recovery status indicator (app)
+- **Shared Date Range Selector** — reusable component across fitness, training, sleep, and HRV pages with preset buttons (app)
+- **Recompute Metrics button** — on-demand metrics recompute from Settings; new `/auth/recompute` endpoint in addon auth server
+- **Enhanced Export** — Advanced Metrics and HRV CSV exports; JSON backup schema bumped to v1.1 (app)
+- **HRV in bottom nav** — replaced Zones with HRV Analysis for quick access (app)
+
+### Fixed
+- Sleep page date presets capped at 90d (matching API max)
+- Export HRV lookup optimized from O(n²) to O(n) using Map pre-indexing
+- Recompute API route now propagates upstream HTTP status codes
+- DateRangeSelector type safety improved (readonly presets, no unsafe casts)
+- HRV CV% division-by-zero guard when mean is 0
+- Proper null check for baseline in recovery status logic
+
 ## [0.15.4] — 2026-04-15
 
 ### Fixed
