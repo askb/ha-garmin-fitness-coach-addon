@@ -339,6 +339,12 @@ def compute_readiness_score(cur, user_id: str) -> dict:
                 "zone": zone,
                 "explanation": f"Garmin Training Readiness: {score}/100 ({zone})",
                 "source": "garmin_native",
+                "hrv_component": None,
+                "sleep_quantity_component": None,
+                "sleep_quality_component": None,
+                "training_load_component": None,
+                "stress_component": None,
+                "resting_hr_component": None,
             }
         else:
             # Compute Buchheit-style composite
@@ -391,11 +397,18 @@ def compute_readiness_score(cur, user_id: str) -> dict:
                 score = min(100, max(0, score))
                 zone = _readiness_zone(score)
                 parts = ", ".join(f"{n}={v:.0f}" for n, v, _ in components)
+                comp_map = {n: v for n, v, _ in components}
                 results[d] = {
                     "score": score,
                     "zone": zone,
                     "explanation": f"Buchheit composite: {score}/100 ({parts})",
                     "source": "buchheit_composite",
+                    "hrv_component": comp_map.get("hrv"),
+                    "sleep_quantity_component": comp_map.get("sleep"),
+                    "sleep_quality_component": None,
+                    "training_load_component": comp_map.get("load"),
+                    "stress_component": comp_map.get("stress"),
+                    "resting_hr_component": comp_map.get("rhr"),
                 }
             else:
                 continue
@@ -423,21 +436,36 @@ def _readiness_zone(score: int) -> str:
 
 
 def upsert_readiness_scores(cur, user_id: str, readiness_data: dict):
-    """Upsert readiness scores into readiness_score table."""
+    """Upsert readiness scores with component breakdowns into readiness_score table."""
     for d_str, data in sorted(readiness_data.items()):
         cur.execute("""
             INSERT INTO readiness_score (
                 user_id, date, score, zone,
-                explanation, computed_at
-            ) VALUES (%s, %s, %s, %s, %s, NOW())
+                explanation, computed_at,
+                sleep_quantity_component, sleep_quality_component,
+                hrv_component, resting_hr_component,
+                training_load_component, stress_component
+            ) VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, date) DO UPDATE SET
                 score = EXCLUDED.score,
                 zone = EXCLUDED.zone,
                 explanation = EXCLUDED.explanation,
-                computed_at = NOW()
+                computed_at = NOW(),
+                sleep_quantity_component = EXCLUDED.sleep_quantity_component,
+                sleep_quality_component = EXCLUDED.sleep_quality_component,
+                hrv_component = EXCLUDED.hrv_component,
+                resting_hr_component = EXCLUDED.resting_hr_component,
+                training_load_component = EXCLUDED.training_load_component,
+                stress_component = EXCLUDED.stress_component
         """, (
             user_id, d_str, data["score"], data["zone"],
             data["explanation"],
+            data.get("sleep_quantity_component"),
+            data.get("sleep_quality_component"),
+            data.get("hrv_component"),
+            data.get("resting_hr_component"),
+            data.get("training_load_component"),
+            data.get("stress_component"),
         ))
 
 
