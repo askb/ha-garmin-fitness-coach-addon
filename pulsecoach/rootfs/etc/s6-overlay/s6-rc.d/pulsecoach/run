@@ -227,6 +227,17 @@ BEGIN
 END \$\$;
 " 2>/dev/null || true
 
+# Ensure ai_insight unique constraint exists (needed for upsert in generateInsights)
+# First deduplicate if duplicates exist (keep newest row per user/date/type)
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c "
+DELETE FROM ai_insight a USING ai_insight b
+WHERE a.id < b.id AND a.user_id = b.user_id AND a.date = b.date AND a.insight_type = b.insight_type;
+" 2>/dev/null || true
+psql -h 127.0.0.1 -U postgres -d pulsecoach -c "
+CREATE UNIQUE INDEX IF NOT EXISTS ai_insight_user_date_type_unique
+    ON ai_insight (user_id, date, insight_type);
+" 2>/dev/null || true
+
 bashio::log.info "Creating daily_athlete_summary materialized view..."
 psql -h 127.0.0.1 -U postgres -d pulsecoach -f /app/sql/create_daily_athlete_summary.sql 2>&1 || bashio::log.warning "Matview creation had warnings (tables may not exist yet)"
 
