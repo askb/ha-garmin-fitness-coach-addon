@@ -309,7 +309,9 @@ def compute_readiness_score(cur, user_id: str) -> dict:
       HRV: 25%, Sleep: 20%, Training Load: 15%, Resting HR: 10%,
       Stress: 8%, SpO2: 8%, Respiration: 7%, Skin Temp: 7%
 
-    Returns {date_str: {score, zone, explanation, source, *_component}}.
+    Returns {date_str: {score, zone, explanation, source,
+            hrv_component, sleep_quantity_component, sleep_quality_component,
+            training_load_component, stress_component, resting_hr_component}}.
     """
     cur.execute("""
         SELECT date, hrv, sleep_score, stress_score, resting_hr,
@@ -407,8 +409,9 @@ def compute_readiness_score(cur, user_id: str) -> dict:
                 components.append(("stress", stress_pct, 0.08))
                 total_weight += 0.08
 
-            # SpO2 component (8%): deviation below 96% baseline penalizes
-            # Normal range: 95-100%. Below 95% = concerning, below 90% = danger
+            # SpO2 component (8%): deviation below rolling 14-day average penalizes
+            # Normal range: 95-100%. Score starts at 75 (at baseline), each 1%
+            # below baseline = ~20pt penalty, each 1% above = ~20pt bonus.
             if spo2_val and len(spo2_history) >= 3:
                 avg_spo2 = sum(spo2_history[-14:]) / len(spo2_history[-14:])
                 # Score: 100 at baseline, drops steeply below baseline
