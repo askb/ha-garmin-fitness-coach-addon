@@ -127,7 +127,8 @@ def get_latest_metrics(cur, user_id: str) -> dict:
     # Fallback: query tables directly (pre-matview compatibility)
     cur.execute("""
         SELECT date, hrv, resting_hr, body_battery_end, stress_score,
-               sleep_debt_minutes, body_battery_start
+               sleep_debt_minutes, body_battery_start,
+               spo2, respiration_rate, skin_temp
         FROM daily_metric
         WHERE user_id = %s
         ORDER BY date DESC LIMIT 1
@@ -496,6 +497,39 @@ def run_notifications(user_id: str):
                         "unit_of_measurement": "kg",
                         "icon": "mdi:scale-bathroom",
                         "body_fat_pct": dm.get('body_fat_pct') if dm else None,
+                    })
+
+        # sensor.pulsecoach_spo2
+        spo2 = dm.get('spo2') if dm else None
+        push_sensor("sensor.pulsecoach_spo2",
+                    round(spo2, 1) if spo2 is not None else "unknown",
+                    {
+                        "friendly_name": "PulseCoach SpO2",
+                        "unit_of_measurement": "%",
+                        "icon": "mdi:lungs",
+                        "status": "normal" if spo2 and spo2 >= 95 else
+                                 ("low" if spo2 and spo2 >= 90 else
+                                  ("critical" if spo2 else "unknown")),
+                    })
+
+        # sensor.pulsecoach_respiration_rate
+        rr = dm.get('respiration_rate') if dm else None
+        push_sensor("sensor.pulsecoach_respiration_rate",
+                    round(rr, 1) if rr is not None else "unknown",
+                    {
+                        "friendly_name": "PulseCoach Respiration Rate",
+                        "unit_of_measurement": "brpm",
+                        "icon": "mdi:weather-windy",
+                    })
+
+        # sensor.pulsecoach_skin_temp
+        skin_temp = dm.get('skin_temp') if dm else None
+        push_sensor("sensor.pulsecoach_skin_temp",
+                    round(skin_temp, 1) if skin_temp is not None else "unknown",
+                    {
+                        "friendly_name": "PulseCoach Skin Temperature",
+                        "unit_of_measurement": "°C",
+                        "icon": "mdi:thermometer",
                     })
 
         # sensor.pulsecoach_workout_recommendation
