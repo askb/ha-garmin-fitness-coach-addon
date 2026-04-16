@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.3] — 2026-04-16
+
+### Fixed
+- **Refresh Insights button now always produces results** — added an always-fire
+  "Daily Status Snapshot" insight that summarizes readiness, ACWR, form, sleep,
+  HRV, and SpO2 even when no warning rules trigger.
+
+### Added
+- **SpO2 alert rule** — critical at <92%, warning when <95% and below 14d baseline.
+- **Respiration rate alert rule** — fires when RR exceeds baseline by 2+ brpm.
+- Fixed insightType conflicts preventing same-day upsert collisions between rules.
+
 ## [0.16.2] — 2026-04-16
 
 ### Added
