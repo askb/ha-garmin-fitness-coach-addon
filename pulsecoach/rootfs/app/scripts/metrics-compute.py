@@ -302,17 +302,22 @@ def compute_readiness_score(cur, user_id: str) -> dict:
     """Compute Buchheit-style readiness score per day.
 
     Uses Garmin's native training readiness when available, otherwise
-    computes a weighted composite from HRV, sleep, load, stress, resting HR.
+    computes a weighted composite from HRV, sleep, load, stress, resting HR,
+    SpO2, respiration rate, and skin temperature.
 
-    Weights (Buchheit 2014 adapted):
-      HRV: 35%, Sleep: 25%, Training Load: 20%, Resting HR: 10%, Stress: 10%
+    Weights (Buchheit 2014 adapted + vitals):
+      HRV: 25%, Sleep: 20%, Training Load: 15%, Resting HR: 10%,
+      Stress: 8%, SpO2: 8%, Respiration: 7%, Skin Temp: 7%
 
-    Returns {date_str: {score, zone, explanation, source}}.
+    Returns {date_str: {score, zone, explanation, source,
+            hrv_component, sleep_quantity_component, sleep_quality_component,
+            training_load_component, stress_component, resting_hr_component}}.
     """
     cur.execute("""
         SELECT date, hrv, sleep_score, stress_score, resting_hr,
                body_battery_end, garmin_training_readiness,
-               garmin_training_readiness_level
+               garmin_training_readiness_level,
+               spo2, respiration_rate, skin_temp
         FROM daily_metric
         WHERE user_id = %s
         ORDER BY date
@@ -324,6 +329,9 @@ def compute_readiness_score(cur, user_id: str) -> dict:
     # Build rolling averages for z-score-like normalization
     hrv_history = []
     rhr_history = []
+    spo2_history = []
+    rr_history = []
+    skin_temp_history = []
     results = {}
 
     for row in rows:
@@ -347,37 +355,46 @@ def compute_readiness_score(cur, user_id: str) -> dict:
                 "resting_hr_component": None,
             }
         else:
-            # Compute Buchheit-style composite
+            # Compute Buchheit-style composite with vitals
             hrv_val = row.get("hrv")
             sleep_val = row.get("sleep_score")
             stress_val = row.get("stress_score")
             rhr_val = row.get("resting_hr")
             bb_val = row.get("body_battery_end")
+            spo2_val = row.get("spo2")
+            rr_val = row.get("respiration_rate")
+            skin_temp_val = row.get("skin_temp")
 
             if hrv_val:
                 hrv_history.append(hrv_val)
             if rhr_val:
                 rhr_history.append(rhr_val)
+            if spo2_val:
+                spo2_history.append(spo2_val)
+            if rr_val:
+                rr_history.append(rr_val)
+            if skin_temp_val:
+                skin_temp_history.append(skin_temp_val)
 
             components = []
             total_weight = 0
 
-            # HRV component (35%): higher is better, z-score vs 14-day avg
+            # HRV component (25%): higher is better, ratio vs 14-day avg
             if hrv_val and len(hrv_history) >= 7:
                 avg_hrv = sum(hrv_history[-14:]) / len(hrv_history[-14:])
                 hrv_pct = min(100, max(0, (hrv_val / max(1, avg_hrv)) * 50 + 25))
-                components.append(("hrv", hrv_pct, 0.35))
-                total_weight += 0.35
-
-            # Sleep component (25%): direct score 0-100
-            if sleep_val is not None:
-                components.append(("sleep", min(100, sleep_val), 0.25))
+                components.append(("hrv", hrv_pct, 0.25))
                 total_weight += 0.25
 
-            # Training load component (20%): Body Battery as proxy
-            if bb_val is not None:
-                components.append(("load", min(100, bb_val), 0.20))
+            # Sleep component (20%): direct score 0-100
+            if sleep_val is not None:
+                components.append(("sleep", min(100, sleep_val), 0.20))
                 total_weight += 0.20
+
+            # Training load component (15%): Body Battery as proxy
+            if bb_val is not None:
+                components.append(("load", min(100, bb_val), 0.15))
+                total_weight += 0.15
 
             # Resting HR component (10%): lower is better vs baseline
             if rhr_val and len(rhr_history) >= 7:
@@ -386,11 +403,43 @@ def compute_readiness_score(cur, user_id: str) -> dict:
                 components.append(("rhr", rhr_pct, 0.10))
                 total_weight += 0.10
 
-            # Stress component (10%): lower is better (invert)
+            # Stress component (8%): lower is better (invert)
             if stress_val is not None:
                 stress_pct = max(0, 100 - stress_val)
-                components.append(("stress", stress_pct, 0.10))
-                total_weight += 0.10
+                components.append(("stress", stress_pct, 0.08))
+                total_weight += 0.08
+
+            # SpO2 component (8%): deviation below rolling 14-day average penalizes
+            # Normal range: 95-100%. Score starts at 75 (at baseline), each 1%
+            # below baseline = ~20pt penalty, each 1% above = ~20pt bonus.
+            if spo2_val and len(spo2_history) >= 3:
+                avg_spo2 = sum(spo2_history[-14:]) / len(spo2_history[-14:])
+                # Score: 100 at baseline, drops steeply below baseline
+                # Each 1% below baseline = ~20pt penalty
+                deviation = spo2_val - avg_spo2
+                spo2_pct = min(100, max(0, 75 + deviation * 20))
+                components.append(("spo2", spo2_pct, 0.08))
+                total_weight += 0.08
+
+            # Respiration rate component (7%): elevated RR = stress/illness
+            # Normal sleep RR: 12-20 brpm. Lower (near baseline) is better.
+            if rr_val and len(rr_history) >= 3:
+                avg_rr = sum(rr_history[-14:]) / len(rr_history[-14:])
+                # Each 1 brpm above baseline = ~15pt penalty
+                deviation = rr_val - avg_rr
+                rr_pct = min(100, max(0, 75 - deviation * 15))
+                components.append(("rr", rr_pct, 0.07))
+                total_weight += 0.07
+
+            # Skin temperature component (7%): deviation from baseline
+            # Elevated skin temp = illness/overreaching (WHOOP model)
+            if skin_temp_val and len(skin_temp_history) >= 3:
+                avg_st = sum(skin_temp_history[-14:]) / len(skin_temp_history[-14:])
+                # Each 0.5°C above baseline = ~20pt penalty
+                deviation = skin_temp_val - avg_st
+                st_pct = min(100, max(0, 75 - deviation * 40))
+                components.append(("skin_temp", st_pct, 0.07))
+                total_weight += 0.07
 
             if total_weight > 0:
                 score = round(sum(v * w for _, v, w in components) / total_weight)
@@ -413,11 +462,18 @@ def compute_readiness_score(cur, user_id: str) -> dict:
             else:
                 continue
 
-        # Update HRV/RHR history regardless
-        if row.get("hrv") and garmin_readiness is not None:
-            hrv_history.append(row["hrv"])
-        if row.get("resting_hr") and garmin_readiness is not None:
-            rhr_history.append(row["resting_hr"])
+        # Update history for Garmin-native rows too (for baseline computation)
+        if garmin_readiness is not None:
+            if row.get("hrv"):
+                hrv_history.append(row["hrv"])
+            if row.get("resting_hr"):
+                rhr_history.append(row["resting_hr"])
+            if row.get("spo2"):
+                spo2_history.append(row["spo2"])
+            if row.get("respiration_rate"):
+                rr_history.append(row["respiration_rate"])
+            if row.get("skin_temp"):
+                skin_temp_history.append(row["skin_temp"])
 
     return results
 
