@@ -91,6 +91,55 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# ─── Clean up stale options from OpenClaw → PulseCoach rename ─────────────────
+# Use Supervisor API to permanently remove stale keys from addon config,
+# then update the local options file atomically as a fallback.
+OPTIONS_FILE="${DATA_DIR}/options.json"
+STALE_KEYS=("openclaw_agent_id" "openclaw_api_key" "openclaw_url")
+if [[ -f "${OPTIONS_FILE}" ]]; then
+    NEEDS_CLEANUP=false
+    for key in "${STALE_KEYS[@]}"; do
+        if python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if sys.argv[2] in d else 1)" \
+            "${OPTIONS_FILE}" "${key}" 2>/dev/null; then
+            NEEDS_CLEANUP=true
+            break
+        fi
+    done
+    if [[ "${NEEDS_CLEANUP}" == "true" ]]; then
+        bashio::log.info "Cleaning stale OpenClaw options from addon config..."
+        # Build cleaned options and update via Supervisor API for persistence
+        CLEANED_OPTIONS=$(python3 -c "
+import json, sys, os, tempfile
+opts_file = sys.argv[1]
+stale = set(sys.argv[2:])
+with open(opts_file, 'r') as f:
+    d = json.load(f)
+removed = [k for k in stale if k in d]
+for k in removed:
+    d.pop(k)
+if removed:
+    # Atomic write to local file as fallback
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(opts_file))
+    with os.fdopen(fd, 'w') as f:
+        json.dump(d, f, indent=2)
+    os.replace(tmp, opts_file)
+print(json.dumps(d))
+" "${OPTIONS_FILE}" "${STALE_KEYS[@]}" 2>/dev/null)
+        if [[ -n "${CLEANED_OPTIONS}" ]]; then
+            # Update Supervisor stored config so changes persist across restarts
+            if curl -sf -X POST \
+                -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "{\"options\": ${CLEANED_OPTIONS}}" \
+                "http://supervisor/addons/self/options" >/dev/null 2>&1; then
+                bashio::log.info "Stale OpenClaw options removed via Supervisor API (persistent)"
+            else
+                bashio::log.warning "Supervisor API update failed; local options.json updated only"
+            fi
+        fi
+    fi
+fi
+
 # ─── Read addon configuration ─────────────────────────────────────────────────
 GARMIN_EMAIL=$(bashio::config 'garmin_email')
 GARMIN_PASSWORD=$(bashio::config 'garmin_password')
