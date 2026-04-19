@@ -91,6 +91,25 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# ─── Clean up stale options from OpenClaw → PulseCoach rename ─────────────────
+OPTIONS_FILE="/data/options.json"
+if [[ -f "${OPTIONS_FILE}" ]]; then
+    STALE_KEYS=("openclaw_agent_id" "openclaw_api_key" "openclaw_url")
+    for key in "${STALE_KEYS[@]}"; do
+        if python3 -c "import json; d=json.load(open('${OPTIONS_FILE}')); exit(0 if '${key}' in d else 1)" 2>/dev/null; then
+            bashio::log.info "Removing stale option '${key}' (leftover from OpenClaw rename)"
+            python3 -c "
+import json
+with open('${OPTIONS_FILE}', 'r') as f:
+    d = json.load(f)
+d.pop('${key}', None)
+with open('${OPTIONS_FILE}', 'w') as f:
+    json.dump(d, f, indent=2)
+"
+        fi
+    done
+fi
+
 # ─── Read addon configuration ─────────────────────────────────────────────────
 GARMIN_EMAIL=$(bashio::config 'garmin_email')
 GARMIN_PASSWORD=$(bashio::config 'garmin_password')
