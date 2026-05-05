@@ -1,6 +1,10 @@
 # PulseCoach — Home Assistant Addon
 
 [![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Faskb%2Fha-garmin-fitness-coach-addon)
+[![GitHub Release](https://img.shields.io/github/v/release/askb/ha-garmin-fitness-coach-addon?label=release)](https://github.com/askb/ha-garmin-fitness-coach-addon/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/askb/ha-garmin-fitness-coach-addon/total?label=downloads)](https://github.com/askb/ha-garmin-fitness-coach-addon/releases)
+[![GHCR](https://ghcr-badge.egpl.dev/askb/pulsecoach-addon-amd64/latest_tag?label=ghcr)](https://github.com/askb/ha-garmin-fitness-coach-addon/pkgs/container/pulsecoach-addon-amd64)
+[![License](https://img.shields.io/github/license/askb/ha-garmin-fitness-coach-addon)](LICENSE)
 
 AI-powered sport scientist that turns your Garmin data into actionable
 coaching, training analysis, and recovery optimization — running entirely on
