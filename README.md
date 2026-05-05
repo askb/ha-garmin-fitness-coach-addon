@@ -115,16 +115,6 @@ Click the button at the top of this README, or:
 
 Then install **PulseCoach** from the add-on store and start it.
 
-### Via HACS (Custom Repository)
-
-1. Open HACS in your Home Assistant instance.
-2. Click the **⋮** menu (top right) → **Custom repositories**.
-3. Add this URL and select category **Add-on**:
-   ```
-   https://github.com/askb/ha-garmin-fitness-coach-addon
-   ```
-4. Click **Add**, then find **PulseCoach** in HACS and install.
-
 ### Manual Install
 
 1. In Home Assistant go to **Settings → Add-ons → Add-on Store → ⋮ →
