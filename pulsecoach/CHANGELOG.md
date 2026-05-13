@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.6] — 2026-05-13
+
+### Added
+- **HA sensor surface** — expose Garmin recovery hours, HRV, and load focus
+  as Home Assistant sensors via the ha-notify bridge (#110).
+- **HACS install docs** — README now documents adding the repo as a HACS
+  custom repository (#105). Earlier incorrect instructions removed (#106).
+- **Download tracking + release badges** — README badges show GHCR pulls
+  and release counts (#104).
+
+### Tests
+- Phase 3 coverage for `sync_training_*` jobs and ha-notify sensor
+  helpers (#111).
+- Metrics-compute readiness scoring + load fetching covered (#109).
+
+### Maintenance
+- Bump `github/gh-aw` 0.67.4 → 0.73.0 (#79, #102, #107).
+- Bump `node` 22-alpine → 26-alpine (#81, #108).
+- Bump `softprops/action-gh-release` 2 → 3 (#80).
+
+## [0.16.5] — 2026-04-19
+
+### Fixed
+- Hotfix following 0.16.4 release plumbing; container build pipeline
+  hardening.
+
 ## [0.16.4] — 2026-04-17
 
 ### Fixed
