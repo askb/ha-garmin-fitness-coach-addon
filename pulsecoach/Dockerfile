@@ -7,7 +7,8 @@ ARG BUILD_ARCH
 FROM node:26-alpine AS builder
 
 RUN apk add --no-cache git
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+# Node 26+ alpine images no longer ship corepack — install explicitly.
+RUN npm install -g corepack@latest && corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 WORKDIR /build
 
