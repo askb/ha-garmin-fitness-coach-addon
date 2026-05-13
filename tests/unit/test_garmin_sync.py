@@ -347,3 +347,211 @@ class TestDbPath:
                 "DATABASE_URL", "file:/data/pulsecoach.db"
             ).replace("file:", "")
             assert result == "/data/pulsecoach.db"
+
+
+# ── Training readiness sync ──────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+class TestSyncTrainingReadiness:
+    """Tests for sync_training_readiness()."""
+
+    @staticmethod
+    def _make_client(payload):
+        client = MagicMock()
+        client.get_training_readiness.return_value = payload
+        return client
+
+    def test_inserts_readiness_when_score_present(self, garmin_sync, mock_pg_db):
+        """A payload with a score triggers an INSERT + UPDATE."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({
+            "score": 72,
+            "level": "GOOD",
+            "sleepScore": 80,
+            "recoveryTime": 12,
+            "hrvStatus": "BALANCED",
+        })
+        garmin_sync.sync_training_readiness(client, conn, days=1)
+
+        assert cursor.execute.called
+        assert conn.commit.called
+        # Ensure the UPDATE was issued and persisted the rounded score
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_readiness" in c.args[0]
+        ]
+        assert update_calls, "expected an UPDATE daily_metric SET garmin_training_readiness ..."
+        params = update_calls[0].args[1]
+        assert params[0] == 72  # rounded score
+        assert params[1] == "good"  # level lower-cased
+        # Factors JSON contains the contributing-factor keys we sent
+        factors = json.loads(params[2])
+        assert factors["sleepScore"] == 80
+        assert factors["recoveryTime"] == 12
+        assert factors["hrvStatus"] == "BALANCED"
+
+    def test_skips_when_score_missing(self, garmin_sync, mock_pg_db):
+        """Payload without a score is skipped — no UPDATE issued."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({"level": "POOR"})  # no score / readinessScore
+        garmin_sync.sync_training_readiness(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_readiness" in c.args[0]
+        ]
+        assert not update_calls
+
+    def test_skips_when_payload_empty(self, garmin_sync, mock_pg_db):
+        """Empty payload (None / falsy) is silently skipped."""
+        conn, cursor = mock_pg_db
+        client = self._make_client(None)
+        garmin_sync.sync_training_readiness(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "garmin_training_readiness" in c.args[0]
+        ]
+        assert not update_calls
+
+    def test_accepts_readinessscore_alias(self, garmin_sync, mock_pg_db):
+        """Garmin sometimes returns `readinessScore` instead of `score`."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({"readinessScore": 55, "readinessLevel": "FAIR"})
+        garmin_sync.sync_training_readiness(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_readiness" in c.args[0]
+        ]
+        assert update_calls
+        assert update_calls[0].args[1][0] == 55
+
+    def test_continues_on_per_day_exception(self, garmin_sync, mock_pg_db):
+        """If one date raises, the loop continues for the remaining days."""
+        conn, cursor = mock_pg_db
+        client = MagicMock()
+        # First call fails, second succeeds
+        client.get_training_readiness.side_effect = [
+            Exception("API rate-limited"),
+            {"score": 60, "level": "GOOD"},
+        ]
+        garmin_sync.sync_training_readiness(client, conn, days=2)
+
+        assert client.get_training_readiness.call_count == 2
+        # Only one UPDATE should be issued (for the day that succeeded)
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_readiness" in c.args[0]
+        ]
+        assert len(update_calls) == 1
+
+
+# ── Training status sync ─────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+class TestSyncTrainingStatus:
+    """Tests for sync_training_status()."""
+
+    @staticmethod
+    def _make_client(payload):
+        client = MagicMock()
+        client.get_training_status.return_value = payload
+        return client
+
+    def test_inserts_status_and_load_focus(self, garmin_sync, mock_pg_db):
+        """Status + load distribution + recovery hours are all persisted."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({
+            "trainingStatus": "productive",
+            "trainingLoadFocus": "low_aerobic",
+            "lowAerobicTrainingLoadPercentage": 60,
+            "highAerobicTrainingLoadPercentage": 30,
+            "anaerobicTrainingLoadPercentage": 10,
+            "recoveryTimeInMinutes": 180,  # 3 hours
+        })
+        garmin_sync.sync_training_status(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_status" in c.args[0]
+        ]
+        assert update_calls, "expected an UPDATE daily_metric SET garmin_training_status ..."
+        params = update_calls[0].args[1]
+        # Status is upper-cased
+        assert params[0] == "PRODUCTIVE"
+        # Load focus JSON contains the percentage keys we sent
+        load_dist = json.loads(params[1])
+        assert load_dist["lowAerobicTrainingLoadPercentage"] == 60
+        assert load_dist["anaerobicTrainingLoadPercentage"] == 10
+        # 180 minutes → 3.0 hours
+        assert params[2] == 3.0
+
+    def test_converts_recovery_minutes_to_hours(self, garmin_sync, mock_pg_db):
+        """recoveryTimeInMinutes is rounded to 1dp hours."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({
+            "trainingStatus": "maintaining",
+            "recoveryTimeInMinutes": 95,  # 1.5833... → 1.6
+        })
+        garmin_sync.sync_training_status(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_status" in c.args[0]
+        ]
+        assert update_calls
+        assert update_calls[0].args[1][2] == 1.6
+
+    def test_skips_when_all_fields_missing(self, garmin_sync, mock_pg_db):
+        """Payload with no status / load_focus / recovery is skipped."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({"someUnrelatedField": 1})
+        garmin_sync.sync_training_status(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_status" in c.args[0]
+        ]
+        assert not update_calls
+
+    def test_accepts_status_alias(self, garmin_sync, mock_pg_db):
+        """Garmin sometimes returns `status` instead of `trainingStatus`."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({"status": "peaking"})
+        garmin_sync.sync_training_status(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_status" in c.args[0]
+        ]
+        assert update_calls
+        assert update_calls[0].args[1][0] == "PEAKING"
+
+    def test_continues_on_per_day_exception(self, garmin_sync, mock_pg_db):
+        """Per-day exceptions are swallowed so the loop continues."""
+        conn, cursor = mock_pg_db
+        client = MagicMock()
+        client.get_training_status.side_effect = [
+            Exception("network error"),
+            {"trainingStatus": "productive", "recoveryTimeInMinutes": 60},
+        ]
+        garmin_sync.sync_training_status(client, conn, days=2)
+
+        assert client.get_training_status.call_count == 2
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_status" in c.args[0]
+        ]
+        assert len(update_calls) == 1
