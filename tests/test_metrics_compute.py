@@ -207,3 +207,172 @@ class TestInjuryRisk:
         level, score = ha_notify.compute_injury_risk(None, None, None)
         assert level == "unknown"
         assert score == 0
+
+
+class TestReadinessZone:
+    """Boundary tests for the readiness score → zone mapping."""
+
+    def test_prime_zone(self, metrics_compute):
+        assert metrics_compute._readiness_zone(80) == "prime"
+        assert metrics_compute._readiness_zone(100) == "prime"
+
+    def test_good_zone(self, metrics_compute):
+        assert metrics_compute._readiness_zone(60) == "good"
+        assert metrics_compute._readiness_zone(79) == "good"
+
+    def test_moderate_zone(self, metrics_compute):
+        assert metrics_compute._readiness_zone(40) == "moderate"
+        assert metrics_compute._readiness_zone(59) == "moderate"
+
+    def test_low_zone(self, metrics_compute):
+        assert metrics_compute._readiness_zone(20) == "low"
+        assert metrics_compute._readiness_zone(39) == "low"
+
+    def test_poor_zone(self, metrics_compute):
+        assert metrics_compute._readiness_zone(0) == "poor"
+        assert metrics_compute._readiness_zone(19) == "poor"
+
+
+def _make_mock_cur(rows):
+    """Return a MagicMock psycopg2 cursor whose fetchall() yields ``rows``."""
+    cur = MagicMock()
+    cur.execute = MagicMock()
+    cur.fetchall = MagicMock(return_value=rows)
+    return cur
+
+
+class TestComputeReadinessScore:
+    """Tests for compute_readiness_score covering native + composite paths."""
+
+    def test_empty_rows_returns_empty(self, metrics_compute):
+        cur = _make_mock_cur([])
+        assert metrics_compute.compute_readiness_score(cur, "user-1") == {}
+
+    def test_garmin_native_passthrough(self, metrics_compute):
+        """When Garmin readiness exists, score is used verbatim with that zone."""
+        cur = _make_mock_cur([
+            {
+                "date": "2025-01-01",
+                "hrv": 60,
+                "sleep_score": 80,
+                "stress_score": 25,
+                "resting_hr": 55,
+                "body_battery_end": 70,
+                "garmin_training_readiness": 85,
+                "garmin_training_readiness_level": "PRIME",
+                "spo2": 97,
+                "respiration_rate": 14,
+                "skin_temp": 36.5,
+            },
+        ])
+        result = metrics_compute.compute_readiness_score(cur, "user-1")
+        assert "2025-01-01" in result
+        r = result["2025-01-01"]
+        assert r["score"] == 85
+        assert r["zone"] == "prime"
+        assert r["source"] == "garmin_native"
+        # Native path leaves component columns null
+        assert r["hrv_component"] is None
+        assert r["sleep_quantity_component"] is None
+
+    def test_buchheit_composite_when_native_absent(self, metrics_compute):
+        """Composite path: sleep + body battery + stress drive the score."""
+        rows = []
+        for i in range(10):
+            day = f"2025-01-{i + 1:02d}"
+            rows.append({
+                "date": day,
+                "hrv": 55,
+                "sleep_score": 75,
+                "stress_score": 30,
+                "resting_hr": 55,
+                "body_battery_end": 65,
+                "garmin_training_readiness": None,
+                "garmin_training_readiness_level": None,
+                "spo2": None,
+                "respiration_rate": None,
+                "skin_temp": None,
+            })
+        cur = _make_mock_cur(rows)
+        result = metrics_compute.compute_readiness_score(cur, "user-1")
+        # Need enough history before HRV/RHR components kick in (>=7 rows)
+        last = result["2025-01-10"]
+        assert last["source"] == "buchheit_composite"
+        assert 0 <= last["score"] <= 100
+        assert last["zone"] in {"prime", "good", "moderate", "low", "poor"}
+        # Sleep is always populated when sleep_score is present
+        assert last["sleep_quantity_component"] is not None
+
+    def test_insufficient_history_skips_hrv_component(self, metrics_compute):
+        """First few days without HRV history must not produce an HRV component."""
+        rows = []
+        for i in range(3):
+            rows.append({
+                "date": f"2025-01-{i + 1:02d}",
+                "hrv": 55,
+                "sleep_score": 75,
+                "stress_score": 30,
+                "resting_hr": 55,
+                "body_battery_end": 65,
+                "garmin_training_readiness": None,
+                "garmin_training_readiness_level": None,
+                "spo2": None,
+                "respiration_rate": None,
+                "skin_temp": None,
+            })
+        cur = _make_mock_cur(rows)
+        result = metrics_compute.compute_readiness_score(cur, "user-1")
+        # Day 1: only 1 HRV sample, history < 7 → no HRV component
+        first = result.get("2025-01-01")
+        assert first is not None
+        assert first["hrv_component"] is None
+
+    def test_no_signals_skips_day(self, metrics_compute):
+        """A day with no usable inputs is omitted from results."""
+        cur = _make_mock_cur([
+            {
+                "date": "2025-01-01",
+                "hrv": None,
+                "sleep_score": None,
+                "stress_score": None,
+                "resting_hr": None,
+                "body_battery_end": None,
+                "garmin_training_readiness": None,
+                "garmin_training_readiness_level": None,
+                "spo2": None,
+                "respiration_rate": None,
+                "skin_temp": None,
+            },
+        ])
+        result = metrics_compute.compute_readiness_score(cur, "user-1")
+        assert "2025-01-01" not in result
+
+
+class TestFetchDailyLoads:
+    """fetch_daily_loads must merge daily_metric and activity TRIMP correctly."""
+
+    def test_uses_garmin_load_when_present(self, metrics_compute):
+        cur = MagicMock()
+        # First call: daily_metric query
+        # Second call: activity TRIMP query
+        cur.fetchall.side_effect = [
+            [{"date": "2025-01-01", "load": 80.0}],
+            [{"activity_date": "2025-01-01", "total_trimp": 120.0}],
+        ]
+        loads = metrics_compute.fetch_daily_loads(cur, "user-1")
+        # When daily_metric has non-zero load, activity TRIMP is ignored
+        assert loads == {"2025-01-01": 80.0}
+
+    def test_falls_back_to_activity_trimp_when_load_zero(self, metrics_compute):
+        cur = MagicMock()
+        cur.fetchall.side_effect = [
+            [{"date": "2025-01-01", "load": 0.0}],
+            [{"activity_date": "2025-01-01", "total_trimp": 120.0}],
+        ]
+        loads = metrics_compute.fetch_daily_loads(cur, "user-1")
+        assert loads == {"2025-01-01": 120.0}
+
+    def test_empty_inputs_returns_empty(self, metrics_compute):
+        cur = MagicMock()
+        cur.fetchall.side_effect = [[], []]
+        assert metrics_compute.fetch_daily_loads(cur, "user-1") == {}
