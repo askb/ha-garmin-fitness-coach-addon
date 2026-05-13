@@ -11,6 +11,7 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
+from typing import Any, Mapping, Optional, Sequence, Tuple, Union
 from zoneinfo import ZoneInfo
 
 try:
@@ -87,27 +88,77 @@ def create_notification(title: str, message: str, notification_id: str) -> bool:
     }) is not None
 
 
+def _compute_hrv_trend(
+    rows: Sequence[Mapping[str, Any]],
+) -> Tuple[Optional[str], Optional[float]]:
+    """Return (trend_label, avg) from a list of {'hrv': float} rows ordered ASC.
+
+    NOTE: ``daily_metric.hrv`` is populated from Garmin's ``hrvSummary.weeklyAvg``
+    (see garmin-sync.py), so this trend tracks day-over-day movement of the
+    weekly-average value, not raw nightly HRV. Needs at least 3 datapoints
+    to emit a label. Returns ``(None, None)`` when there is insufficient data;
+    otherwise ``trend_label`` is one of ``"rising"`` / ``"falling"`` / ``"stable"``.
+    """
+    if not rows or len(rows) < 3:
+        return None, None
+    vals = [float(r["hrv"]) for r in rows]
+    avg = round(sum(vals) / len(vals), 1)
+    latest = vals[-1]
+    if latest > avg * 1.05:
+        return "rising", avg
+    if latest < avg * 0.95:
+        return "falling", avg
+    return "stable", avg
+
+
+def _derive_load_focus_label(
+    payload: Union[str, Mapping[str, Any], None],
+) -> str:
+    """Reduce Garmin ``garmin_load_focus`` JSON to a single label.
+
+    The synced JSON can contain either percentage keys
+    (``*TrainingLoadPercentage``) or absolute load keys
+    (``*TrainingLoad``). Prefer percentages when present.
+
+    Accepts a pre-resolved label string, a dict payload, or ``None``.
+    Returns one of ``"anaerobic"`` / ``"high_aerobic"`` / ``"low_aerobic"`` /
+    ``"unknown"``.
+    """
+    if not payload:
+        return "unknown"
+    if isinstance(payload, str):
+        return payload.lower()
+    if not isinstance(payload, dict):
+        return "unknown"
+
+    pct_keys = (
+        "highAerobicTrainingLoadPercentage",
+        "lowAerobicTrainingLoadPercentage",
+        "anaerobicTrainingLoadPercentage",
+    )
+    abs_keys = (
+        "highAerobicTrainingLoad",
+        "lowAerobicTrainingLoad",
+        "anaerobicTrainingLoad",
+    )
+    keys = pct_keys if any(payload.get(k) is not None for k in pct_keys) else abs_keys
+    aerobic_high = payload.get(keys[0], 0) or 0
+    aerobic_low = payload.get(keys[1], 0) or 0
+    anaerobic = payload.get(keys[2], 0) or 0
+    if max(aerobic_high, aerobic_low, anaerobic) <= 0:
+        return "unknown"
+    if anaerobic > aerobic_high and anaerobic > aerobic_low:
+        return "anaerobic"
+    if aerobic_high > aerobic_low:
+        return "high_aerobic"
+    return "low_aerobic"
+
+
 def get_latest_metrics(cur, user_id: str) -> dict:
     """Get latest metrics from daily_athlete_summary materialized view.
 
     Falls back to separate table queries if the matview doesn't exist yet.
     """
-    # Helper to compute HRV trend from a list of (date, hrv) rows ordered ASC.
-    # NOTE: `daily_metric.hrv` is populated from Garmin's weeklyAvg
-    # (see garmin-sync.py — `hrvSummary.weeklyAvg`), so this trend
-    # tracks day-over-day movement of the weekly-average value, not
-    # raw nightly HRV.
-    def _compute_hrv_trend(rows):
-        if not rows or len(rows) < 3:
-            return None, None
-        vals = [float(r["hrv"]) for r in rows]
-        avg = round(sum(vals) / len(vals), 1)
-        latest = vals[-1]
-        if latest > avg * 1.05:
-            return "rising", avg
-        if latest < avg * 0.95:
-            return "falling", avg
-        return "stable", avg
 
     # Inclusive 7-day window: CURRENT_DATE - 6 days .. CURRENT_DATE = 7 rows.
     hrv_history_sql = """
@@ -573,37 +624,8 @@ def run_notifications(user_id: str):
         #   - absolute load keys (highAerobicTrainingLoad, ...).
         # Prefer percentages when present; fall back to absolutes otherwise.
         load_focus_raw = dm.get('garmin_load_focus') if dm else None
-        load_focus_label = "unknown"
-        load_focus_attrs = {}
-        if load_focus_raw:
-            if isinstance(load_focus_raw, dict):
-                load_focus_attrs = load_focus_raw
-                pct_keys = (
-                    "highAerobicTrainingLoadPercentage",
-                    "lowAerobicTrainingLoadPercentage",
-                    "anaerobicTrainingLoadPercentage",
-                )
-                abs_keys = (
-                    "highAerobicTrainingLoad",
-                    "lowAerobicTrainingLoad",
-                    "anaerobicTrainingLoad",
-                )
-                if any(load_focus_raw.get(k) is not None for k in pct_keys):
-                    keys = pct_keys
-                else:
-                    keys = abs_keys
-                aerobic_high = load_focus_raw.get(keys[0], 0) or 0
-                aerobic_low = load_focus_raw.get(keys[1], 0) or 0
-                anaerobic = load_focus_raw.get(keys[2], 0) or 0
-                if max(aerobic_high, aerobic_low, anaerobic) > 0:
-                    if anaerobic > aerobic_high and anaerobic > aerobic_low:
-                        load_focus_label = "anaerobic"
-                    elif aerobic_high > aerobic_low:
-                        load_focus_label = "high_aerobic"
-                    else:
-                        load_focus_label = "low_aerobic"
-            elif isinstance(load_focus_raw, str):
-                load_focus_label = load_focus_raw.lower()
+        load_focus_label = _derive_load_focus_label(load_focus_raw)
+        load_focus_attrs = load_focus_raw if isinstance(load_focus_raw, dict) else {}
         push_sensor("sensor.pulsecoach_load_focus",
                     load_focus_label,
                     {
