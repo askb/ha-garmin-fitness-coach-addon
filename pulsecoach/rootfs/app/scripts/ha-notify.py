@@ -11,6 +11,7 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
+from typing import Any, Mapping, Optional, Sequence, Tuple, Union
 from zoneinfo import ZoneInfo
 
 try:
@@ -87,13 +88,16 @@ def create_notification(title: str, message: str, notification_id: str) -> bool:
     }) is not None
 
 
-def _compute_hrv_trend(rows):
+def _compute_hrv_trend(
+    rows: Sequence[Mapping[str, Any]],
+) -> Tuple[Optional[str], Optional[float]]:
     """Return (trend_label, avg) from a list of {'hrv': float} rows ordered ASC.
 
-    NOTE: `daily_metric.hrv` is populated from Garmin's `hrvSummary.weeklyAvg`
+    NOTE: ``daily_metric.hrv`` is populated from Garmin's ``hrvSummary.weeklyAvg``
     (see garmin-sync.py), so this trend tracks day-over-day movement of the
     weekly-average value, not raw nightly HRV. Needs at least 3 datapoints
-    to emit a label.
+    to emit a label. Returns ``(None, None)`` when there is insufficient data;
+    otherwise ``trend_label`` is one of ``"rising"`` / ``"falling"`` / ``"stable"``.
     """
     if not rows or len(rows) < 3:
         return None, None
@@ -107,13 +111,18 @@ def _compute_hrv_trend(rows):
     return "stable", avg
 
 
-def _derive_load_focus_label(payload):
-    """Reduce Garmin `garmin_load_focus` JSON to a single label.
+def _derive_load_focus_label(
+    payload: Union[str, Mapping[str, Any], None],
+) -> str:
+    """Reduce Garmin ``garmin_load_focus`` JSON to a single label.
 
     The synced JSON can contain either percentage keys
     (``*TrainingLoadPercentage``) or absolute load keys
     (``*TrainingLoad``). Prefer percentages when present.
-    Returns 'anaerobic' / 'high_aerobic' / 'low_aerobic' / 'unknown'.
+
+    Accepts a pre-resolved label string, a dict payload, or ``None``.
+    Returns one of ``"anaerobic"`` / ``"high_aerobic"`` / ``"low_aerobic"`` /
+    ``"unknown"``.
     """
     if not payload:
         return "unknown"
