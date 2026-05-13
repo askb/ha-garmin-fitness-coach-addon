@@ -16,7 +16,6 @@ from zoneinfo import ZoneInfo
 try:
     import psycopg2
     import psycopg2.extras
-    import psycopg2.errors
 except ImportError:
     print("ERROR: psycopg2 not installed", file=sys.stderr)
     sys.exit(1)
@@ -128,12 +127,25 @@ def get_latest_metrics(cur, user_id: str) -> dict:
     cur.execute("""
         SELECT date, hrv, resting_hr, body_battery_end, stress_score,
                sleep_debt_minutes, body_battery_start,
-               spo2, respiration_rate, skin_temp
+               spo2, respiration_rate, skin_temp,
+               garmin_training_readiness, garmin_training_readiness_level,
+               garmin_training_status, garmin_load_focus, garmin_recovery_hours,
+               garmin_training_load, readiness_score, readiness_zone,
+               weight_kg, body_fat_pct
         FROM daily_metric
         WHERE user_id = %s
         ORDER BY date DESC LIMIT 1
     """, (user_id,))
     dm = cur.fetchone()
+
+    # 7-day HRV history for trend computation
+    cur.execute("""
+        SELECT date, hrv FROM daily_metric
+        WHERE user_id = %s AND date >= CURRENT_DATE - INTERVAL '7 days'
+          AND hrv IS NOT NULL
+        ORDER BY date ASC
+    """, (user_id,))
+    hrv_rows = cur.fetchall()
 
     cur.execute("""
         SELECT date, ctl, atl, tsb, acwr, ramp_rate, cp, mftp, effective_vo2max
@@ -152,10 +164,26 @@ def get_latest_metrics(cur, user_id: str) -> dict:
     hard_days_row = cur.fetchone()
     hard_days = hard_days_row['count'] if hard_days_row else 0
 
+    # 7-day HRV history → simple trend label
+    hrv_trend = None
+    hrv_avg = None
+    if hrv_rows and len(hrv_rows) >= 3:
+        hrv_values = [float(r["hrv"]) for r in hrv_rows]
+        hrv_avg = round(sum(hrv_values) / len(hrv_values), 1)
+        latest_hrv = hrv_values[-1]
+        if latest_hrv > hrv_avg * 1.05:
+            hrv_trend = "rising"
+        elif latest_hrv < hrv_avg * 0.95:
+            hrv_trend = "falling"
+        else:
+            hrv_trend = "stable"
+
     return {
         "daily": dm,
         "advanced": am,
         "consecutive_hard_days": hard_days,
+        "hrv_avg_7d": hrv_avg,
+        "hrv_trend": hrv_trend,
     }
 
 
@@ -486,6 +514,64 @@ def run_notifications(user_id: str):
                         "icon": "mdi:run-fast",
                         "recovery_hours": g_recovery_hrs,
                         "load_focus": dm.get('garmin_load_focus') if dm else None,
+                    })
+
+        # sensor.pulsecoach_recovery_time (top-level for automations/dashboards)
+        push_sensor("sensor.pulsecoach_recovery_time",
+                    round(g_recovery_hrs, 1) if g_recovery_hrs is not None else "unknown",
+                    {
+                        "friendly_name": "PulseCoach Recovery Time",
+                        "unit_of_measurement": "h",
+                        "icon": "mdi:timer-sand",
+                        "device_class": "duration",
+                        "status": (
+                            "ready" if g_recovery_hrs is not None and g_recovery_hrs < 6 else
+                            ("partial" if g_recovery_hrs is not None and g_recovery_hrs < 24 else
+                             ("recovering" if g_recovery_hrs is not None else "unknown"))
+                        ),
+                    })
+
+        # sensor.pulsecoach_hrv
+        latest_hrv = dm.get('hrv') if dm else None
+        hrv_trend = data.get('hrv_trend')
+        hrv_avg_7d = data.get('hrv_avg_7d')
+        push_sensor("sensor.pulsecoach_hrv",
+                    round(latest_hrv, 1) if latest_hrv is not None else "unknown",
+                    {
+                        "friendly_name": "PulseCoach HRV",
+                        "unit_of_measurement": "ms",
+                        "icon": "mdi:heart-flash",
+                        "trend": hrv_trend or "unknown",
+                        "avg_7d": hrv_avg_7d,
+                    })
+
+        # sensor.pulsecoach_load_focus (top-level for dashboards)
+        load_focus_raw = dm.get('garmin_load_focus') if dm else None
+        # garmin_load_focus is JSONB - extract primary descriptor if possible
+        load_focus_label = "unknown"
+        load_focus_attrs = {}
+        if load_focus_raw:
+            if isinstance(load_focus_raw, dict):
+                load_focus_attrs = load_focus_raw
+                # Heuristic: pick the dominant load category
+                aerobic_high = load_focus_raw.get("highAerobicTrainingLoadPercentage", 0) or 0
+                aerobic_low = load_focus_raw.get("lowAerobicTrainingLoadPercentage", 0) or 0
+                anaerobic = load_focus_raw.get("anaerobicTrainingLoadPercentage", 0) or 0
+                if max(aerobic_high, aerobic_low, anaerobic) > 0:
+                    if anaerobic > aerobic_high and anaerobic > aerobic_low:
+                        load_focus_label = "anaerobic"
+                    elif aerobic_high > aerobic_low:
+                        load_focus_label = "high_aerobic"
+                    else:
+                        load_focus_label = "low_aerobic"
+            elif isinstance(load_focus_raw, str):
+                load_focus_label = load_focus_raw.lower()
+        push_sensor("sensor.pulsecoach_load_focus",
+                    load_focus_label,
+                    {
+                        "friendly_name": "PulseCoach Load Focus",
+                        "icon": "mdi:chart-donut",
+                        **load_focus_attrs,
                     })
 
         # sensor.pulsecoach_weight
