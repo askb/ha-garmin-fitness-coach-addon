@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.11] — 2026-05-14
+
+### Fixed
+- **UI data-consistency pass 4** (app v0.2.5) — two Fitness page fixes:
+  - **Garmin VO2 Max chart — window-empty fallback**: Garmin
+    Firstbeat only emits VO2max readings after qualifying outdoor
+    runs (12+ min with HR + GPS), which in practice means one
+    reading every 1-2 weeks. Selecting a 7d or 14d window often
+    returned zero rows and showed an unhelpful empty-state. The
+    chart now falls back to your most recent readings (last 60,
+    no window filter) and displays a friendly note explaining
+    the situation. Title switches to "Garmin VO2 Max — last N
+    reading(s)" in fallback mode.
+  - **VO2max Y-axis decimal rendering**: previous `toFixed(1)`
+    tick formatter produced visually dropped decimal points at
+    10pt SVG font (e.g. `297` instead of `29.7`). Replaced with
+    `allowDecimals={false}` + integer-rounded domain on both the
+    Garmin chart and the UTH chart so ticks render crisply.
+
 ## [0.16.10] — 2026-05-14
 
 ### Fixed
