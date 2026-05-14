@@ -6,10 +6,15 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * Playwright config for PulseCoach screenshot capture.
  *
- * BASE_URL defaults to the dev Next.js port (`http://localhost:3000`).
- * For a locally-running addon container, point it at the exposed port:
+ * `BASE_URL` is the addon's Next.js port. To make it reachable from
+ * outside HA, enable the host-port mapping for `3000/tcp` in the
+ * addon's Network settings (Settings → Add-ons → PulseCoach → Network)
+ * and restart the addon. The URL is then `http://<haos-host>:3000`,
+ * e.g. `http://homeassistant.local:3000`.
  *
- *   BASE_URL=http://localhost:3001 pnpm screenshot
+ * For a locally-running container:
+ *   docker run -p 3000:3000 ghcr.io/askb/pulsecoach-addon-amd64:latest
+ *   BASE_URL=http://localhost:3000 npm run screenshot
  *
  * The runner is single-threaded so the produced PNGs land in a stable
  * filename pattern (no shard suffixes), which is important for AI diffing
