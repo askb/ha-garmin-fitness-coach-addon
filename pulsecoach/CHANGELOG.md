@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.9] — 2026-05-14
+
+### Fixed
+- **UI data-consistency pass 2** (app v0.2.3) — 13 issues from screenshot review:
+  - **Hamburger overlap**: `pl-12 sm:pl-0` on page headers so the
+    top-left menu button stops clipping page titles on mobile
+    (Activities, Coach, Insights, Sleep, Trends, Zones, etc).
+  - **YAxis "100" clipped**: bumped width on sleep/trends/zones charts
+    so the top tick label is fully visible.
+  - **Training Strain ticks**: explicit `[0,5,10,15,20]` ticks, no more
+    auto-generated `82.5` fractional values on a 0-21 domain.
+  - **Vitals baseline labels**: moved to `insideTopRight` so they no
+    longer sit on top of the dashed reference line.
+  - **Future-dated activities**: server-side filter `startedAt <= now`
+    so a "Walking — Fri May 15" never appears at the top of the list
+    for users in positive-UTC timezones.
+  - **Sleep charts direction**: Stages / Score / Actual-vs-Need / Debt
+    / Timing now render chronologically (oldest left → newest right).
+    Also fixed Sleep Debt stat reading the oldest entry instead of
+    the newest.
+  - **Activities sport-code leakage**: pure-numeric `subType` strings
+    (Garmin internal enum codes like `163`) are no longer rendered as
+    tiny chips next to "Yoga" / "Walking".
+  - **Trends correlation labels**: snake_case keys (`sleep_duration`,
+    `next_day_hrv`, `resting_hr`) now mapped to friendly names with
+    a `prettyMetric()` Title-Case fallback.
+  - **Trends Avg Stress**: computed from `DailyMetric.stressScore`
+    instead of hard-coded `—`.
+  - **VO2max consistency**: hero card now selects by source priority
+    (Garmin Firstbeat > Pace+HR > Cooper > UTH), matching the Race
+    Predictions card. Adds a "via …" provenance badge.
+  - **Insights debug dump**: replaced monospace `HRV: 18 | TSB: -14 |
+    ACWR: 1.41 …` line with friendly chip pills.
+  - **Insights stuck loading**: skeleton now gated on _every_ query
+    being pending instead of _any_ query, so a single lagging child
+    query no longer blocks the entire page.
+  - **Readiness debug text**: stale `Buchheit composite: N/100
+    (hrv=…)` strings stored in the DB are now sanitized at read-time
+    into clean zone-keyed explanations; cached rows self-heal on
+    next recompute.
+
 ## [0.16.8] — 2026-05-14
 
 ### Fixed
