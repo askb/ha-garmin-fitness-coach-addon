@@ -8,34 +8,81 @@ SPDX-License-Identifier: Apache-2.0
 Playwright-based capture of the PulseCoach dashboard for **AI-assisted UX
 review** and side-by-side iteration.
 
-It does **not** test the HA ingress path — it hits the underlying Next.js
-app directly, which is far simpler and avoids HA's session-scoped ingress
-tokens.
+The tool talks **directly to the addon container's HTTP port**. It does
+not try to use HA ingress — ingress URLs embed a session-scoped token
+that rotates per HA login, which is impractical to script around.
 
-## Quick start
+## Setup (one-time, ~2 min)
+
+### 1. Expose the addon's port on your HAOS host
+
+PulseCoach's `config.json` already declares `3000/tcp`. By default it's
+**disabled** (only reachable via HA ingress). Enable host networking once:
+
+1. In Home Assistant: **Settings → Add-ons → PulseCoach → Network**
+2. Under `Web UI (3000)`, set the host port to `3000`
+   (or any free port — adjust `BASE_URL` below to match)
+3. Click **Save**
+4. **Restart** the addon
+
+PulseCoach is now reachable from your LAN at
+`http://<your-haos-host>:3000` (e.g. `http://homeassistant.local:3000`).
+
+> Security note: the addon honors `DEV_BYPASS_AUTH=true` for local dev,
+> which is what makes screenshot capture work without a login flow. Do
+> not expose this port to the public internet — it's a LAN-only feature.
+
+### 2. Install the tool
+
+On any machine on your LAN (your laptop, a CI runner, a dev VM):
 
 ```bash
-# 1. Start the Next.js app in another terminal (from the *app* repo):
-#    cd ../ha-garmin-fitness-coach-app && pnpm dev
-#    (serves at http://localhost:3000)
-#
-# Or run the addon container locally with the port exposed:
-#    docker run -p 3001:3001 ghcr.io/askb/pulsecoach-addon-amd64:latest
-#    (in which case set BASE_URL=http://localhost:3001 below)
-
-cd tools/screenshots
+git clone https://github.com/askb/ha-garmin-fitness-coach-addon.git
+cd ha-garmin-fitness-coach-addon/tools/screenshots
 npm install
-npx playwright install chromium    # one-time
-npm run screenshot
+npx playwright install chromium      # one-time, ~150 MB
+```
+
+## Capture
+
+```bash
+BASE_URL=http://homeassistant.local:3000 npm run screenshot
 ```
 
 PNGs land in `screenshots/<YYYY-MM-DD>/<route>-<desktop|mobile>.png`.
 An HTML report is written to `report/index.html` for browsing.
 
+Single device:
+
+```bash
+BASE_URL=http://homeassistant.local:3000 npm run screenshot:desktop
+BASE_URL=http://homeassistant.local:3000 npm run screenshot:mobile
+```
+
+Light mode:
+
+```bash
+BASE_URL=http://homeassistant.local:3000 PULSECOACH_THEME=light npm run screenshot
+```
+
+Or put the env into `.env` once:
+
+```bash
+cp .env.example .env
+$EDITOR .env       # set BASE_URL
+npm run screenshot # picks it up automatically? no — see below
+```
+
+Note: Playwright doesn't auto-load `.env`. Either prefix each command, or
+export from your shell rc, or use [`dotenv-cli`](https://www.npmjs.com/package/dotenv-cli):
+
+```bash
+npx dotenv-cli -- npm run screenshot
+```
+
 ## What gets captured
 
-One full-page screenshot per route per device profile (desktop 1440×900
-@2x, mobile = iPhone 14 Pro). Routes covered:
+One full-page screenshot per route per device profile. Routes:
 
 | Route          | Notes                                              |
 | -------------- | -------------------------------------------------- |
@@ -54,32 +101,14 @@ One full-page screenshot per route per device profile (desktop 1440×900
 
 Add or remove routes in `tests/dashboard.spec.ts` (the `ROUTES` array).
 
-## Configuration
+Device profiles:
 
-Copy `.env.example` to `.env`:
-
-```bash
-BASE_URL=http://localhost:3000   # where the app is served
-SCREENSHOT_DIR=screenshots       # output dir
-PULSECOACH_THEME=dark            # dark | light
-```
-
-Or pass on the command line:
-
-```bash
-BASE_URL=http://localhost:3001 PULSECOACH_THEME=light npm run screenshot
-```
-
-Single device profile:
-
-```bash
-npm run screenshot:desktop
-npm run screenshot:mobile
-```
+- **desktop**: 1440×900 viewport @2x scale (4 MP-ish PNGs)
+- **mobile**: iPhone 14 Pro
 
 ## AI review workflow
 
-1. Run `npm run screenshot` after each material UI change.
+1. Run `npm run screenshot` after each material UI change in the addon.
 2. Drop the day's folder into your model of choice with a prompt like:
 
    > Review these PulseCoach dashboard screenshots for visual hierarchy,
@@ -87,28 +116,30 @@ npm run screenshot:mobile
    > Flag any cards where the value, axis, or threshold annotation is
    > ambiguous. Suggest concrete CSS / layout changes.
 
-3. Commit the diff. Re-run. Compare with the previous day's folder.
+3. Open an issue / branch with the suggested fixes. Re-run after the
+   addon rebuild. Diff against the previous day's folder.
 
-The date-stamped subdirectories make before/after diffs trivial — open
-two folders side-by-side in your file manager, or run a structural diff
-like `magick compare`.
+Because PNGs are date-stamped, before/after comparison is trivial — open
+two folders in your file manager, or run `magick compare`.
 
-## Why not via HA ingress?
+## Alternatives
 
-HA's ingress URL embeds a **session-scoped token** that rotates per HA
-session. Long-lived access tokens authorise the WebSocket API but **not**
-ingress. Running Playwright from outside HA against ingress is not
-practical. Hitting the Next.js app directly bypasses this entirely and
-gives identical pixels (ingress only rewrites paths; it does not transform
-the rendered DOM).
+### Don't want to expose the port?
 
-## Out of scope (for now)
+Use Playwright's [`storageState`](https://playwright.dev/docs/auth) with
+HA cookies:
 
-- Visual-regression assertions (pixel diff thresholds). The current setup
-  only captures — assertions would belong in the *app* repo's test suite
-  with stable seed data.
-- Authenticated screenshots. The app honors `DEV_BYPASS_AUTH=true` (the
-  standard dev setting), which is sufficient for screenshot capture.
-- Triggering screenshots from inside HA via a service call. Addon
-  isolation makes this awkward; trigger from your dev machine or a CI
-  runner instead.
+1. `npx playwright codegen --save-storage=auth.json http://homeassistant.local:8123`
+2. Log in once interactively; close the recorder.
+3. Reference `auth.json` in `playwright.config.ts` and target the
+   ingress URL.
+
+This works but the saved auth expires when your HA session ends, so it's
+fiddlier than just enabling the port.
+
+### CI screenshots
+
+Out of scope for this folder. The right place is a workflow in this
+repo that spins up the addon via `docker run`, waits for it to be
+healthy, then runs `npm run screenshot` against `http://localhost:3000`.
+Open an issue if you want me to add it.
