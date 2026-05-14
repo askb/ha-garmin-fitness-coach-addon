@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.12] — 2026-05-15
+
+### Fixed
+- **UI data-consistency pass 5** (app v0.2.6) — two issues spotted in
+  v0.16.11 screenshots:
+  - **Zones Y-axis '3000001%' artefact** — Training Polarization and
+    Monthly Zone Distribution charts now use explicit
+    `ticks=[0, 25, 50, 75, 100]` plus `allowDataOverflow`. Pass-3's
+    rotated-label removal cleared one source of garbage, but the
+    auto-tick generator still produced a colliding extra tick at the
+    chart edge. Explicit ticks guarantee 5 clean labels.
+  - **Insights '44.8' rendering as '4 4.8'** — the metric chip on
+    the Overreaching insight had adjacent identical digits kerning
+    apart at 10pt. Added `tabular-nums` className for monospaced
+    digit widths.
+
 ## [0.16.11] — 2026-05-14
 
 ### Fixed
