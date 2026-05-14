@@ -1,0 +1,18 @@
+{
+  "name": "@pulsecoach/screenshots",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Playwright screenshot tooling for PulseCoach dashboard (UX iteration + AI review)",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "screenshot": "playwright test",
+    "screenshot:desktop": "playwright test --project=desktop",
+    "screenshot:mobile": "playwright test --project=mobile",
+    "screenshot:dark": "PULSECOACH_THEME=dark playwright test --project=desktop",
+    "install-browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
