@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.7] — 2026-05-14
+
+### Fixed
+- **Analytics 500 on malformed activity dates** — `analytics.getTrainingLoads`
+  and `analytics.getTrainingStatus` no longer return HTTP 500 when any
+  Activity row in the 42-day window has a NaN `startedAt`. The
+  `dayInTimezone` helper now short-circuits to a sentinel date, and the
+  daily-load aggregator skips bad rows so they don't pollute ACWR / CTL /
+  ATL math. (app PR #103)
+
+### Docs
+- **Screenshot tooling for HAOS** — `tools/screenshots/` now leads with
+  the HAOS port-exposure workflow (Settings → Add-ons → PulseCoach →
+  Network → enable `3000/tcp`) instead of the previous `pnpm dev`
+  instructions, which didn't apply to users running only the addon.
+  Fixes wrong port (`3001` → `3000`) in `.env.example`. (#114)
+
 ## [0.16.6] — 2026-05-13
 
 ### Added
