@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.8] — 2026-05-14
+
+### Fixed
+- **UI data-consistency pass 1** (app v0.2.2):
+  - PMC chart x-axis: adaptive ~8-tick step so 180-day windows no longer
+    render labels mashed together (`02-1302-2002-27...`).
+  - ACWR gauge: falls back to the last point on the PMC chart series when
+    the analytics endpoint returns null. The gauge and the chart can no
+    longer disagree.
+  - Daily Strain y-axis: integer `tickFormatter` so the [0,21] domain
+    stops rendering as `444`.
+  - All three VO2max charts on the Fitness page now use an explicit
+    `toFixed(1)` y-axis formatter and a wider tick column, so values
+    like `29.5` no longer drop their decimal point (`297, 317, 337`).
+  - Performance Comparison no longer claims "top 90%" in green for
+    below-median VO2max; it now reads "bottom X%" in amber when below
+    the population median.
+- **Garmin Training Summary card** — renamed to "Garmin Native
+  (Firstbeat)" with a one-line caption explaining the fields require a
+  Forerunner 245+ / Fenix 6+. This clarifies why the card may show
+  em-dashes while the home-page Readiness score (our computed Buchheit
+  composite) shows real numbers for the same day.
+- **`/validation` page** — was the only screen rendering in light mode
+  against a dark app shell. Converted all raw light-mode utilities to
+  dark-aware semantic Tailwind tokens.
+
 ## [0.16.7] — 2026-05-14
 
 ### Fixed
