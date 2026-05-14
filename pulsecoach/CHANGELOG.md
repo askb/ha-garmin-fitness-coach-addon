@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.10] — 2026-05-14
+
+### Fixed
+- **UI data-consistency pass 3** (app v0.2.4) — 4 remaining issues
+  caught by the v0.16.9 screenshot review:
+  - **Hamburger overlap on desktop**: page-title left padding is
+    now unconditional (`pl-12`) instead of `pl-12 sm:pl-0`. The
+    fixed-position hamburger button is present at every
+    breakpoint, so Activities / Coach / etc. titles were still
+    being clipped at ≥640px.
+  - **Zones \"00000001\" Y-axis artefact**: replaced the rotated
+    `%` axis label with a per-tick `tickFormatter` suffix on both
+    the Training Polarization and Monthly Zone Distribution
+    charts. The rotated label was overlapping the `100` tick and
+    rendering as garbage.
+  - **Coach AI VO2max mismatch**: the Sport Scientist agent now
+    picks its VO2max by the same source priority as the dashboard
+    hero card (Garmin Firstbeat > Pace+HR > Cooper > UTH), so the
+    chat narrative no longer quotes `28.7 ml/kg/min` while the
+    Fitness page reads `32.5`.
+  - **Correlation insight snake_case leak**: the engine now maps
+    raw field-name keys (`sleep_duration`, `next_day_hrv`,
+    `resting_hr`, …) through a label table before they're
+    interpolated into the insight sentence, so Trends →
+    Correlation Insights cards read \"sleep duration and readiness
+    are strongly positively correlated…\" instead of
+    \"sleep_duration and readiness …\".
+
 ## [0.16.9] — 2026-05-14
 
 ### Fixed
