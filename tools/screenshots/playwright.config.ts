@@ -52,7 +52,22 @@ export default defineConfig({
     {
       name: "mobile",
       use: {
-        ...devices["iPhone 14 Pro"],
+        // iPhone 14 Pro viewport on Chromium instead of WebKit. The
+        // `devices['iPhone 14 Pro']` preset defaults to WebKit, which
+        // pulls in `libjpeg-turbo` + `gstreamer1.0-libav` system deps
+        // that Fedora and other non-Ubuntu hosts don't ship by default
+        // (Playwright is officially supported only on Ubuntu). Chromium
+        // produces visually equivalent mobile screenshots and is the
+        // browser we already validate desktop in.
+        ...devices["Pixel 7"],
+        viewport: { width: 393, height: 852 },
+        deviceScaleFactor: 3,
+        isMobile: true,
+        hasTouch: true,
+        userAgent:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) " +
+          "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 " +
+          "Mobile/15E148 Safari/604.1",
       },
     },
   ],
