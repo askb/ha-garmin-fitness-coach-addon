@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.13] — 2026-05-15
+
+### Added
+- **WHOOP-style Daily Outlook card** (app v0.2.7) — the home page now
+  features a Target Strain band directly under your Readiness ring.
+  Given today's readiness, PulseCoach recommends a 0-21 day-strain
+  band (e.g. `14–18` when you're Primed, `0–6` when recovery is
+  poor), with a zone-tinted scale viz, midpoint marker, label
+  (All-out / Vigorous / Moderate / Light / Recovery) and a
+  plain-language rationale. Personalises ±2 toward your median
+  chronic strain when ≥7 sessions are available. New engine helper
+  `computeTargetStrain` with sport-science citations
+  (Foster 2001, Halson 2014, Soligard 2016, Hulin 2016) and 7 new
+  unit tests.
+
+### Fixed
+- **Sleep Debt Last 7 Days chart** — was rendering all dots at zero
+  despite a visible cumulative debt badge. The chart now computes
+  per-day debt on the fly from `sleepNeed − actualSleep` using the
+  coach's recommended nightly need as the baseline, instead of
+  reading a `DailyMetric.sleepDebtMinutes` column that was never
+  written by the ETL.
+- **Coach AI sport codes** — recent activity sent to the LLM is now
+  prettified (`Tennis_v2` → `Tennis`, `trail_running` →
+  `Trail Running`) so the AI no longer parrots raw Garmin sport
+  identifiers back at you.
+- **Trends Multi-Metric Trend chart** — Stress can now be toggled
+  alongside Readiness / Sleep / HRV. The backend already exposed it;
+  only the chart was missing the overlay.
+
 ## [0.16.12] — 2026-05-15
 
 ### Fixed
