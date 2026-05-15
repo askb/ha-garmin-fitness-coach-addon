@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.14] — 2026-05-15
+
+### Fixed
+- **Settings > "Last sync" was showing the wrong timestamp** —
+  previously sourced from the Garmin token directory's mtime, which
+  only changes on (re)login and never reflects actual data sync. The
+  endpoint now reads a dedicated `.last_sync` file written by
+  `garmin-sync.py` at the end of every successful sync run; the
+  legacy mtime path is retained as a fallback for fresh installs
+  where the first sync hasn't completed yet.
+
 ## [0.16.13] — 2026-05-15
 
 ### Added
