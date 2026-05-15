@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.15] — 2026-05-15
+
+### Fixed
+- **Training & Fitness pages were returning 500s for ACWR / Training
+  Status cards** — `analytics.getTrainingLoads` and
+  `analytics.getTrainingStatus` crashed in production with
+  `RangeError: Invalid time value` from superjson's Date serializer.
+  Both endpoints now emit primitives only (ISO strings, numbers,
+  strings) and filter Activity rows with malformed `startedAt`
+  defensively at the router boundary. Picks up app `v0.2.8`.
+
 ## [0.16.14] — 2026-05-15
 
 ### Fixed
