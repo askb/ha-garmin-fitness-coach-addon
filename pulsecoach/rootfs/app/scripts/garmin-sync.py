@@ -52,6 +52,17 @@ def _user_today():
     return datetime.now(USER_TZ).date()
 
 SYNC_STATUS_FILE = os.path.join(TOKEN_DIR, ".sync_status")
+LAST_SYNC_FILE = os.path.join(TOKEN_DIR, ".last_sync")
+
+
+def _write_last_sync() -> None:
+    """Record successful sync completion time for /auth/status."""
+    try:
+        os.makedirs(TOKEN_DIR, exist_ok=True)
+        with open(LAST_SYNC_FILE, "w") as f:
+            f.write(datetime.now(timezone.utc).isoformat())
+    except Exception:
+        pass
 
 
 def _write_sync_status(phase, detail="", progress=0):
@@ -1041,6 +1052,7 @@ def main():
             f.write(datetime.now(timezone.utc).isoformat())
 
     _clear_sync_status()
+    _write_last_sync()
     print("Garmin sync complete")
 
 

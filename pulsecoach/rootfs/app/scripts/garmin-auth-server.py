@@ -183,11 +183,21 @@ def status() -> Response:
 
     try:
         email = os.environ.get("GARMIN_EMAIL", "")
-        # Check for last sync time from token dir modification
-        stat = os.stat(TOKEN_DIR)
-        last_modified = datetime.fromtimestamp(
-            stat.st_mtime, tz=timezone.utc
-        ).isoformat()
+        # Prefer last successful data sync timestamp (written by garmin-sync.py)
+        # falling back to token directory mtime when that file is missing
+        # (fresh install before first sync completes).
+        last_sync_file = os.path.join(TOKEN_DIR, ".last_sync")
+        last_modified = None
+        try:
+            with open(last_sync_file, "r") as f:
+                last_modified = f.read().strip()
+        except OSError:
+            last_modified = None
+        if not last_modified:
+            stat = os.stat(TOKEN_DIR)
+            last_modified = datetime.fromtimestamp(
+                stat.st_mtime, tz=timezone.utc
+            ).isoformat()
         return jsonify(connected=True, email=email, lastSync=last_modified)
     except Exception:
         return jsonify(connected=False, email="", lastSync="")
