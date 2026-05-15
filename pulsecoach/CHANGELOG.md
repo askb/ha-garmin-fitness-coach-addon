@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.16] — 2026-05-15
+
+### Fixed
+- **Training & Fitness pages still crashing with `RangeError: Invalid
+  time value` after v0.16.15** — root cause was deeper than the
+  Date-serialization defense added in `0.2.8`. The Alpine `nodejs=~22`
+  package in the HA base image ships a **minimal-ICU** build without
+  the en-CA CLDR locale data, so
+  `Intl.DateTimeFormat('en-CA', { year, month, day }).format(date)`
+  silently returns en-US `MM/DD/YYYY` instead of `YYYY-MM-DD`. That
+  malformed string broke `shiftIsoDay`, which is called for every
+  `aggregateDailyLoads` invocation (Training Loads + Training Status).
+  `dayInTimezone` now uses `formatToParts()` (locale-independent
+  because each field is named) and assembles `YYYY-MM-DD` by hand.
+  Picks up app `v0.2.9`.
+
 ## [0.16.15] — 2026-05-15
 
 ### Fixed
