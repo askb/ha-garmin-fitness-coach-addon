@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.18] — 2026-05-16
+
+Hot-fix for the Garmin Native (Firstbeat) card showing only em-dashes
+on every field except HRV, even though the watch had clearly synced.
+
+### Fixed
+- **Training readiness and training status no longer sync** because the
+  upstream `garminconnect` Python library changed its response shape
+  from `dict` to `list[dict]` (single-element list wrapping the same
+  payload). Our sync code called `.get("score")` directly on the
+  response and raised `AttributeError: 'list' object has no attribute
+  'get'`, which was caught by the broad `except Exception` and logged
+  as "Training readiness unavailable for &lt;date&gt;", leaving
+  `garmin_training_readiness`, `garmin_training_status`,
+  `garmin_recovery_hours`, and `garmin_training_load` columns NULL on
+  every `daily_metric` row.
+
+  Added a `_first_dict()` normaliser in `garmin-sync.py` that accepts
+  either a dict (legacy) or a non-empty `list[dict]` (current) and
+  returns the first usable dict, or `None` otherwise. Wrapped both
+  `client.get_training_readiness(...)` and
+  `client.get_training_status(...)` call sites.
+
+  After this release the Firstbeat card will populate on the next
+  scheduled sync (no manual backfill required — the orchestrator
+  re-reads the last 7 days every cycle).
+
+### Tests
+- 8 new unit tests in `tests/test_garmin_sync.py::TestFirstDict`
+  pinning the dict-passthrough / list-unwrap / empty / scalar /
+  None-fallback behaviour.
+
 ## [0.16.17] — 2026-05-16
 
 Picks up app `v0.2.10` with three correlated fixes for the next-morning

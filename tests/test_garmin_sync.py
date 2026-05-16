@@ -154,6 +154,50 @@ class TestSafeSleepMinutes:
 
 
 # ---------------------------------------------------------------------------
+# _first_dict — Garmin API list/dict response normaliser
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestFirstDict:
+    """Regression tests for _first_dict().
+
+    Pins behaviour for the v0.16.18 fix where `garminconnect` started
+    returning `[{...}]` instead of `{...}` for training-readiness and
+    training-status endpoints, which caused all those columns to stay
+    NULL because `data.get("score")` raised AttributeError on a list.
+    """
+
+    def test_dict_passes_through(self, garmin_sync):
+        result = garmin_sync._first_dict({"score": 75})
+        assert result == {"score": 75}
+
+    def test_list_of_one_dict_unwrapped(self, garmin_sync):
+        """Latest garminconnect shape: `[{...}]`."""
+        result = garmin_sync._first_dict([{"score": 75}])
+        assert result == {"score": 75}
+
+    def test_list_with_leading_empty_dict_skipped(self, garmin_sync):
+        result = garmin_sync._first_dict([{}, {"score": 75}])
+        assert result == {"score": 75}
+
+    def test_none_returns_none(self, garmin_sync):
+        assert garmin_sync._first_dict(None) is None
+
+    def test_empty_list_returns_none(self, garmin_sync):
+        assert garmin_sync._first_dict([]) is None
+
+    def test_list_of_non_dicts_returns_none(self, garmin_sync):
+        assert garmin_sync._first_dict([1, 2, "x"]) is None
+
+    def test_scalar_returns_none(self, garmin_sync):
+        assert garmin_sync._first_dict(42) is None
+
+    def test_list_of_empty_dicts_returns_none(self, garmin_sync):
+        assert garmin_sync._first_dict([{}, {}]) is None
+
+
+# ---------------------------------------------------------------------------
 # sync_daily_stats
 # ---------------------------------------------------------------------------
 
