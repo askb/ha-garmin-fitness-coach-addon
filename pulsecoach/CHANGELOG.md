@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.21] — 2026-05-17
+
+CI follow-up + picks up app v0.2.12.
+
+### Fixed
+- **SBOM release-asset upload** (#131). The `SBOM & Security Scan` job
+  in `release.yaml` was failing on tag pushes with "Resource not
+  accessible by integration" because the job had `contents: read` but
+  `anchore/sbom-action@v0` auto-attaches the generated SBOM to the
+  GitHub Release. Grant `contents: write` so the SBOM lands on the
+  release page.
+
+### Picked up from app v0.2.12 (askb/ha-garmin-fitness-coach-app#123)
+- **Home action card no longer contradicts the HRV tile.** The
+  suggestion would unconditionally assert "your HRV of Xms is below
+  baseline" whenever readiness was low, even when the HRV component
+  was actually in the optimal range (real cause was sleep debt /
+  training load). Gated on the engine's HRV component score (<40
+  threshold, same as `generateExplanation()`).
+- **Training Status tile no longer shows "— · as of <date>".** When
+  `garmin_training_status` is NULL the sublabel now reads
+  `unavailable` without an unrelated readiness-level timestamp.
+
 ## [0.16.20] — 2026-05-16
 
 Diagnostic logging + activity-sync resilience.
