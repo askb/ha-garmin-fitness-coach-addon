@@ -271,9 +271,41 @@ class TestComputeReadinessScore:
         assert r["score"] == 85
         assert r["zone"] == "prime"
         assert r["source"] == "garmin_native"
-        # Native path leaves component columns null
-        assert r["hrv_component"] is None
-        assert r["sleep_quantity_component"] is None
+        # Native path preserves component columns computed from raw signals.
+        assert r["sleep_quantity_component"] == 80
+        assert r["training_load_component"] == 70
+        assert r["stress_component"] == 75
+
+    def test_garmin_native_preserves_components_with_history(self, metrics_compute):
+        """Native readiness keeps computed component values when raw signals exist."""
+        rows = []
+        for i in range(7):
+            rows.append({
+                "date": f"2025-01-{i + 1:02d}",
+                "hrv": 60,
+                "sleep_score": 80,
+                "stress_score": 25,
+                "resting_hr": 55,
+                "body_battery_end": 70,
+                "garmin_training_readiness": 21 if i == 6 else None,
+                "garmin_training_readiness_level": "LOW" if i == 6 else None,
+                "spo2": None,
+                "respiration_rate": None,
+                "skin_temp": None,
+            })
+
+        cur = _make_mock_cur(rows)
+        result = metrics_compute.compute_readiness_score(cur, "user-1")
+        r = result["2025-01-07"]
+
+        assert r["score"] == 21
+        assert r["zone"] == "low"
+        assert r["source"] == "garmin_native"
+        assert r["hrv_component"] is not None
+        assert r["sleep_quantity_component"] is not None
+        assert r["training_load_component"] is not None
+        assert r["stress_component"] is not None
+        assert r["resting_hr_component"] is not None
 
     def test_buchheit_composite_when_native_absent(self, metrics_compute):
         """Composite path: sleep + body battery + stress drive the score."""
