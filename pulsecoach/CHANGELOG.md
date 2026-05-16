@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.17] — 2026-05-16
+
+Picks up app `v0.2.10` with three correlated fixes for the next-morning
+Garmin publish lag, where today's `daily_metric` row exists (activity
+counts + steps land hours after a workout) but HRV / readiness / RHR
+remain `null` until the watch syncs the health snapshot the following
+morning.
+
+### Fixed
+- **Activity times rendered in UTC instead of the profile timezone**
+  inside the HAOS addon container. `Date.toLocaleString()` without an
+  explicit `timeZone` resolves to the container's TZ (UTC). The
+  activities list, activity detail, and dashboard "Good morning" date
+  now thread the profile's IANA timezone through every
+  `Intl.DateTimeFormat` call via a new `useUserTimezone()` hook +
+  `formatDateInTz` / `formatTimeInTz` helpers.
+- **Garmin Native (Firstbeat) card showed em-dashes for every field**
+  on the morning of a long workout — today's row was populated from
+  the activity feed (steps, intensity minutes) but the Firstbeat
+  fields (VO2max, training status, etc.) hadn't been written yet.
+  `garmin.getTrainingSummary` now computes `latestNonNull` per field
+  across the most recent rows, mirroring how the HRV trend already
+  worked.
+- **Readiness card contradicted itself** — engine explanation said
+  *"HRV 0.9 SD above baseline"* while the action below it said
+  *"HRV data is unavailable"*. Root cause: the engine's
+  `generateExplanation` already walked back to find the most recent
+  non-null HRV, but the router's `computeDataQuality` strictly checked
+  today's row. Both `computeDataQuality` and `buildActionSuggestion`
+  now accept an 8-day metric window — "good" if value is ≤ 3 days old,
+  "stale" 4–7 days, "missing" only beyond 7 days. Six regression tests
+  pin the new behaviour.
+
 ## [0.16.16] — 2026-05-15
 
 ### Fixed
