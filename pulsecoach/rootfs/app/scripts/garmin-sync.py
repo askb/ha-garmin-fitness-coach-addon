@@ -407,6 +407,91 @@ def sync_daily_stats(client, db, date_str):
         cur.close()
 
 
+def _upsert_activity(cur, act: dict, act_id: str) -> None:
+    """Insert/update one Garmin activity row.
+
+    Extracted from the inline loop in :func:`sync_activities` so a failure on a
+    single row can be caught without aborting the entire batch.
+    """
+    hr_zones = None
+    if act.get("hrTimeInZone_1") is not None:
+        hr_zones = json.dumps({
+            "zone1": round((act.get("hrTimeInZone_1", 0) or 0) / 60, 1),
+            "zone2": round((act.get("hrTimeInZone_2", 0) or 0) / 60, 1),
+            "zone3": round((act.get("hrTimeInZone_3", 0) or 0) / 60, 1),
+            "zone4": round((act.get("hrTimeInZone_4", 0) or 0) / 60, 1),
+            "zone5": round((act.get("hrTimeInZone_5", 0) or 0) / 60, 1),
+        })
+
+    avg_hr = act.get("averageHR")
+    duration_min = (act.get("duration", 0) or 0) / 60
+    trimp = None
+    if avg_hr and duration_min > 0:
+        hr_ratio = avg_hr / 200.0
+        trimp = round(duration_min * hr_ratio * 0.64 * (1.92 ** hr_ratio), 1)
+
+    avg_cadence = (
+        act.get("averageRunningCadenceInStepsPerMinute")
+        or act.get("averageBikingCadenceInRevPerMinute")
+    )
+    max_cadence = (
+        act.get("maxRunningCadenceInStepsPerMinute")
+        or act.get("maxBikingCadenceInRevPerMinute")
+    )
+
+    activity_type = act.get("activityType") or {}
+    if not isinstance(activity_type, dict):
+        activity_type = {}
+
+    cur.execute("""
+        INSERT INTO activity (
+            user_id, garmin_activity_id, sport_type, sub_type,
+            started_at, duration_minutes, distance_meters,
+            avg_hr, max_hr, calories, avg_pace_sec_per_km,
+            aerobic_te, anaerobic_te, hr_zone_minutes,
+            trimp_score, strain_score,
+            avg_power, normalized_power, max_power,
+            avg_cadence, max_cadence,
+            synced_at, raw_garmin_data
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (garmin_activity_id) DO UPDATE SET
+            hr_zone_minutes = COALESCE(EXCLUDED.hr_zone_minutes, activity.hr_zone_minutes),
+            trimp_score = COALESCE(EXCLUDED.trimp_score, activity.trimp_score),
+            strain_score = COALESCE(EXCLUDED.strain_score, activity.strain_score),
+            avg_power = COALESCE(EXCLUDED.avg_power, activity.avg_power),
+            normalized_power = COALESCE(EXCLUDED.normalized_power, activity.normalized_power),
+            max_power = COALESCE(EXCLUDED.max_power, activity.max_power),
+            avg_cadence = COALESCE(EXCLUDED.avg_cadence, activity.avg_cadence),
+            max_cadence = COALESCE(EXCLUDED.max_cadence, activity.max_cadence),
+            synced_at = EXCLUDED.synced_at,
+            raw_garmin_data = EXCLUDED.raw_garmin_data
+    """, (
+        USER_ID,
+        act_id,
+        activity_type.get("typeKey", "other"),
+        activity_type.get("typeId", ""),
+        act.get("startTimeLocal"),
+        duration_min,
+        act.get("distance"),
+        avg_hr,
+        act.get("maxHR"),
+        act.get("calories"),
+        act.get("averageSpeed"),
+        act.get("aerobicTrainingEffect"),
+        act.get("anaerobicTrainingEffect"),
+        hr_zones,
+        trimp,
+        act.get("activityTrainingLoad"),
+        act.get("averagePower"),
+        act.get("normPower"),
+        act.get("maxPower"),
+        avg_cadence,
+        max_cadence,
+        datetime.now(timezone.utc).isoformat(),
+        json.dumps(act),
+    ))
+
+
 def sync_activities(client, db, days=7):
     """Sync activities, fetching in batches of 100."""
     cur = db.cursor()
@@ -426,95 +511,71 @@ def sync_activities(client, db, days=7):
         """)
 
         total = 0
+        skipped = 0
         batch_size = 100
         start = 0
         while True:
-            activities = client.get_activities(start, batch_size)
+            try:
+                activities = client.get_activities(start, batch_size)
+            except Exception as fetch_exc:
+                print(
+                    f"  get_activities(start={start}, "
+                    f"limit={batch_size}) failed: "
+                    f"{type(fetch_exc).__name__}: {fetch_exc}",
+                    file=sys.stderr,
+                )
+                raise
+
+            # Defensive: garminconnect occasionally wraps responses as
+            # [[{...}, {...}]] (single-element list of a list). Unwrap so the
+            # iteration below doesn't blow up silently on AttributeError.
+            if isinstance(activities, list) and len(activities) == 1 and \
+                    isinstance(activities[0], list):
+                activities = activities[0]
+            if not isinstance(activities, list):
+                print(
+                    f"  Unexpected activities shape from Garmin API: "
+                    f"{type(activities).__name__} — skipping batch",
+                    file=sys.stderr,
+                )
+                break
             if not activities:
                 break
 
             for act in activities:
+                if not isinstance(act, dict):
+                    skipped += 1
+                    print(
+                        f"  Skipping non-dict activity entry: "
+                        f"{type(act).__name__}",
+                        file=sys.stderr,
+                    )
+                    continue
                 act_id = str(act.get("activityId", ""))
-                # Extract HR zone minutes (seconds → minutes)
-                hr_zones = None
-                z1 = act.get("hrTimeInZone_1")
-                if z1 is not None:
-                    hr_zones = json.dumps({
-                        "zone1": round((act.get("hrTimeInZone_1", 0) or 0) / 60, 1),
-                        "zone2": round((act.get("hrTimeInZone_2", 0) or 0) / 60, 1),
-                        "zone3": round((act.get("hrTimeInZone_3", 0) or 0) / 60, 1),
-                        "zone4": round((act.get("hrTimeInZone_4", 0) or 0) / 60, 1),
-                        "zone5": round((act.get("hrTimeInZone_5", 0) or 0) / 60, 1),
-                    })
-
-                # Compute TRIMP from avg HR and duration
-                avg_hr = act.get("averageHR")
-                duration_min = (act.get("duration", 0) or 0) / 60
-                trimp = None
-                if avg_hr and duration_min > 0:
-                    # Simplified TRIMP: duration * intensity factor
-                    hr_ratio = avg_hr / 200.0  # Normalized intensity
-                    trimp = round(duration_min * hr_ratio * 0.64 * (1.92 ** hr_ratio), 1)
-
-                avg_cadence = (
-                    act.get("averageRunningCadenceInStepsPerMinute")
-                    or act.get("averageBikingCadenceInRevPerMinute")
-                )
-                max_cadence = (
-                    act.get("maxRunningCadenceInStepsPerMinute")
-                    or act.get("maxBikingCadenceInRevPerMinute")
-                )
-
-                cur.execute("""
-                    INSERT INTO activity (
-                        user_id, garmin_activity_id, sport_type, sub_type,
-                        started_at, duration_minutes, distance_meters,
-                        avg_hr, max_hr, calories, avg_pace_sec_per_km,
-                        aerobic_te, anaerobic_te, hr_zone_minutes,
-                        trimp_score, strain_score,
-                        avg_power, normalized_power, max_power,
-                        avg_cadence, max_cadence,
-                        synced_at, raw_garmin_data
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (garmin_activity_id) DO UPDATE SET
-                        hr_zone_minutes = COALESCE(EXCLUDED.hr_zone_minutes, activity.hr_zone_minutes),
-                        trimp_score = COALESCE(EXCLUDED.trimp_score, activity.trimp_score),
-                        strain_score = COALESCE(EXCLUDED.strain_score, activity.strain_score),
-                        avg_power = COALESCE(EXCLUDED.avg_power, activity.avg_power),
-                        normalized_power = COALESCE(EXCLUDED.normalized_power, activity.normalized_power),
-                        max_power = COALESCE(EXCLUDED.max_power, activity.max_power),
-                        avg_cadence = COALESCE(EXCLUDED.avg_cadence, activity.avg_cadence),
-                        max_cadence = COALESCE(EXCLUDED.max_cadence, activity.max_cadence),
-                        synced_at = EXCLUDED.synced_at,
-                        raw_garmin_data = EXCLUDED.raw_garmin_data
-                """, (
-                    USER_ID,
-                    act_id,
-                    act.get("activityType", {}).get("typeKey", "other"),
-                    act.get("activityType", {}).get("typeId", ""),
-                    act.get("startTimeLocal"),
-                    duration_min,
-                    act.get("distance"),
-                    avg_hr,
-                    act.get("maxHR"),
-                    act.get("calories"),
-                    act.get("averageSpeed"),
-                    act.get("aerobicTrainingEffect"),
-                    act.get("anaerobicTrainingEffect"),
-                    hr_zones,
-                    trimp,
-                    act.get("activityTrainingLoad"),
-                    act.get("averagePower"),
-                    act.get("normPower"),
-                    act.get("maxPower"),
-                    avg_cadence,
-                    max_cadence,
-                    datetime.now(timezone.utc).isoformat(),
-                    json.dumps(act),
-                ))
+                if not act_id:
+                    skipped += 1
+                    print(
+                        "  Skipping activity with no activityId",
+                        file=sys.stderr,
+                    )
+                    continue
+                try:
+                    _upsert_activity(cur, act, act_id)
+                except Exception as row_exc:
+                    skipped += 1
+                    print(
+                        f"  Failed to upsert activity {act_id}: "
+                        f"{type(row_exc).__name__}: {row_exc}",
+                        file=sys.stderr,
+                    )
+                    db.rollback()
+                    continue
             db.commit()
             total += len(activities)
-            print(f"  Synced batch: {len(activities)} activities (total: {total})")
+            print(
+                f"  Synced batch: {len(activities)} activities "
+                f"(total: {total}, skipped: {skipped})"
+            )
 
             if len(activities) < batch_size:
                 break

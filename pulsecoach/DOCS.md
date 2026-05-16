@@ -83,7 +83,7 @@ fetches up to 6 years of historical data.
 | **403 Forbidden errors** | Garmin may rate-limit or block requests. Wait 15-30 minutes and try again. Avoid setting `sync_interval_minutes` below 30. |
 | **Token expired** | Session tokens last approximately **one year**. When the addon shows an authentication alert, go to **Settings → Connect Garmin** and re-authenticate. |
 | **"Invalid credentials"** | Double-check email/password. If you recently changed your Garmin password, update the addon configuration and reconnect. |
-| **Sync stuck or no data** | Check the addon **Log** tab for errors. Restart the addon if the sync daemon is unresponsive. |
+| **Sync stuck or no data** | Check the addon **Log** tab for errors. If a **manual sync** silently does nothing, the underlying error is now captured in `/data/garmin-sync.log` (rotated to `.log.1` on each run). Tail it with `cat /data/garmin-sync.log` from the addon's `Web terminal`/SSH, or call `GET /auth/sync-log` via the ingress endpoint. Restart the addon if the sync daemon is unresponsive. |
 
 ## Pages
 

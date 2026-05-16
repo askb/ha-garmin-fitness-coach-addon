@@ -217,6 +217,26 @@ def sync_status() -> Response:
     return jsonify(syncing=False, phase="idle", detail="", progress=100)
 
 
+@app.route("/auth/sync-log", methods=["GET"])
+def sync_log() -> Response:
+    """Return the tail of the most recent manual-sync log for diagnosis."""
+    log_path = "/data/garmin-sync.log"
+    prev_log_path = "/data/garmin-sync.log.1"
+    try:
+        lines: list[str] = []
+        if os.path.exists(prev_log_path):
+            with open(prev_log_path) as f:
+                lines.extend(f.readlines()[-200:])
+        if os.path.exists(log_path):
+            with open(log_path) as f:
+                lines.extend(f.readlines()[-400:])
+        if not lines:
+            return jsonify(available=False, log="(no sync log yet)")
+        return jsonify(available=True, log="".join(lines[-500:]))
+    except OSError as exc:
+        return jsonify(available=False, log=f"(error reading log: {exc})")
+
+
 @app.route("/auth/sync", methods=["POST"])
 def trigger_sync() -> tuple[Response, int] | Response:
     """Trigger an immediate Garmin sync in the background."""
@@ -237,21 +257,43 @@ def trigger_sync() -> tuple[Response, int] | Response:
     if not os.path.exists(os.path.join(TOKEN_DIR, "oauth1_token.json")):
         return jsonify(success=False, message="Not connected to Garmin"), 400
 
-    # Launch sync in background
+    # Launch sync in background. Capture stdout/stderr to a rotated log so
+    # failures (e.g. garminconnect list-wrap regressions, API errors) are
+    # surfaced for diagnosis instead of being silently discarded.
     try:
         env = os.environ.copy()
         env["DATABASE_URL"] = os.environ.get(
             "DATABASE_URL",
             "postgresql://postgres@127.0.0.1:5432/pulsecoach"
         )
+        log_path = "/data/garmin-sync.log"
+        prev_log_path = "/data/garmin-sync.log.1"
+        try:
+            if os.path.exists(log_path):
+                # Keep one rotation so the previous run's tail survives.
+                if os.path.exists(prev_log_path):
+                    os.remove(prev_log_path)
+                os.rename(log_path, prev_log_path)
+        except OSError as exc:
+            log.warning("Could not rotate sync log: %s", exc)
+        log_fh = open(log_path, "w", buffering=1)
+        log_fh.write(
+            f"=== Manual sync triggered at "
+            f"{datetime.now(timezone.utc).isoformat()} ===\n"
+        )
+        log_fh.flush()
         subprocess.Popen(
             ["python3", "/app/scripts/garmin-sync.py"],
             env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log_fh,
+            stderr=subprocess.STDOUT,
         )
-        log.info("Manual sync triggered")
-        return jsonify(success=True, message="Sync started")
+        log.info("Manual sync triggered (log: %s)", log_path)
+        return jsonify(
+            success=True,
+            message="Sync started",
+            log_path=log_path,
+        )
     except Exception as exc:
         log.error("Failed to trigger sync: %s", exc)
         return jsonify(success=False, message=f"Failed to start sync: {exc}"), 500

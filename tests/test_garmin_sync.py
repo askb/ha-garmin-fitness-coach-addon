@@ -370,6 +370,72 @@ class TestSyncActivities:
         ]
         assert len(insert_calls) == 1
 
+    def test_unwraps_list_of_list_response(
+        self, garmin_sync, mock_db, mock_client
+    ):
+        """Garmin sometimes returns activities as `[[{...}]]`; unwrap it."""
+        conn, cursor = mock_db
+        original = mock_client.get_activities.return_value
+        mock_client.get_activities.side_effect = [
+            [original],  # list-of-list wrapper
+            [],
+        ]
+        garmin_sync.sync_activities(mock_client, conn, days=7)
+        insert_calls = [
+            c for c in cursor.execute.call_args_list
+            if "INSERT INTO activity" in c[0][0]
+        ]
+        assert len(insert_calls) == len(original)
+
+    def test_skips_non_dict_activity_entries(
+        self, garmin_sync, mock_db, mock_client, capsys
+    ):
+        """Garbled entries in the activities array are skipped, not fatal."""
+        conn, cursor = mock_db
+        good = mock_client.get_activities.return_value[0]
+        mock_client.get_activities.side_effect = [
+            ["not-a-dict", None, good],
+            [],
+        ]
+        garmin_sync.sync_activities(mock_client, conn, days=7)
+        insert_calls = [
+            c for c in cursor.execute.call_args_list
+            if "INSERT INTO activity" in c[0][0]
+        ]
+        assert len(insert_calls) == 1
+        err = capsys.readouterr().err
+        assert "Skipping non-dict activity entry" in err
+
+    def test_per_row_failure_does_not_abort_batch(
+        self, garmin_sync, mock_db, mock_client, capsys
+    ):
+        """A single row exception is logged and rolled back; siblings still sync."""
+        conn, cursor = mock_db
+        good = dict(mock_client.get_activities.return_value[0])
+        bad = dict(good)
+        bad["activityId"] = 99002
+
+        original_execute = cursor.execute
+
+        def selective_execute(sql, params=None):
+            if (
+                params is not None
+                and len(params) > 1
+                and params[1] == "99002"
+                and "INSERT INTO activity" in sql
+            ):
+                raise RuntimeError("simulated row failure")
+            return original_execute(sql, params)
+
+        cursor.execute = MagicMock(side_effect=selective_execute)
+        mock_client.get_activities.side_effect = [[bad, good], []]
+        garmin_sync.sync_activities(mock_client, conn, days=7)
+        err = capsys.readouterr().err
+        assert "Failed to upsert activity 99002" in err
+        # rollback called for the bad row; commit still called for the batch
+        assert conn.rollback.called
+        assert conn.commit.called
+
 
 # ---------------------------------------------------------------------------
 # sync_vo2max
