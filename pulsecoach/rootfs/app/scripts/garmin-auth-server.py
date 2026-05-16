@@ -277,17 +277,22 @@ def trigger_sync() -> tuple[Response, int] | Response:
         except OSError as exc:
             log.warning("Could not rotate sync log: %s", exc)
         log_fh = open(log_path, "w", buffering=1)
-        log_fh.write(
-            f"=== Manual sync triggered at "
-            f"{datetime.now(timezone.utc).isoformat()} ===\n"
-        )
-        log_fh.flush()
-        subprocess.Popen(
-            ["python3", "/app/scripts/garmin-sync.py"],
-            env=env,
-            stdout=log_fh,
-            stderr=subprocess.STDOUT,
-        )
+        try:
+            log_fh.write(
+                f"=== Manual sync triggered at "
+                f"{datetime.now(timezone.utc).isoformat()} ===\n"
+            )
+            log_fh.flush()
+            subprocess.Popen(
+                ["python3", "/app/scripts/garmin-sync.py"],
+                env=env,
+                stdout=log_fh,
+                stderr=subprocess.STDOUT,
+            )
+        finally:
+            # Child inherits the fd; the parent can safely close its handle
+            # to avoid leaking an fd per /sync invocation.
+            log_fh.close()
         log.info("Manual sync triggered (log: %s)", log_path)
         return jsonify(
             success=True,

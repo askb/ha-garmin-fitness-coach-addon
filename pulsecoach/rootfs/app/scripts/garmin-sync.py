@@ -542,8 +542,10 @@ def sync_activities(client, db, days=7):
             if not activities:
                 break
 
+            batch_skipped = 0
             for act in activities:
                 if not isinstance(act, dict):
+                    batch_skipped += 1
                     skipped += 1
                     print(
                         f"  Skipping non-dict activity entry: "
@@ -551,8 +553,12 @@ def sync_activities(client, db, days=7):
                         file=sys.stderr,
                     )
                     continue
-                act_id = str(act.get("activityId", ""))
+                act_id_raw = act.get("activityId")
+                act_id = (
+                    str(act_id_raw) if act_id_raw not in (None, "") else ""
+                )
                 if not act_id:
+                    batch_skipped += 1
                     skipped += 1
                     print(
                         "  Skipping activity with no activityId",
@@ -560,18 +566,29 @@ def sync_activities(client, db, days=7):
                     )
                     continue
                 try:
+                    cur.execute("SAVEPOINT activity_upsert")
                     _upsert_activity(cur, act, act_id)
+                    cur.execute("RELEASE SAVEPOINT activity_upsert")
                 except Exception as row_exc:
+                    batch_skipped += 1
                     skipped += 1
                     print(
                         f"  Failed to upsert activity {act_id}: "
                         f"{type(row_exc).__name__}: {row_exc}",
                         file=sys.stderr,
                     )
-                    db.rollback()
+                    # Roll back to the per-row savepoint so successful upserts
+                    # earlier in this batch are preserved.
+                    try:
+                        cur.execute("ROLLBACK TO SAVEPOINT activity_upsert")
+                    except Exception:
+                        # If the savepoint is gone (e.g., connection-level
+                        # error), fall back to a full rollback for safety.
+                        db.rollback()
                     continue
             db.commit()
-            total += len(activities)
+            inserted_this_batch = len(activities) - batch_skipped
+            total += inserted_this_batch
             print(
                 f"  Synced batch: {len(activities)} activities "
                 f"(total: {total}, skipped: {skipped})"
