@@ -451,6 +451,61 @@ class TestSyncTrainingReadiness:
         ]
         assert len(update_calls) == 1
 
+    # --- v0.16.19 regressions ----------------------------------------------
+
+    def test_writes_recovery_hours_from_readiness_payload(self, garmin_sync, mock_pg_db):
+        """recoveryTime (min) inside the readiness payload should land in
+        garmin_recovery_hours, since get_training_status() is empty for
+        many users until Garmin computes Firstbeat status."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({
+            "score": 29, "level": "LOW",
+            "recoveryTime": 240,  # 4 hours
+        })
+        garmin_sync.sync_training_readiness(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_readiness" in c.args[0]
+        ]
+        assert update_calls
+        params = update_calls[0].args[1]
+        # New parameter order: score, level, factors, recovery_hours
+        assert params[3] == 4.0
+        # The UPDATE must use COALESCE so a later partial run can't blank
+        # a value populated by sync_training_status earlier.
+        assert "COALESCE" in update_calls[0].args[0]
+
+    def test_recovery_hours_zero_preserved(self, garmin_sync, mock_pg_db):
+        """recoveryTime == 0 (fully recovered) converts to 0.0 hours, not None."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({"score": 90, "level": "PRIME", "recoveryTime": 0})
+        garmin_sync.sync_training_readiness(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_readiness" in c.args[0]
+        ]
+        assert update_calls
+        assert update_calls[0].args[1][3] == 0.0
+
+    def test_recovery_hours_missing_passes_none(self, garmin_sync, mock_pg_db):
+        """Without recoveryTime, parameter is None and COALESCE preserves
+        any existing column value."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({"score": 60, "level": "GOOD"})  # no recoveryTime
+        garmin_sync.sync_training_readiness(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_readiness" in c.args[0]
+        ]
+        assert update_calls
+        assert update_calls[0].args[1][3] is None
+
 
 # ── Training status sync ─────────────────────────────────────────────────────
 
@@ -555,3 +610,75 @@ class TestSyncTrainingStatus:
             and "garmin_training_status" in c.args[0]
         ]
         assert len(update_calls) == 1
+
+    # --- v0.16.19 regressions ----------------------------------------------
+
+    def test_parses_nested_mostRecentTrainingStatus_dto(self, garmin_sync, mock_pg_db):
+        """Current Garmin shape: status under mostRecentTrainingStatus.
+        latestTrainingStatusData.<deviceId>.{trainingStatus,recoveryTime}."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({
+            "userId": 72997753,
+            "mostRecentVO2Max": None,
+            "mostRecentTrainingLoadBalance": None,
+            "mostRecentTrainingStatus": {
+                "latestTrainingStatusData": {
+                    "3610171495": {
+                        "trainingStatus": "productive",
+                        "trainingLoadFocus": "high_aerobic",
+                        "recoveryTime": 240,  # 4 hours
+                    }
+                }
+            },
+            "heatAltitudeAcclimationDTO": None,
+        })
+        garmin_sync.sync_training_status(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_status" in c.args[0]
+        ]
+        assert update_calls, "expected nested DTO to drive an UPDATE"
+        params = update_calls[0].args[1]
+        assert params[0] == "PRODUCTIVE"
+        assert params[2] == 4.0  # 240 min → 4.0 h
+
+    def test_recovery_time_zero_is_preserved(self, garmin_sync, mock_pg_db):
+        """recoveryTime == 0 (fully recovered) must NOT be discarded as missing."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({
+            "mostRecentTrainingStatus": {
+                "latestTrainingStatusData": {
+                    "dev": {"trainingStatus": "productive", "recoveryTime": 0}
+                }
+            }
+        })
+        garmin_sync.sync_training_status(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_status" in c.args[0]
+        ]
+        assert update_calls
+        assert update_calls[0].args[1][2] == 0.0  # 0 min → 0.0 h, NOT None
+
+    def test_null_dtos_skip_silently(self, garmin_sync, mock_pg_db):
+        """The common empty-payload shape (all nested DTOs null) is skipped."""
+        conn, cursor = mock_pg_db
+        client = self._make_client({
+            "userId": 72997753,
+            "mostRecentVO2Max": None,
+            "mostRecentTrainingLoadBalance": None,
+            "mostRecentTrainingStatus": None,
+            "heatAltitudeAcclimationDTO": None,
+        })
+        garmin_sync.sync_training_status(client, conn, days=1)
+
+        update_calls = [
+            c for c in cursor.execute.call_args_list
+            if "UPDATE daily_metric" in c.args[0]
+            and "garmin_training_status" in c.args[0]
+        ]
+        assert not update_calls

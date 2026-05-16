@@ -26,13 +26,16 @@ revealed two remaining issues:
 ### Fixed
 - **`sync_training_readiness` now also writes `garmin_recovery_hours`**
   by converting `recoveryTime` (minutes) from the readiness payload.
-  Uses `COALESCE` so it never clobbers a value that `sync_training_status`
-  may have written later in the same run.
+  Uses `COALESCE` so a later run that hits an emptier payload can't
+  blank out a recovery value previously stored for the same day.
 - **`sync_training_status` parses the nested DTO shape**
   (`mostRecentTrainingStatus.latestTrainingStatusData.<deviceId>`)
   for status / load focus / recovery time, with fallbacks to the
-  flat shapes used by older library versions. Updates use `COALESCE`
-  so partial responses don't blank out previously-populated columns.
+  flat shapes used by older library versions. Recovery time lookup
+  now uses an explicit `is not None` check so a fully-recovered
+  `recoveryTime == 0` isn't discarded as "missing". Updates use
+  `COALESCE` so a partial response can't blank out columns the
+  readiness sync populated earlier in the run.
 
 After this release, the Firstbeat card should show Recovery hours
 even for users without computed Firstbeat training status.

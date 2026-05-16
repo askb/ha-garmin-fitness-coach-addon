@@ -1025,10 +1025,11 @@ def sync_training_status(client, db, days=7):
                     if val is not None:
                         load_dist[key] = val
 
-                recovery_min = (
-                    inner_status.get("recoveryTime")
-                    or data.get("recoveryTimeInMinutes")
-                )
+                # Use explicit None-check (not `or`) so a fully-recovered
+                # user's `recoveryTime == 0` isn't discarded as "missing".
+                recovery_min = inner_status.get("recoveryTime")
+                if recovery_min is None:
+                    recovery_min = data.get("recoveryTimeInMinutes")
                 recovery_hrs = (
                     round(recovery_min / 60.0, 1)
                     if isinstance(recovery_min, (int, float))
@@ -1036,7 +1037,12 @@ def sync_training_status(client, db, days=7):
                     else None
                 )
 
-                if not status and not load_focus and not recovery_hrs and not load_dist:
+                if (
+                    not status
+                    and not load_focus
+                    and recovery_hrs is None
+                    and not load_dist
+                ):
                     continue
 
                 cur.execute("""
