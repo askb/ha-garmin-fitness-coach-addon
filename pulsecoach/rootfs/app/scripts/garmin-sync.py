@@ -905,6 +905,20 @@ def sync_training_readiness(client, db, days=7):
                     if val is not None:
                         factors[key] = val
 
+                # Recovery time is reported in minutes inside the readiness
+                # payload itself. Convert to hours so the Garmin Native
+                # (Firstbeat) card and downstream consumers can render it
+                # even when get_training_status() comes back empty (which is
+                # the common case until Garmin has computed Firstbeat status
+                # from enough recent activity).
+                recovery_minutes = data.get("recoveryTime")
+                recovery_hours = (
+                    round(recovery_minutes / 60.0, 1)
+                    if isinstance(recovery_minutes, (int, float))
+                    and recovery_minutes >= 0
+                    else None
+                )
+
                 cur.execute("""
                     INSERT INTO daily_metric (user_id, date)
                     VALUES (%s, %s)
@@ -915,12 +929,14 @@ def sync_training_readiness(client, db, days=7):
                     UPDATE daily_metric SET
                         garmin_training_readiness = %s,
                         garmin_training_readiness_level = %s,
-                        garmin_readiness_factors = %s
+                        garmin_readiness_factors = %s,
+                        garmin_recovery_hours = COALESCE(%s, garmin_recovery_hours)
                     WHERE user_id = %s AND date = %s
                 """, (
                     round(score),
                     level.lower() if isinstance(level, str) else str(level),
                     json.dumps(factors) if factors else None,
+                    recovery_hours,
                     USER_ID, date_str,
                 ))
                 synced += 1
@@ -951,26 +967,76 @@ def sync_training_status(client, db, days=7):
                 if not data:
                     continue
 
-                # Training status fields
-                status = data.get("trainingStatus") or data.get("status", "")
-                load_focus = data.get("trainingLoadFocus") or data.get("loadFocus")
+                # The endpoint returns a flat top-level dict whose meaningful
+                # payload lives in nested DTOs:
+                #   {
+                #     "userId": ...,
+                #     "mostRecentTrainingStatus": {...} | null,
+                #     "mostRecentTrainingLoadBalance": {...} | null,
+                #     "mostRecentVO2Max": {...} | null,
+                #     "heatAltitudeAcclimationDTO": {...} | null,
+                #   }
+                # Garmin only populates these once the watch has computed
+                # Firstbeat status (typically needs ~7 days of structured
+                # activity). When they're null we just leave the columns
+                # alone — `garmin_recovery_hours` is filled from the
+                # readiness payload instead (see sync_training_readiness).
+                status_dto = data.get("mostRecentTrainingStatus") or {}
+                load_dto = data.get("mostRecentTrainingLoadBalance") or {}
 
-                # Extract load distribution (low/high aerobic + anaerobic)
+                # mostRecentTrainingStatus is itself wrapped — the actual
+                # per-device payload sits under
+                # latestTrainingStatusData.<deviceId>.
+                inner_status = {}
+                if isinstance(status_dto, dict):
+                    latest = status_dto.get("latestTrainingStatusData") or {}
+                    if isinstance(latest, dict) and latest:
+                        # Pick the first (and usually only) device entry.
+                        for v in latest.values():
+                            if isinstance(v, dict):
+                                inner_status = v
+                                break
+
+                status = (
+                    inner_status.get("trainingStatus")
+                    or inner_status.get("trainingStatusFeedbackPhrase")
+                    # Legacy/flat shapes seen on older library versions.
+                    or data.get("trainingStatus")
+                    or data.get("status")
+                    or ""
+                )
+                load_focus = (
+                    inner_status.get("trainingLoadFocus")
+                    or (load_dto.get("trainingLoadFocus")
+                        if isinstance(load_dto, dict) else None)
+                    or data.get("trainingLoadFocus")
+                    or data.get("loadFocus")
+                )
+
+                # Load distribution lives on the load-balance DTO when present.
                 load_dist = {}
+                load_source = load_dto if isinstance(load_dto, dict) and load_dto else data
                 for key in [
                     "lowAerobicTrainingLoad", "highAerobicTrainingLoad",
                     "anaerobicTrainingLoad", "lowAerobicTrainingLoadPercentage",
                     "highAerobicTrainingLoadPercentage", "anaerobicTrainingLoadPercentage",
                 ]:
-                    val = data.get(key)
+                    val = load_source.get(key)
                     if val is not None:
                         load_dist[key] = val
 
-                recovery_hrs = data.get("recoveryTimeInMinutes")
-                if recovery_hrs is not None:
-                    recovery_hrs = round(recovery_hrs / 60, 1)
+                recovery_min = (
+                    inner_status.get("recoveryTime")
+                    or data.get("recoveryTimeInMinutes")
+                )
+                recovery_hrs = (
+                    round(recovery_min / 60.0, 1)
+                    if isinstance(recovery_min, (int, float))
+                    and recovery_min >= 0
+                    else None
+                )
 
-                if not status and not load_focus and not recovery_hrs:
+                if not status and not load_focus and not recovery_hrs and not load_dist:
                     continue
 
                 cur.execute("""
@@ -981,9 +1047,9 @@ def sync_training_status(client, db, days=7):
 
                 cur.execute("""
                     UPDATE daily_metric SET
-                        garmin_training_status = %s,
-                        garmin_load_focus = %s,
-                        garmin_recovery_hours = %s
+                        garmin_training_status = COALESCE(%s, garmin_training_status),
+                        garmin_load_focus = COALESCE(%s, garmin_load_focus),
+                        garmin_recovery_hours = COALESCE(%s, garmin_recovery_hours)
                     WHERE user_id = %s AND date = %s
                 """, (
                     str(status).upper() if status else None,

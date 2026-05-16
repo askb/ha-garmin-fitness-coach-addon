@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.19] — 2026-05-16
+
+Second pass on the Garmin Native (Firstbeat) card. After v0.16.18
+restored the `training_readiness` sync, live inspection on HAOS
+revealed two remaining issues:
+
+1. Recovery time (hours) was still NULL because `get_training_status`
+   returns `mostRecentTrainingStatus: null` for users whose watch
+   hasn't yet computed Firstbeat status (typically requires ~7 days
+   of structured activity). However the value we actually want for
+   the card — `recoveryTime` in minutes — is already inside the
+   `get_training_readiness` payload.
+2. When `get_training_status` does populate, the meaningful fields
+   live under `mostRecentTrainingStatus.latestTrainingStatusData.
+   <deviceId>.{trainingStatus, recoveryTime, ...}` — a nested DTO
+   shape the previous code never inspected. So even users with a
+   computed status would have seen empty columns.
+
+### Fixed
+- **`sync_training_readiness` now also writes `garmin_recovery_hours`**
+  by converting `recoveryTime` (minutes) from the readiness payload.
+  Uses `COALESCE` so it never clobbers a value that `sync_training_status`
+  may have written later in the same run.
+- **`sync_training_status` parses the nested DTO shape**
+  (`mostRecentTrainingStatus.latestTrainingStatusData.<deviceId>`)
+  for status / load focus / recovery time, with fallbacks to the
+  flat shapes used by older library versions. Updates use `COALESCE`
+  so partial responses don't blank out previously-populated columns.
+
+After this release, the Firstbeat card should show Recovery hours
+even for users without computed Firstbeat training status.
+
 ## [0.16.18] — 2026-05-16
 
 Hot-fix for the Garmin Native (Firstbeat) card showing only em-dashes
