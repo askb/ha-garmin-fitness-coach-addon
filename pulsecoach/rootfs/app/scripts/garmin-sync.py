@@ -853,6 +853,30 @@ def sync_vo2max(client, db, days=7):
         cur.close()
 
 
+def _first_dict(data):
+    """Coerce a Garmin Connect response into a single dict or None.
+
+    Some `garminconnect` endpoints (notably `get_training_readiness` and
+    `get_training_status` since the library bumped past 0.2.x) now return
+    a `list[dict]` of one element instead of a plain `dict`. Calling
+    `.get(...)` directly on a list raises `AttributeError: 'list' object
+    has no attribute 'get'`, which the wider try/except in the sync
+    helpers swallowed silently — leaving the affected columns NULL for
+    every synced day. Normalise here so each caller can treat the result
+    as a dict (or `None` when the day genuinely has no data).
+    """
+    if data is None:
+        return None
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, list):
+        for entry in data:
+            if isinstance(entry, dict) and entry:
+                return entry
+        return None
+    return None
+
+
 def sync_training_readiness(client, db, days=7):
     """Sync Garmin Training Readiness score and contributing factors."""
     cur = db.cursor()
@@ -862,7 +886,7 @@ def sync_training_readiness(client, db, days=7):
         for days_ago in range(days):
             date_str = (today - timedelta(days=days_ago)).isoformat()
             try:
-                data = client.get_training_readiness(date_str)
+                data = _first_dict(client.get_training_readiness(date_str))
                 if not data:
                     continue
 
@@ -923,7 +947,7 @@ def sync_training_status(client, db, days=7):
         for days_ago in range(days):
             date_str = (today - timedelta(days=days_ago)).isoformat()
             try:
-                data = client.get_training_status(date_str)
+                data = _first_dict(client.get_training_status(date_str))
                 if not data:
                     continue
 
