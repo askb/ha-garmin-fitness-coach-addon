@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.20] — 2026-05-16
+
+Diagnostic logging + activity-sync resilience.
+
+### Fixed
+- **Manual sync errors no longer disappear.** `/auth/sync` previously
+  routed both stdout and stderr to `/dev/null`, so any failure
+  (network, schema, garminconnect list-wrap regression, single
+  malformed activity row) silently aborted the whole sync with no
+  trace. Output now streams to `/data/garmin-sync.log` (rotated to
+  `.log.1` on each run). New `GET /auth/sync-log` endpoint returns
+  the tail of the log for in-app diagnostics.
+- **Activity sync is now resilient to bad data.** `sync_activities`
+  used to abort the entire batch on the first exception (e.g. an
+  activity with a missing `activityType` dict or a Garmin response
+  shaped as `[[{...}]]` instead of `[{...}]`). The loop now:
+    - Defensively unwraps `[[...]]` list-of-list responses (same
+      pattern that bit Firstbeat in v0.16.18).
+    - Skips non-dict / id-less entries with a logged warning instead
+      of crashing.
+    - Wraps each row in its own try/except so a single malformed
+      activity rolls back only itself; the rest of the batch still
+      commits.
+    - Logs the full exception type+message for every fetch failure.
+
+### Tests
+- `tests/test_garmin_sync.py`: 3 new regression tests for
+  `sync_activities` covering the list-of-list unwrapping, non-dict
+  entries, and per-row failure isolation.
+
 ## [0.16.19] — 2026-05-16
 
 Second pass on the Garmin Native (Firstbeat) card. After v0.16.18

@@ -370,6 +370,128 @@ class TestSyncActivities:
         ]
         assert len(insert_calls) == 1
 
+    def test_unwraps_list_of_list_response(
+        self, garmin_sync, mock_db, mock_client
+    ):
+        """Garmin sometimes returns activities as `[[{...}]]`; unwrap it."""
+        conn, cursor = mock_db
+        original = mock_client.get_activities.return_value
+        mock_client.get_activities.side_effect = [
+            [original],  # list-of-list wrapper
+            [],
+        ]
+        garmin_sync.sync_activities(mock_client, conn, days=7)
+        insert_calls = [
+            c for c in cursor.execute.call_args_list
+            if "INSERT INTO activity" in c[0][0]
+        ]
+        assert len(insert_calls) == len(original)
+
+    def test_skips_non_dict_activity_entries(
+        self, garmin_sync, mock_db, mock_client, capsys
+    ):
+        """Garbled entries in the activities array are skipped, not fatal."""
+        conn, cursor = mock_db
+        good = mock_client.get_activities.return_value[0]
+        mock_client.get_activities.side_effect = [
+            ["not-a-dict", None, good],
+            [],
+        ]
+        garmin_sync.sync_activities(mock_client, conn, days=7)
+        insert_calls = [
+            c for c in cursor.execute.call_args_list
+            if "INSERT INTO activity" in c[0][0]
+        ]
+        assert len(insert_calls) == 1
+        err = capsys.readouterr().err
+        assert "Skipping non-dict activity entry" in err
+
+    def test_per_row_failure_does_not_abort_batch(
+        self, garmin_sync, mock_db, mock_client, capsys
+    ):
+        """A single row exception is logged and rolled back; siblings still sync."""
+        conn, cursor = mock_db
+        good = dict(mock_client.get_activities.return_value[0])
+        bad = dict(good)
+        bad["activityId"] = 99002
+
+        original_execute = cursor.execute
+
+        def selective_execute(sql, params=None):
+            if (
+                params is not None
+                and len(params) > 1
+                and params[1] == "99002"
+                and "INSERT INTO activity" in sql
+            ):
+                raise RuntimeError("simulated row failure")
+            return original_execute(sql, params)
+
+        cursor.execute = MagicMock(side_effect=selective_execute)
+        mock_client.get_activities.side_effect = [[bad, good], []]
+        garmin_sync.sync_activities(mock_client, conn, days=7)
+        err = capsys.readouterr().err
+        assert "Failed to upsert activity 99002" in err
+        # Per-row failure rolls back to the savepoint (not the whole batch)
+        # so earlier successful upserts are preserved on commit.
+        executed_sql = [
+            c[0][0] for c in cursor.execute.call_args_list
+            if isinstance(c[0][0], str)
+        ]
+        assert any("SAVEPOINT activity_upsert" in s for s in executed_sql)
+        assert any(
+            "ROLLBACK TO SAVEPOINT activity_upsert" in s for s in executed_sql
+        )
+        assert conn.commit.called
+
+    def test_good_then_bad_then_good_persists_good_rows(
+        self, garmin_sync, mock_db, mock_client, capsys
+    ):
+        """Good rows before AND after a bad row in the same batch survive.
+
+        Regression for the bug where a per-row failure called
+        ``db.rollback()`` on the whole connection, wiping previously
+        successful upserts within the same batch.
+        """
+        conn, cursor = mock_db
+        base = mock_client.get_activities.return_value[0]
+        good1 = dict(base)
+        good1["activityId"] = 99001
+        bad = dict(base)
+        bad["activityId"] = 99002
+        good2 = dict(base)
+        good2["activityId"] = 99003
+
+        original_execute = cursor.execute
+
+        def selective_execute(sql, params=None):
+            if (
+                params is not None
+                and len(params) > 1
+                and params[1] == "99002"
+                and "INSERT INTO activity" in sql
+            ):
+                raise RuntimeError("simulated row failure")
+            return original_execute(sql, params)
+
+        cursor.execute = MagicMock(side_effect=selective_execute)
+        mock_client.get_activities.side_effect = [[good1, bad, good2], []]
+        garmin_sync.sync_activities(mock_client, conn, days=7)
+
+        insert_calls = [
+            c for c in cursor.execute.call_args_list
+            if isinstance(c[0][0], str) and "INSERT INTO activity" in c[0][0]
+        ]
+        inserted_ids = {c[0][1][1] for c in insert_calls}
+        # Both good rows were attempted (and the SAVEPOINT for the bad row
+        # was rolled back without aborting the surrounding commit).
+        assert "99001" in inserted_ids
+        assert "99003" in inserted_ids
+        # The connection-level rollback() was NOT called — only the
+        # per-row SAVEPOINT was rolled back.
+        assert not conn.rollback.called
+        assert conn.commit.called
+
 
 # ---------------------------------------------------------------------------
 # sync_vo2max
