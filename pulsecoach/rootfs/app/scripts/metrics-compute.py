@@ -395,8 +395,8 @@ def compute_readiness_score(cur, user_id: str) -> dict:
         # below baseline = ~20pt penalty, each 1% above = ~20pt bonus.
         if spo2_val and len(spo2_history) >= 3:
             avg_spo2 = sum(spo2_history[-14:]) / len(spo2_history[-14:])
-            # Score: 100 at baseline, drops steeply below baseline
-            # Each 1% below baseline = ~20pt penalty
+            # Score: 75 at baseline (matches the block comment above);
+            # each 1% below baseline = ~20pt penalty, each 1% above = ~20pt bonus.
             deviation = spo2_val - avg_spo2
             spo2_pct = min(100, max(0, 75 + deviation * 20))
             components.append(("spo2", spo2_pct, 0.08))
