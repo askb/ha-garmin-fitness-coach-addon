@@ -13,6 +13,7 @@ Supports two auth modes:
 import json
 import math
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -407,6 +408,48 @@ def sync_daily_stats(client, db, date_str):
         cur.close()
 
 
+def _normalize_started_at(act: dict) -> str | None:
+    """Resolve an Activity's start time as an unambiguous UTC instant.
+
+    Garmin's activity payload contains two start-time fields:
+
+    * ``startTimeGMT`` — the real UTC instant of the activity, formatted
+      as a TZ-naive string (e.g. ``"2026-05-17 09:00:00"``).
+    * ``startTimeLocal`` — the same moment expressed in the watch's local
+      time, also TZ-naive.
+
+    Previously we stored ``startTimeLocal`` directly into a ``timestamptz``
+    column. Postgres applies the session's ``TimeZone`` setting to a
+    TZ-naive literal, so on a UTC-default Postgres the local string was
+    *re-interpreted* as UTC. For any user east of UTC this shifted
+    morning activities into the future and they were then filtered out
+    by ``lte(Activity.startedAt, new Date())`` in the app layer — the
+    "missing recent workouts" bug. See
+    https://github.com/askb/ha-garmin-fitness-coach-addon/issues
+    for context.
+
+    Stamp ``startTimeGMT`` with an explicit ``+00:00`` so Postgres always
+    treats it as UTC regardless of session TZ. Fall back to
+    ``startTimeLocal`` only if ``startTimeGMT`` is missing (older Garmin
+    activities occasionally lack it); the legacy behaviour is preserved
+    as a last resort.
+    """
+    gmt = act.get("startTimeGMT")
+    if isinstance(gmt, str) and gmt.strip():
+        # Garmin currently returns "YYYY-MM-DD HH:MM:SS" with no offset.
+        # Defensively detect a trailing offset / 'Z' so we never
+        # double-stamp if a future Garmin build adds one. Match both
+        # positive and negative offsets in the trailing tz-suffix
+        # position (can't just look for '-' because the date contains
+        # '-' separators).
+        s = gmt.rstrip()
+        if s.endswith("Z") or re.search(r"[+-]\d{2}:?\d{2}$", s):
+            return s
+        return f"{s}+00:00"
+    local = act.get("startTimeLocal")
+    return local if isinstance(local, str) else None
+
+
 def _upsert_activity(cur, act: dict, act_id: str) -> None:
     """Insert/update one Garmin activity row.
 
@@ -470,7 +513,7 @@ def _upsert_activity(cur, act: dict, act_id: str) -> None:
         act_id,
         activity_type.get("typeKey", "other"),
         activity_type.get("typeId", ""),
-        act.get("startTimeLocal"),
+        _normalize_started_at(act),
         duration_min,
         act.get("distance"),
         avg_hr,
@@ -606,6 +649,69 @@ def sync_activities(client, db, days=7):
     except Exception as e:
         db.rollback()
         print(f"  Failed to sync activities: {e}", file=sys.stderr)
+    finally:
+        cur.close()
+
+
+def backfill_activity_started_at_utc(db):
+    """One-time migration: re-stamp Activity.started_at using startTimeGMT.
+
+    Earlier sync code stored ``startTimeLocal`` (TZ-naive) into a
+    ``timestamptz`` column. Postgres interpreted the literal in the
+    session's TimeZone (UTC by default for the HA Postgres base
+    image), so morning activities for users east of UTC ended up
+    timestamped in the *future* and were filtered out of the home
+    page by ``lte(Activity.startedAt, new Date())``.
+
+    Re-derive every row's start instant from ``raw_garmin_data->>
+    'startTimeGMT'`` (always the true UTC moment) and stamp it
+    explicitly with ``+00:00``. Idempotent: rows that already match
+    the GMT field are left untouched.
+
+    Guarded by a marker file in ``TOKEN_DIR`` so the migration only
+    runs once per install. Set ``PULSECOACH_REBACKFILL_STARTED_AT=1``
+    to force a re-run (useful for support / testing).
+    """
+    marker = os.path.join(TOKEN_DIR, ".activity_started_at_utc_backfill_done")
+    if os.path.exists(marker) and not os.environ.get(
+            "PULSECOACH_REBACKFILL_STARTED_AT"):
+        return
+
+    cur = db.cursor()
+    try:
+        cur.execute(
+            """
+            UPDATE activity SET
+                started_at = ((raw_garmin_data->>'startTimeGMT') || '+00:00')::timestamptz
+            WHERE user_id = %s
+              AND raw_garmin_data IS NOT NULL
+              AND raw_garmin_data ? 'startTimeGMT'
+              AND (raw_garmin_data->>'startTimeGMT') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$'
+              AND started_at <> ((raw_garmin_data->>'startTimeGMT') || '+00:00')::timestamptz
+            """,
+            (USER_ID,),
+        )
+        updated = cur.rowcount
+        db.commit()
+        if updated:
+            print(
+                f"  Re-stamped {updated} activities to UTC from "
+                f"raw_garmin_data.startTimeGMT (TZ-correctness backfill)"
+            )
+        try:
+            with open(marker, "w") as f:
+                f.write(datetime.now(timezone.utc).isoformat())
+        except OSError as e:
+            print(
+                f"  Warning: could not write backfill marker {marker}: {e}",
+                file=sys.stderr,
+            )
+    except Exception as e:
+        db.rollback()
+        print(
+            f"  Activity started_at UTC backfill failed: {e}",
+            file=sys.stderr,
+        )
     finally:
         cur.close()
 
@@ -1202,6 +1308,13 @@ def main():
     # Backfill computed fields from raw Garmin JSON
     _write_sync_status("backfill", "Computing zones & strain...", 80)
     backfill_from_raw_json(db)
+
+    # One-time: re-stamp activity.started_at from startTimeGMT so rows
+    # synced by older versions (which used startTimeLocal as a TZ-naive
+    # literal) get their true UTC instant. Guarded by a marker file so
+    # subsequent syncs are no-ops.
+    _write_sync_status("backfill_started_at", "Fixing activity timestamps...", 82)
+    backfill_activity_started_at_utc(db)
 
     _write_sync_status("backfill_stress", "Backfilling stress & sleep timing...", 85)
     backfill_stress_and_sleep(client, db)

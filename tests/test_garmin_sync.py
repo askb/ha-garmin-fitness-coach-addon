@@ -87,6 +87,7 @@ def mock_client():
             "activityId": 99001,
             "activityType": {"typeKey": "running", "typeId": "1"},
             "startTimeLocal": "2025-01-15 07:30:00",
+            "startTimeGMT": "2025-01-14 21:30:00",
             "duration": 1800.0,   # 30 min
             "distance": 5000.0,
             "averageHR": 150,
@@ -274,6 +275,74 @@ class TestSyncDailyStats:
 
 
 @pytest.mark.unit
+class TestNormalizeStartedAt:
+    """Tests for _normalize_started_at() — UTC-correctness regression.
+
+    Earlier sync code passed Garmin's ``startTimeLocal`` (a TZ-naive
+    string in the watch's local time) straight into a ``timestamptz``
+    column. Postgres re-interpreted the literal in the session's
+    TimeZone (UTC by default), so morning activities for users east
+    of UTC were timestamped in the future and were filtered out of
+    the home page by ``lte(Activity.startedAt, new Date())``. The
+    normalize helper must:
+
+    1. Prefer ``startTimeGMT``.
+    2. Stamp it with an explicit ``+00:00`` offset.
+    3. Fall back to ``startTimeLocal`` only when ``startTimeGMT`` is
+       absent.
+    """
+
+    def test_prefers_gmt_and_appends_utc_offset(self, garmin_sync):
+        act = {
+            "startTimeGMT": "2026-05-17 09:00:00",
+            "startTimeLocal": "2026-05-17 19:00:00",  # AEST same instant
+        }
+        assert garmin_sync._normalize_started_at(act) == "2026-05-17 09:00:00+00:00"
+
+    def test_falls_back_to_local_when_gmt_missing(self, garmin_sync):
+        act = {"startTimeLocal": "2026-05-17 19:00:00"}
+        # Legacy behaviour preserved when GMT is unavailable; we'd
+        # rather store *something* than NULL on these rare rows.
+        assert garmin_sync._normalize_started_at(act) == "2026-05-17 19:00:00"
+
+    def test_returns_none_when_both_missing(self, garmin_sync):
+        assert garmin_sync._normalize_started_at({}) is None
+
+    def test_does_not_double_stamp_when_offset_already_present(self, garmin_sync):
+        # Defensive: future Garmin client versions may include an offset.
+        act = {"startTimeGMT": "2026-05-17 09:00:00+00:00"}
+        assert garmin_sync._normalize_started_at(act) == "2026-05-17 09:00:00+00:00"
+
+    def test_does_not_double_stamp_when_z_suffix_present(self, garmin_sync):
+        act = {"startTimeGMT": "2026-05-17T09:00:00Z"}
+        assert garmin_sync._normalize_started_at(act) == "2026-05-17T09:00:00Z"
+
+    def test_does_not_double_stamp_when_negative_offset_present(self, garmin_sync):
+        # Defensive: a future Garmin build may emit a non-UTC offset.
+        # The trailing-offset detector must not be fooled by the '-'
+        # characters inside the date portion.
+        act = {"startTimeGMT": "2026-05-17 04:00:00-05:00"}
+        assert (
+            garmin_sync._normalize_started_at(act)
+            == "2026-05-17 04:00:00-05:00"
+        )
+
+    def test_does_not_double_stamp_when_compact_offset_present(self, garmin_sync):
+        act = {"startTimeGMT": "2026-05-17 04:00:00-0500"}
+        assert (
+            garmin_sync._normalize_started_at(act)
+            == "2026-05-17 04:00:00-0500"
+        )
+
+    def test_blank_gmt_falls_back_to_local(self, garmin_sync):
+        act = {
+            "startTimeGMT": "   ",
+            "startTimeLocal": "2026-05-17 19:00:00",
+        }
+        assert garmin_sync._normalize_started_at(act) == "2026-05-17 19:00:00"
+
+
+@pytest.mark.unit
 class TestSyncActivities:
     """Tests for sync_activities() — activity parsing, HR zones, TRIMP."""
 
@@ -296,6 +365,28 @@ class TestSyncActivities:
             if "INSERT INTO activity" in c[0][0]
         ]
         assert len(insert_calls) == 1
+
+    def test_started_at_uses_gmt_with_utc_offset(
+        self, garmin_sync, mock_db, mock_client
+    ):
+        """started_at hits the DB as the UTC instant, never the local string.
+
+        Regression for the "missing recent workouts" bug where AEST
+        morning activities were timestamped in the future and filtered
+        out by the app router. The INSERT must carry the GMT field
+        with an explicit ``+00:00`` so Postgres always parses it as
+        UTC regardless of the database session's TimeZone.
+        """
+        conn, cursor = mock_db
+        garmin_sync.sync_activities(mock_client, conn, days=7)
+        insert_call = self._get_activity_insert_call(cursor)
+        assert insert_call is not None
+        values = insert_call[0][1]
+        # started_at is the 5th positional in the INSERT (after
+        # user_id, garmin_activity_id, sport_type, sub_type).
+        assert "2025-01-14 21:30:00+00:00" in values
+        # And the local-time string must NOT have leaked through.
+        assert "2025-01-15 07:30:00" not in values
 
     def test_stores_raw_garmin_json(self, garmin_sync, mock_db, mock_client):
         """The raw Garmin activity dict is serialised to JSON in the INSERT values."""
