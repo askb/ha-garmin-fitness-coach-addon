@@ -13,6 +13,7 @@ Supports two auth modes:
 import json
 import math
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -435,9 +436,16 @@ def _normalize_started_at(act: dict) -> str | None:
     """
     gmt = act.get("startTimeGMT")
     if isinstance(gmt, str) and gmt.strip():
-        # Garmin returns "YYYY-MM-DD HH:MM:SS" with no offset.
-        # Avoid double-stamping if a future Garmin build ever includes one.
-        return gmt if ("+" in gmt or gmt.endswith("Z")) else f"{gmt}+00:00"
+        # Garmin currently returns "YYYY-MM-DD HH:MM:SS" with no offset.
+        # Defensively detect a trailing offset / 'Z' so we never
+        # double-stamp if a future Garmin build adds one. Match both
+        # positive and negative offsets in the trailing tz-suffix
+        # position (can't just look for '-' because the date contains
+        # '-' separators).
+        s = gmt.rstrip()
+        if s.endswith("Z") or re.search(r"[+-]\d{2}:?\d{2}$", s):
+            return s
+        return f"{s}+00:00"
     local = act.get("startTimeLocal")
     return local if isinstance(local, str) else None
 

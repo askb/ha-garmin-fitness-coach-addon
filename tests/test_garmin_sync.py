@@ -317,6 +317,23 @@ class TestNormalizeStartedAt:
         act = {"startTimeGMT": "2026-05-17T09:00:00Z"}
         assert garmin_sync._normalize_started_at(act) == "2026-05-17T09:00:00Z"
 
+    def test_does_not_double_stamp_when_negative_offset_present(self, garmin_sync):
+        # Defensive: a future Garmin build may emit a non-UTC offset.
+        # The trailing-offset detector must not be fooled by the '-'
+        # characters inside the date portion.
+        act = {"startTimeGMT": "2026-05-17 04:00:00-05:00"}
+        assert (
+            garmin_sync._normalize_started_at(act)
+            == "2026-05-17 04:00:00-05:00"
+        )
+
+    def test_does_not_double_stamp_when_compact_offset_present(self, garmin_sync):
+        act = {"startTimeGMT": "2026-05-17 04:00:00-0500"}
+        assert (
+            garmin_sync._normalize_started_at(act)
+            == "2026-05-17 04:00:00-0500"
+        )
+
     def test_blank_gmt_falls_back_to_local(self, garmin_sync):
         act = {
             "startTimeGMT": "   ",
