@@ -103,6 +103,10 @@ fetches up to 6 years of historical data.
 | **Zones** | HR zone distribution, Seiler polarization index, calendar heatmap |
 | **Settings** | Garmin account connection, AI backend configuration, sync controls |
 
+A visual walkthrough of the main pages — Home, Fitness, Training,
+Zones, Trends, and the AI Coach — is in the
+[repository README](https://github.com/askb/ha-garmin-fitness-coach-addon#screenshots).
+
 ## HA Sensors
 
 The addon pushes 7 sensors to Home Assistant via the Supervisor API:

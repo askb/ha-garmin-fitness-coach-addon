@@ -15,6 +15,7 @@ your local network.
 ## Table of Contents
 
 - [Features](#features)
+- [Screenshots](#screenshots)
 - [Architecture](#architecture)
 - [Installation](#installation)
 - [Configuration](#configuration)
@@ -46,6 +47,59 @@ your local network.
 - 🩺 **Readiness Score** — Evidence-based daily score (0-100) using HRV, sleep,
   training load, and stress (Buchheit 2014)
 - 🔒 **Fully Private** — All data stays local; AI runs on your hardware
+
+## Screenshots
+
+A walkthrough of the main dashboards as they appear in the ingress UI
+(v0.2.13 / addon v0.16.22). Mobile layouts are responsive and follow
+the same information density; see the live addon on your HA instance
+for the full mobile experience.
+
+### Home — Daily readiness, today's plan, recent activity
+The landing screen shows your readiness score, today's training load,
+the workout the coach has scheduled for you, and the last few synced
+sessions at a glance.
+
+![Home dashboard](docs/screenshots/home-desktop.png)
+
+### Fitness — VO2max, racing shape, predictions
+Long-term fitness trajectory: VO2max trend, running-form efficiency,
+race-distance predictions, and historical race-result comparison.
+
+![Fitness dashboard](docs/screenshots/fitness-desktop.png)
+
+### Training — Load management (CTL / ATL / TSB / ACWR)
+Performance Management Chart driven by the Banister fitness-fatigue
+model, ramp-rate tracking, ACWR injury-risk gauge, and the Garmin
+Firstbeat metrics surfaced where your device supports them.
+
+![Training dashboard](docs/screenshots/training-desktop.png)
+
+### Zones — HR zones, polarization, training consistency
+Distribution of time in each HR zone, Seiler polarization index for
+endurance balance, pace/HR efficiency over time, and a calendar
+heatmap of your training consistency.
+
+![Zones dashboard](docs/screenshots/zones-desktop.png)
+
+### Trends — Multi-year multi-metric overlays
+Long-window views of readiness, HRV, sleep, training load, and other
+metrics side-by-side, with notable-change detection and inter-metric
+correlations.
+
+![Trends dashboard](docs/screenshots/trends-desktop.png)
+
+### Coach — Specialist AI agents
+Persona-based AI guidance: sport scientist, psychologist,
+nutritionist, and recovery coach. Powered by HA Conversation
+(default), local Ollama, or a rules-based fallback — your choice in
+the addon config.
+
+![AI Coach dashboard](docs/screenshots/coach-desktop.png)
+
+> 💡 Sleep, HRV, vitals, and the validation dashboards are also
+> available in the addon but omitted from this README for privacy.
+> They render with the same density and layout conventions.
 
 ## Architecture
 
