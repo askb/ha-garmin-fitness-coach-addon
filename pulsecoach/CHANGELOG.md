@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.22] — 2026-05-17
+
+Fixes recent workouts disappearing from the app's home page for users
+east of UTC (AEST in particular).
+
+### Fixed
+- **Activity start-time stored as UTC** (#133). The sync was writing
+  Garmin's TZ-naive `startTimeLocal` into a `timestamptz` column, which
+  Postgres re-parses in the session's TimeZone (UTC by default in HA's
+  postgres image). For AEST (UTC+10) users a 9 AM morning workout was
+  timestamped 10 hours in the future, and the app's
+  `lte(startedAt, new Date())` filter then silently hid it until the
+  wall clock caught up.
+  - `_normalize_started_at()` now prefers `startTimeGMT` and stamps
+    it with an explicit `+00:00` offset.
+  - One-time backfill re-stamps all existing activity rows from
+    `raw_garmin_data->>'startTimeGMT'`. Idempotent + guarded by a
+    marker file; force-replay with `PULSECOACH_REBACKFILL_STARTED_AT=1`.
+  - 8 new unit tests + 1 upsert wiring test.
+
+### Picked up from app v0.2.13 (askb/ha-garmin-fitness-coach-app#125)
+- Widened activity future-row filter to a 26-hour horizon so a future
+  TZ regression fails loudly (visibly-future row) instead of silently
+  hiding data.
+
 ## [0.16.21] — 2026-05-17
 
 CI follow-up + picks up app v0.2.12.
