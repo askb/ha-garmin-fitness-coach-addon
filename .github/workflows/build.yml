@@ -28,7 +28,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       matrix:
         arch: [amd64, aarch64]
