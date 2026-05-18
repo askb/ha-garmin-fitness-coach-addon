@@ -1,6 +1,6 @@
 {
   "name": "PulseCoach",
-  "version": "0.16.23",
+  "version": "0.16.24",
   "slug": "pulsecoach",
   "image": "ghcr.io/askb/pulsecoach-addon-{arch}",
   "description": "AI-powered sport scientist — training analysis, coaching, and recovery optimization from your Garmin data",
