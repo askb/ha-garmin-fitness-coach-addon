@@ -36,6 +36,12 @@ export default defineConfig({
     video: "off",
     colorScheme:
       (process.env.PULSECOACH_THEME as "light" | "dark" | undefined) ?? "dark",
+    // Launch Chromium with extensions disabled so user-installed
+    // browser extensions don't bake overlay icons / toolbars into the
+    // captured PNGs (#138).
+    launchOptions: {
+      args: ["--disable-extensions", "--disable-component-extensions-with-background-pages"],
+    },
   },
 
   outputDir: "./artifacts",
