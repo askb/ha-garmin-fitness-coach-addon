@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.24] — 2026-05-18
+
+Picks up seven screenshot-QA fixes from the app
+([#162](https://github.com/askb/ha-garmin-fitness-coach-app/pull/162),
+[#163](https://github.com/askb/ha-garmin-fitness-coach-app/pull/163))
+addressing UI hierarchy, data correctness, and AI-coach polish issues
+surfaced by the 2026-05-18 multi-agent screenshot review.
+
+### Picked up from app
+- **AI coach `*` bullets render properly** (app
+  [#153](https://github.com/askb/ha-garmin-fitness-coach-app/issues/153)).
+  Leading whitespace before block markers (`* `, `### `, `1. `) no
+  longer prevents matching, and single-asterisk italics (`*foo*`) —
+  which LLMs emit far more often than the underscore form — now
+  render as italics instead of literal asterisks.
+- **AI coach VO2max number matches the dashboard** (app
+  [#154](https://github.com/askb/ha-garmin-fitness-coach-app/issues/154)).
+  The coach narrative and the /fitness "Current VO2max" hero card
+  now share a single picker
+  (`packages/api/src/lib/vo2max.ts::pickBestVO2maxEstimate`) so they
+  can never disagree on which estimate is "best" again.
+- **Internal sport ids stop leaking to coach text** (app
+  [#155](https://github.com/askb/ha-garmin-fitness-coach-app/issues/155)).
+  `Tennis_v2` etc. are now humanised before being included in the
+  coach's system prompt.
+- **Insights "This Week" reports 7 days, not 8** (app
+  [#157](https://github.com/askb/ha-garmin-fitness-coach-app/issues/157)).
+  `trends.getSummary` had an off-by-one against an inclusive lower
+  bound; now reports exactly the requested window length.
+- **Activities list filters Garmin's phantom walks** (app
+  [#158](https://github.com/askb/ha-garmin-fitness-coach-app/issues/158)).
+  The <10 min / <500 m filter already used by the home carousel
+  (`activity.getRecent`) is now applied to `activity.list` too, so
+  the /activities page is no longer dominated by auto-detected
+  incidental walks.
+- **Home Quick-Stats hierarchy** (app
+  [#161](https://github.com/askb/ha-garmin-fitness-coach-app/issues/161)).
+  The status sub-label on each mini-card (e.g. "High Load",
+  "Optimal") is dimmed to `text-zinc-400` so the metric value stays
+  the dominant visual element, matching the #148 insights polish.
+- **Zones heatmap stops clipping on mobile** (app
+  [#160](https://github.com/askb/ha-garmin-fitness-coach-app/issues/160),
+  regression of #142). Month labels and the day-grid now share one
+  `overflow-x-auto` scroll container instead of the labels being
+  absolute-positioned in an unconstrained parent.
+
 ## [0.16.23] — 2026-05-18
 
 Picks up four UI/data-integrity fixes from the app and ships them via
