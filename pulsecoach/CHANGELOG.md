@@ -5,7 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.16.22] — 2026-05-17
+## [0.16.23] — 2026-05-18
+
+Picks up four UI/data-integrity fixes from the app and ships them via
+the addon's startup `drizzle-kit push`, which now materialises nine
+previously-missing unique indexes (silently dropped by drizzle-kit
+when declared via the plain-object form).
+
+### Picked up from app
+- **Journal save now works** (app
+  [#150](https://github.com/askb/ha-garmin-fitness-coach-app/issues/150)).
+  Saving a journal entry was failing with PostgreSQL `42P10` —
+  "there is no unique or exclusion constraint matching the ON
+  CONFLICT specification" — because nine schema tables declared their
+  table-level uniqueness via a plain `{ name, columns, unique: true }`
+  literal that `drizzle-kit push` silently dropped. Converted all
+  nine tables (DailyMetric, ReadinessScore, TrainingStatus,
+  JournalEntry, SessionReport, Intervention, AdvancedMetric,
+  AthleteBaseline, AiInsight) to the canonical `uniqueIndex(name).on(...)`
+  form. On first start after upgrading, `drizzle-kit push --force`
+  creates the missing unique indexes; subsequent journal saves
+  succeed.
+- **Track-cycle UI hidden for male profiles** (app
+  [#151](https://github.com/askb/ha-garmin-fitness-coach-app/issues/151)).
+  The 🩸 Track cycle accordion on /journal no longer appears when
+  `profile.sex === "male"`, and `menstrualPhase` is scrubbed from the
+  save payload when the section is hidden.
+- **Power & CP page no longer three empty cards** (app
+  [#149](https://github.com/askb/ha-garmin-fitness-coach-app/issues/149)).
+  When the user has no power-meter activities, /power renders a
+  single explainer hero ("⚡ Power meter required") instead of three
+  identical empty-state cards. The `activity.list` query now also
+  returns `avgPower` / `normalizedPower` so users with a power meter
+  but no computed CP see their data populate correctly.
+- **Insights "This Week" colour hierarchy** (app
+  [#148](https://github.com/askb/ha-garmin-fitness-coach-app/issues/148)).
+  Sub-labels in the four tiles dimmed from `text-zinc-300` to
+  `text-zinc-400` so they stop outshining the bold metric values
+  they describe.
+
+
 
 Fixes recent workouts disappearing from the app's home page for users
 east of UTC (AEST in particular).
