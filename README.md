@@ -51,29 +51,33 @@ your local network.
 ## Screenshots
 
 A walkthrough of the main dashboards as they appear in the ingress UI
-(v0.2.13 / addon v0.16.22). Mobile layouts are responsive and follow
-the same information density; see the live addon on your HA instance
-for the full mobile experience.
-
-### Home — Daily readiness, today's plan, recent activity
-The landing screen shows your readiness score, today's training load,
-the workout the coach has scheduled for you, and the last few synced
-sessions at a glance.
-
-![Home dashboard](docs/screenshots/home-desktop.png)
+(addon v0.16.24, captured 2026-05-19). Mobile layouts are responsive
+and follow the same information density; the mobile gallery will be
+added once a tracked screenshot-capture issue is resolved
+([#141](https://github.com/askb/ha-garmin-fitness-coach-addon/issues/141)).
+See the live addon on your HA instance for the full mobile experience
+in the meantime.
 
 ### Fitness — VO2max, racing shape, predictions
-Long-term fitness trajectory: VO2max trend, running-form efficiency,
-race-distance predictions, and historical race-result comparison.
+Long-term fitness trajectory: current VO2max with Garmin and
+UTH-estimated trend, race-distance predictions, pace zones, and
+historical race-result comparison.
 
 ![Fitness dashboard](docs/screenshots/fitness-desktop.png)
 
-### Training — Load management (CTL / ATL / TSB / ACWR)
-Performance Management Chart driven by the Banister fitness-fatigue
-model, ramp-rate tracking, ACWR injury-risk gauge, and the Garmin
-Firstbeat metrics surfaced where your device supports them.
+### Insights — AI-generated daily summaries
+Plain-language interpretation of the day's readiness, training-load
+status, and a 7-day rollup with avg readiness, sleep, and HRV.
+Confidence-scored so you can see when the engine has enough signal.
 
-![Training dashboard](docs/screenshots/training-desktop.png)
+![Insights dashboard](docs/screenshots/insights-desktop.png)
+
+### Trends — Multi-metric, multi-year overlays
+Long-window views of readiness, HRV, sleep, training load and other
+metrics side-by-side, with notable-change detection and inter-metric
+correlations.
+
+![Trends dashboard](docs/screenshots/trends-desktop.png)
 
 ### Zones — HR zones, polarization, training consistency
 Distribution of time in each HR zone, Seiler polarization index for
@@ -82,24 +86,33 @@ heatmap of your training consistency.
 
 ![Zones dashboard](docs/screenshots/zones-desktop.png)
 
-### Trends — Multi-year multi-metric overlays
-Long-window views of readiness, HRV, sleep, training load, and other
-metrics side-by-side, with notable-change detection and inter-metric
-correlations.
+### Vitals — All your biomarkers in one place
+SpO2, resting heart rate, body battery, stress, and respiration rate
+each with status badge, trend chart, and period summary. Empty
+states clearly indicate where extra hardware (e.g. Garmin scale)
+unlocks more data.
 
-![Trends dashboard](docs/screenshots/trends-desktop.png)
+![Vitals dashboard](docs/screenshots/vitals-desktop.png)
 
-### Coach — Specialist AI agents
-Persona-based AI guidance: sport scientist, psychologist,
-nutritionist, and recovery coach. Powered by HA Conversation
-(default), local Ollama, or a rules-based fallback — your choice in
-the addon config.
+### HRV — Heart rate variability deep-dive
+Current/baseline/CV% stat row, full HRV scatter with baseline
+annotation, and a CV% variability chart. Period summary surfaces the
+data window and reading count for transparency.
 
-![AI Coach dashboard](docs/screenshots/coach-desktop.png)
+![HRV dashboard](docs/screenshots/hrv-desktop.png)
 
-> 💡 Sleep, HRV, vitals, and the validation dashboards are also
-> available in the addon but omitted from this README for privacy.
-> They render with the same density and layout conventions.
+### Activities — Recent synced sessions
+Filterable list across all sport types pulled from Garmin Connect.
+Auto-detected phantom walks under 10 minutes and 500 m are filtered
+out so the list shows only sessions you actually trained.
+
+![Activities dashboard](docs/screenshots/activities-desktop.png)
+
+> 💡 The Home, Training, Coach, Sleep and Validation dashboards are
+> also included in the addon but omitted from this README pass — they
+> are part of ongoing UI-polish work tracked in the issue board. Sleep
+> and HRV detail screens contain sensitive personal data so are
+> shipped only via the live addon.
 
 ## Architecture
 
