@@ -75,10 +75,9 @@ for (const route of ROUTES) {
     await page.waitForTimeout(200);
 
     // Hide any noisy elements that drift run-to-run (date pickers default
-    // to "today", which makes diffs noisy) and — on mobile — release the
-    // fixed bottom nav so `fullPage` captures don't bake it on top of the
-    // content rows for every screen (#138). The selector list is
-    // best-effort — missing nodes don't fail the run.
+    // to "today", which makes diffs noisy) and strip any third-party
+    // accessibility / chat / analytics widgets that may have injected
+    // themselves into the host page (#142).
     await page
       .addStyleTag({
         content: `
@@ -90,23 +89,60 @@ for (const route of ROUTES) {
             transition-duration: 0s !important;
             caret-color: transparent !important;
           }
-          ${
-            isMobile
-              ? `
-          /* Release the sticky bottom nav so it lands once at the end of
-             the full-page screenshot instead of being baked in over every
-             card. The fixed-position element overlaps any scrolled-past
-             content in fullPage screenshots otherwise. */
-          nav[data-bottom-nav], .bottom-nav, [class*="BottomNav"] {
-            position: relative !important;
-            bottom: auto !important;
-          }
-          `
-              : ""
+          /* Strip common host-injected overlay widgets (a11y bars, chat
+             bubbles, feedback launchers) that aren't part of the app
+             but slip past --disable-extensions because they're shipped
+             as npm packages on the page itself (#142). */
+          [id*="accessibility" i][id*="widget" i],
+          [class*="accessibility" i][class*="widget" i],
+          [id*="ally-toolbar" i],
+          [class*="ally-toolbar" i],
+          [id*="userway" i],
+          [class*="userway" i],
+          [id*="acsb" i],
+          [class*="acsb" i],
+          [aria-label*="accessibility menu" i],
+          [aria-label*="open accessibility" i],
+          iframe[title*="accessibility" i],
+          iframe[src*="accessibility" i] {
+            display: none !important;
+            visibility: hidden !important;
           }
         `,
       })
       .catch(() => undefined);
+
+    // Mobile-only: locate any element whose computed position is fixed
+    // or sticky AND whose bottom edge is anchored to the viewport, then
+    // hide it before fullPage capture. This is far more robust than a
+    // hand-maintained selector list — the previous CSS-based fix (#140)
+    // missed the actual nav DOM and left the bar baked over every row
+    // of every mobile screenshot (#141).
+    if (isMobile) {
+      await page
+        .evaluate(() => {
+          const viewportH = window.innerHeight;
+          document.querySelectorAll<HTMLElement>("body *").forEach((el) => {
+            const cs = window.getComputedStyle(el);
+            if (cs.position !== "fixed" && cs.position !== "sticky") return;
+            const rect = el.getBoundingClientRect();
+            // Element is anchored to (or sits within 8px of) the bottom
+            // of the viewport — almost certainly a bottom nav / toast /
+            // floating action bar.
+            const anchoredBottom =
+              rect.bottom >= viewportH - 8 && rect.bottom <= viewportH + 8;
+            const looksLikeNav =
+              el.tagName === "NAV" ||
+              /\b(nav|bottom|tabbar|tab-bar)\b/i.test(el.className) ||
+              el.getAttribute("role") === "navigation" ||
+              el.hasAttribute("data-bottom-nav");
+            if (anchoredBottom || looksLikeNav) {
+              el.style.setProperty("display", "none", "important");
+            }
+          });
+        })
+        .catch(() => undefined);
+    }
 
     // Settle once more after the style injection so the layout reflows
     // before the screenshot fires.
