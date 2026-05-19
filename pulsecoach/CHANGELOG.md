@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.25] — 2026-05-19
+
+Picks up four app fixes from the 2026-05-19 multi-agent screenshot
+review plus two addon-side capture-pipeline fixes.
+
+### Picked up from app
+
+- **AI coach no longer shows raw sport ids or stale VO2max** (app
+  [#164](https://github.com/askb/ha-garmin-fitness-coach-app/issues/164)).
+  `prettySport()` now strips `_v2`, `_legacy`, `_alt`, `_new`, `_old`,
+  `_deprecated`, `_raw` suffixes before they reach the LLM context, and
+  `getVO2maxHistory.latestBest` now reads from the same unwindowed
+  last-30 pool the /coach page uses, so the two surfaces can no longer
+  disagree.
+- **Home Load/HRV sub-labels are readable** (app
+  [#165](https://github.com/askb/ha-garmin-fitness-coach-app/issues/165)).
+  QuickStats sub-labels now force `text-zinc-400` via Tailwind's
+  important modifier so sibling zone-color classes can't bleed through
+  via `currentColor`.
+- **Sleep-debt chart Y-axis no longer clips negative values** (app
+  [#166](https://github.com/askb/ha-garmin-fitness-coach-app/issues/166)).
+  YAxis width bumped from 35 to 40 so `-2.5h` fits.
+- **Validation page title no longer crashes into the back-arrow** (app
+  [#167](https://github.com/askb/ha-garmin-fitness-coach-app/issues/167)).
+  Both the `<h1>` and its subtitle now share `pl-12` padding.
+
+### Addon-side
+
+- **Screenshot capture strips mobile bottom nav reliably** (addon
+  [#141](https://github.com/askb/ha-garmin-fitness-coach-addon/issues/141)).
+  `tools/screenshots/tests/dashboard.spec.ts` now DOM-walks for any
+  fixed/sticky element whose bottom edge is anchored to the viewport
+  (or whose tag/role/class matches nav patterns) and force-hides it,
+  instead of relying on brittle CSS selectors.
+- **Capture run no longer renders the UserWay accessibility widget**
+  (addon
+  [#142](https://github.com/askb/ha-garmin-fitness-coach-addon/issues/142)).
+  Same spec injects CSS killers for `userway`, `ally-toolbar`, `acsb`,
+  and accessibility iframes; `playwright.config.ts` also uses a fresh
+  `mkdtempSync` user-data-dir per run so injected extensions never
+  leak between captures.
+
 ## [0.16.24] — 2026-05-18
 
 Picks up seven screenshot-QA fixes from the app
