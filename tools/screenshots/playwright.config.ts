@@ -1,20 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
 // SPDX-License-Identifier: Apache-2.0
 
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
 import { defineConfig, devices } from "@playwright/test";
 
-// Use a freshly-created throwaway user-data-dir for every run so the
-// browser profile cannot carry over any user-installed extension UI
-// from a developer's everyday Chromium profile (#142). The directory
-// is left behind in the OS tmp tree; the host's tmpfile reaper handles
-// cleanup.
-const ISOLATED_PROFILE = mkdtempSync(
-  path.join(tmpdir(), "pulsecoach-screenshot-profile-"),
-);
+// Disable extensions so user-installed browser extensions don't bake
+// overlay icons / toolbars into the captured PNGs (#138, #142).
+// Playwright's default `chromium.launch()` already uses a fresh
+// ephemeral profile per run, so no `--user-data-dir` override is
+// needed — and passing one as a CLI arg is now rejected (Playwright
+// requires `launchPersistentContext` for that).
 
 /**
  * Playwright config for PulseCoach screenshot capture.
@@ -49,14 +43,10 @@ export default defineConfig({
     video: "off",
     colorScheme:
       (process.env.PULSECOACH_THEME as "light" | "dark" | undefined) ?? "dark",
-    // Launch Chromium with extensions disabled and an isolated, empty
-    // user-data-dir so user-installed browser extensions don't bake
-    // overlay icons / toolbars into the captured PNGs (#138, #142).
     launchOptions: {
       args: [
         "--disable-extensions",
         "--disable-component-extensions-with-background-pages",
-        `--user-data-dir=${ISOLATED_PROFILE}`,
         "--no-first-run",
         "--no-default-browser-check",
       ],
