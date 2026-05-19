@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.26] — 2026-05-19
+
+Picks up four more app fixes from the second 2026-05-19 multi-agent
+screenshot review plus a screenshot-pipeline harden.
+
+### Picked up from app
+
+- **Insights "Readiness" no longer shows two different numbers on the
+  same screen** (app
+  [#173](https://github.com/askb/ha-garmin-fitness-coach-app/pull/173)).
+  AI Insights had been quoting yesterday's cached readiness while
+  Daily Insights computed today's; both now use today's row. When
+  today's readiness hasn't been computed yet, the daily summary shows
+  "Daily Status — Readiness pending" instead of synthesizing a fake
+  50/100, and a critical condition is never masked by neutral tone.
+- **Training page Load Focus and 42-day trend charts render
+  correctly** (app
+  [#175](https://github.com/askb/ha-garmin-fitness-coach-app/pull/175)).
+  Load Focus chart had a 0-px width inside a flex column without
+  `w-full`. The 42-day Training Strain and Body Stress charts now
+  detect all-null data and show a graceful empty state instead of an
+  invisible flat line. On mobile, the time-range pills sit cleanly
+  below the section header.
+- **Activities page subtitle no longer clips behind the menu icon**
+  (app
+  [#172](https://github.com/askb/ha-garmin-fitness-coach-app/pull/172)).
+  Same `pl-12` fix class as #167.
+- **Coach persona tab labels visible on phones ≤400px** (app
+  [#174](https://github.com/askb/ha-garmin-fitness-coach-app/pull/174)).
+  Removes `max-[400px]:hidden` from the label so Sport Scientist /
+  Psychologist / Nutritionist / Recovery names are always visible.
+
+### Addon-side
+
+- **Capture pipeline strips Next.js dev/build portal and any small
+  corner-anchored indicator badge** (addon
+  [#147](https://github.com/askb/ha-garmin-fitness-coach-addon/pull/147)).
+  Adds named CSS killers for `nextjs-portal`, `[data-nextjs-toast]`,
+  etc, plus a belt-and-braces DOM walk that hides any fixed/sticky
+  ≤72×72px element pinned within 16px of a viewport corner with no
+  substantial text content. Re-adds iframe a11y selectors that had
+  been accidentally dropped.
+
 ## [0.16.25] — 2026-05-19
 
 Picks up four app fixes from the 2026-05-19 multi-agent screenshot
