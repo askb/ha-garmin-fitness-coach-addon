@@ -103,6 +103,8 @@ for (const route of ROUTES) {
           [class*="acsb" i],
           [aria-label*="accessibility menu" i],
           [aria-label*="open accessibility" i],
+          iframe[title*="accessibility" i],
+          iframe[src*="accessibility" i],
           /* Strip Next.js dev/build indicators that can survive even when
              NODE_ENV=production if any portal or status overlay slips in
              (the small monitor/screen icon that surfaced inside cards on
@@ -129,8 +131,10 @@ for (const route of ROUTES) {
 
     // Belt-and-braces: walk for any small fixed/sticky element pinned to
     // a viewport corner that looks like an indicator badge (≤72×72px,
-    // not a nav). Catches the Next.js build watcher portal and any other
-    // status-indicator overlays we can't enumerate by name (#142).
+    // not a nav, no substantial text content). Catches the Next.js
+    // build-watcher portal and any other status-indicator overlays we
+    // can't enumerate by name without nuking legitimate app UI badges
+    // that happen to live in a corner (#142).
     await page
       .evaluate(() => {
         const vpW = window.innerWidth;
@@ -140,8 +144,7 @@ for (const route of ROUTES) {
           if (cs.position !== "fixed" && cs.position !== "sticky") return;
           const rect = el.getBoundingClientRect();
           // Small badge-sized element pinned within 16px of a viewport
-          // corner. Skip if it spans most of the viewport (that's a nav,
-          // handled separately) or contains substantial text.
+          // corner.
           const isSmall = rect.width <= 72 && rect.height <= 72;
           const nearLeft = rect.left <= 16;
           const nearRight = rect.right >= vpW - 16;
@@ -149,10 +152,14 @@ for (const route of ROUTES) {
           const nearBottom = rect.bottom >= vpH - 16;
           const inCorner =
             (nearLeft || nearRight) && (nearTop || nearBottom);
+          // Explicit text-content guard — any element holding more than
+          // a couple of glyphs is almost certainly real app UI (a
+          // notification badge, a tooltip, a label). Indicator portals
+          // are typically icon-only or hold ≤2 chars (e.g. "N", "!").
+          const text = (el.textContent ?? "").trim();
+          const hasSubstantialText = text.length > 2;
           const tag = el.tagName.toLowerCase();
-          // Don't nuke the app's own header/nav children — the matcher
-          // already excludes anything larger than 72×72.
-          if (isSmall && inCorner && tag !== "nav") {
+          if (isSmall && inCorner && !hasSubstantialText && tag !== "nav") {
             el.style.setProperty("display", "none", "important");
           }
         });
