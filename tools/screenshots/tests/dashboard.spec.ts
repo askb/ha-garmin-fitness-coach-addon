@@ -104,11 +104,65 @@ for (const route of ROUTES) {
           [aria-label*="accessibility menu" i],
           [aria-label*="open accessibility" i],
           iframe[title*="accessibility" i],
-          iframe[src*="accessibility" i] {
+          iframe[src*="accessibility" i],
+          /* Strip Next.js dev/build indicators that can survive even when
+             NODE_ENV=production if any portal or status overlay slips in
+             (the small monitor/screen icon that surfaced inside cards on
+             mobile in the 2026-05-19 capture batch). */
+          nextjs-portal,
+          [id="__next-build-watcher"],
+          [data-next-mark],
+          [data-nextjs-toast],
+          [data-nextjs-dialog-overlay],
+          [data-nextjs-toast-wrapper],
+          button[data-nextjs-data-runtime-error-collapsed],
+          /* Generic small fixed-position dev/feedback launchers anchored
+             to a viewport corner (~64px or smaller, position fixed). The
+             CSS-only fallback for anything we missed by name. */
+          [class*="dev-indicator" i],
+          [class*="DevIndicator" i],
+          [id*="dev-indicator" i] {
             display: none !important;
             visibility: hidden !important;
           }
         `,
+      })
+      .catch(() => undefined);
+
+    // Belt-and-braces: walk for any small fixed/sticky element pinned to
+    // a viewport corner that looks like an indicator badge (≤72×72px,
+    // not a nav, no substantial text content). Catches the Next.js
+    // build-watcher portal and any other status-indicator overlays we
+    // can't enumerate by name without nuking legitimate app UI badges
+    // that happen to live in a corner (#142).
+    await page
+      .evaluate(() => {
+        const vpW = window.innerWidth;
+        const vpH = window.innerHeight;
+        document.querySelectorAll<HTMLElement>("body *").forEach((el) => {
+          const cs = window.getComputedStyle(el);
+          if (cs.position !== "fixed" && cs.position !== "sticky") return;
+          const rect = el.getBoundingClientRect();
+          // Small badge-sized element pinned within 16px of a viewport
+          // corner.
+          const isSmall = rect.width <= 72 && rect.height <= 72;
+          const nearLeft = rect.left <= 16;
+          const nearRight = rect.right >= vpW - 16;
+          const nearTop = rect.top <= 16;
+          const nearBottom = rect.bottom >= vpH - 16;
+          const inCorner =
+            (nearLeft || nearRight) && (nearTop || nearBottom);
+          // Explicit text-content guard — any element holding more than
+          // a couple of glyphs is almost certainly real app UI (a
+          // notification badge, a tooltip, a label). Indicator portals
+          // are typically icon-only or hold ≤2 chars (e.g. "N", "!").
+          const text = (el.textContent ?? "").trim();
+          const hasSubstantialText = text.length > 2;
+          const tag = el.tagName.toLowerCase();
+          if (isSmall && inCorner && !hasSubstantialText && tag !== "nav") {
+            el.style.setProperty("display", "none", "important");
+          }
+        });
       })
       .catch(() => undefined);
 
