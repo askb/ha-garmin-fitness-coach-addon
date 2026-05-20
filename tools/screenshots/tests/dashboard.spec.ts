@@ -129,39 +129,49 @@ for (const route of ROUTES) {
       })
       .catch(() => undefined);
 
-    // Belt-and-braces: walk for any small fixed/sticky element pinned to
-    // a viewport corner that looks like an indicator badge (≤72×72px,
-    // not a nav, no substantial text content). Catches the Next.js
-    // build-watcher portal and any other status-indicator overlays we
-    // can't enumerate by name without nuking legitimate app UI badges
-    // that happen to live in a corner (#142).
+    // Belt-and-braces: walk for any small fixed/sticky element pinned
+    // to a viewport edge that looks like a floating action button,
+    // chat launcher, dev indicator, or other launcher chrome. We hide
+    // anything ≤128×128px whose computed position is fixed/sticky AND
+    // whose bounding box is anchored within 32px of any viewport edge,
+    // provided it is narrow enough that it cannot be a real navigation
+    // bar (≤25% of viewport width). This catches:
+    //   * the purple coach launcher FAB pinned mid-right
+    //   * the smaller monitor/help icon stacked below it
+    //   * any third-party chat/feedback widget that slipped past the
+    //     CSS killers above
+    //   * Next.js dev indicators
+    // without nuking the real header/footer (full-width) or in-card
+    // app UI (not position:fixed/sticky).
     await page
       .evaluate(() => {
         const vpW = window.innerWidth;
         const vpH = window.innerHeight;
+        const widthCap = vpW * 0.25;
         document.querySelectorAll<HTMLElement>("body *").forEach((el) => {
           const cs = window.getComputedStyle(el);
           if (cs.position !== "fixed" && cs.position !== "sticky") return;
+          if (cs.display === "none" || cs.visibility === "hidden") return;
           const rect = el.getBoundingClientRect();
-          // Small badge-sized element pinned within 16px of a viewport
-          // corner.
-          const isSmall = rect.width <= 72 && rect.height <= 72;
-          const nearLeft = rect.left <= 16;
-          const nearRight = rect.right >= vpW - 16;
-          const nearTop = rect.top <= 16;
-          const nearBottom = rect.bottom >= vpH - 16;
-          const inCorner =
-            (nearLeft || nearRight) && (nearTop || nearBottom);
-          // Explicit text-content guard — any element holding more than
-          // a couple of glyphs is almost certainly real app UI (a
-          // notification badge, a tooltip, a label). Indicator portals
-          // are typically icon-only or hold ≤2 chars (e.g. "N", "!").
-          const text = (el.textContent ?? "").trim();
-          const hasSubstantialText = text.length > 2;
+          if (rect.width === 0 || rect.height === 0) return;
+          // Skip wide elements — they are app chrome (nav, header,
+          // footer, banner), not launcher widgets.
+          if (rect.width > widthCap) return;
+          // Floating launchers are square-ish and modestly sized.
+          const isSmall = rect.width <= 128 && rect.height <= 128;
+          if (!isSmall) return;
+          // Anchored within 32px of *any* viewport edge (not just a
+          // corner — the coach FAB sits mid-right on desktop).
+          const nearLeft = rect.left <= 32;
+          const nearRight = rect.right >= vpW - 32;
+          const nearTop = rect.top <= 32;
+          const nearBottom = rect.bottom >= vpH - 32;
+          const onEdge = nearLeft || nearRight || nearTop || nearBottom;
+          if (!onEdge) return;
           const tag = el.tagName.toLowerCase();
-          if (isSmall && inCorner && !hasSubstantialText && tag !== "nav") {
-            el.style.setProperty("display", "none", "important");
-          }
+          if (tag === "nav" || tag === "header" || tag === "footer") return;
+          if (el.getAttribute("role") === "navigation") return;
+          el.style.setProperty("display", "none", "important");
         });
       })
       .catch(() => undefined);
