@@ -176,6 +176,29 @@ for (const route of ROUTES) {
       })
       .catch(() => undefined);
 
+    // Hide the global ThemeToggle launcher (the "monitor / TV" icon at
+    // the right-bottom of every page). It is `position: absolute`
+    // anchored to `body > div.absolute.right-4.bottom-4`, so the
+    // fixed/sticky walker above never reaches it. Target it via the
+    // sr-only "Toggle theme" label that the underlying Radix Button
+    // ships with — robust across class-name churn (#150 follow-up).
+    await page
+      .evaluate(() => {
+        document
+          .querySelectorAll<HTMLElement>("button .sr-only")
+          .forEach((srOnly) => {
+            if (srOnly.textContent?.trim() !== "Toggle theme") return;
+            const button = srOnly.closest("button") as HTMLElement | null;
+            if (!button) return;
+            button.style.setProperty("display", "none", "important");
+            const wrapper = button.parentElement as HTMLElement | null;
+            if (wrapper) {
+              wrapper.style.setProperty("display", "none", "important");
+            }
+          });
+      })
+      .catch(() => undefined);
+
     // Mobile-only: locate any element whose computed position is fixed
     // or sticky AND whose bottom edge is anchored to the viewport, then
     // hide it before fullPage capture. This is far more robust than a
