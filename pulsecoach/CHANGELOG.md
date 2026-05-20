@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.27] — 2026-05-20
+
+Closes the 2026-05-20 multi-agent screenshot review loop. Twelve app
+fixes plus a screenshot-pipeline harden against floating launchers /
+FABs that survived the previous corner walker.
+
+### Picked up from app
+
+- **Trends multi-metric chart now renders data lines** instead of a
+  blank grid for HRV / Readiness / Sleep / Stress (app#187).
+- **Performance Management Chart contrast fixed** — CTL/ATL/TSB lines
+  are now legible on dark theme with widened strokes and a dynamic
+  y-domain (app#188).
+- **Notable Changes row label cleaned up** — the raw `Week-over-week:`
+  prefix is gone (app#189).
+- **Vitals "Baseline" no longer duplicated** in the Skin Temperature
+  no-data row (app#190).
+- **Home readiness ring** no longer word-breaks `confidence` on
+  narrow viewports (app#191).
+- **Insights mobile "THIS WEEK" widget** uses an explicit dark
+  background so the metric colors stay readable (app#192).
+- **Vitals SpO2 badge clarified** — the "Low" / "Critical" label now
+  carries an absolute-threshold tag so it doesn't contradict the
+  "+x% vs baseline" deviation pill (app#193).
+- **Validation Sleep Lab measurement type** uses a Lucide SVG icon
+  instead of the inconsistent 😴 emoji (app#194).
+- **Coach mobile persona tabs** — all four labels (Sport Scientist,
+  Psychologist, Nutritionist, Recovery) now fit at 390px without the
+  Recovery tab clipping off-screen (app#195).
+- **Sleep "Actual vs Need" chart** now renders the Need reference
+  line on mobile (it was desktop-only before) (app#196).
+- **Sleep Stages chart** plots all 14 nights again — the renderer
+  was coercing legitimate null durations to zero and skipping
+  rows (app#197).
+- **Home workout recommendation** is regenerated when Garmin syncs
+  shift readiness into a new zone, eliminating the
+  "High readiness / Moderate workout" contradiction (app#198).
+
+### Screenshot pipeline
+
+- Strip edge-anchored floating launchers (coach FAB, monitor / help
+  icon, third-party chat bubbles) regardless of corner anchoring.
+  The previous walker only caught corner-anchored ≤72×72 indicators;
+  the new walker catches anything ≤128×128 within 32px of *any*
+  viewport edge and narrower than 25% of the viewport width, so the
+  full-width header / nav / footer stay visible (#150).
+
 ## [0.16.26] — 2026-05-19
 
 Picks up four more app fixes from the second 2026-05-19 multi-agent
