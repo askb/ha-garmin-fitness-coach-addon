@@ -9,11 +9,23 @@ import { test } from "@playwright/test";
  *
  * `wait` lets you tune the post-load delay per route (charts on
  * /training take longer to render than the landing page).
+ *
+ * `timeframes` is an optional list of DateRangeSelector tab labels
+ * ("7d", "14d", "28d", "90d", "180d", "1y") to click and capture
+ * one PNG per. When set, the default-state capture is skipped and
+ * one screenshot is emitted per label (e.g. `fitness-7d-desktop.png`).
+ * This catches windowed-data regressions like sparse VO2max readings
+ * that only render correctly on the longer windows (#163 follow-up).
  */
-const ROUTES: { name: string; path: string; wait?: number }[] = [
+const ROUTES: { name: string; path: string; wait?: number; timeframes?: string[] }[] = [
   { name: "home", path: "/", wait: 4000 },
   { name: "training", path: "/training", wait: 8000 },
-  { name: "fitness", path: "/fitness", wait: 8000 },
+  {
+    name: "fitness",
+    path: "/fitness",
+    wait: 8000,
+    timeframes: ["7d", "14d", "28d", "90d", "180d", "1y"],
+  },
   { name: "activities", path: "/activities", wait: 6000 },
   { name: "sleep", path: "/sleep", wait: 5000 },
   { name: "trends", path: "/trends", wait: 8000 },
@@ -38,8 +50,6 @@ for (const route of ROUTES) {
     const project = testInfo.project.name; // "desktop" | "mobile"
     const isMobile = project === "mobile";
     const day = timestampedDir();
-    const fileName = `${route.name}-${project}.png`;
-    const outPath = path.join(OUT_DIR, day, fileName);
 
     await page.goto(route.path, { waitUntil: "networkidle" });
 
@@ -235,16 +245,43 @@ for (const route of ROUTES) {
     // before the screenshot fires.
     await page.waitForTimeout(200);
 
-    await page.screenshot({
-      path: outPath,
-      fullPage: true,
-      animations: "disabled",
-    });
+    // Helper: capture a single PNG with a given filename suffix.
+    const capture = async (suffix: string): Promise<void> => {
+      const fileName = `${route.name}${suffix ? `-${suffix}` : ""}-${project}.png`;
+      const outPath = path.join(OUT_DIR, day, fileName);
+      await page.screenshot({
+        path: outPath,
+        fullPage: true,
+        animations: "disabled",
+      });
+      await testInfo.attach(`${route.name}${suffix ? `-${suffix}` : ""}-${project}`, {
+        path: outPath,
+        contentType: "image/png",
+      });
+    };
 
-    // Attach to the HTML report so reviewers can flip through quickly.
-    await testInfo.attach(`${route.name}-${project}`, {
-      path: outPath,
-      contentType: "image/png",
-    });
+    if (route.timeframes && route.timeframes.length > 0) {
+      // Drive the DateRangeSelector tab buttons one at a time and
+      // capture a screenshot per window. Charts re-fetch on click
+      // (tRPC `getVO2maxHistory` etc keyed by `chartDays`), so we
+      // wait the route's normal settle time again after each click.
+      for (const label of route.timeframes) {
+        // Match the exact pill text. The selector is intentionally
+        // narrow — buttons with text "7d" / "28d" etc — so it never
+        // clicks legend chips or other UI that happens to contain
+        // those substrings.
+        const btn = page.getByRole("button", { name: label, exact: true });
+        await btn.first().click({ trial: false }).catch(() => undefined);
+        // Recharts animates in over 300-500ms and tRPC refetches
+        // off the network. Use the same per-route wait as the
+        // default capture so the screenshot is stable.
+        await page.waitForTimeout(route.wait ?? 5000);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.waitForTimeout(200);
+        await capture(label);
+      }
+    } else {
+      await capture("");
+    }
   });
 }
