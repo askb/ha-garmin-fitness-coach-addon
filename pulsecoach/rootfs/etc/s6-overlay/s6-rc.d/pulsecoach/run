@@ -344,8 +344,24 @@ export COMPUTE_INTERVAL_MINUTES="${SYNC_INTERVAL}"
     # Wait for initial sync to complete before first compute (120s grace period)
     sleep 120
     while true; do
-        bashio::log.info "Computing advanced metrics..."
-        python3 /app/scripts/metrics-compute.py --once 2>&1 || bashio::log.warning "Metrics compute failed"
+        # Cooperate with chained-from-sync runs and manual /auth/recompute
+        # so we don't double-run metrics-compute. _clear_recompute_status
+        # only updates the marker if it exists, so we always write
+        # running:true here too.
+        status_file="/data/garmin-tokens/.recompute_status"
+        skip=0
+        if [ -f "$status_file" ]; then
+            if grep -q '"running":[[:space:]]*true' "$status_file" 2>/dev/null; then
+                bashio::log.info "metrics-compute already running — skipping periodic pass"
+                skip=1
+            fi
+        fi
+        if [ "$skip" -eq 0 ]; then
+            mkdir -p /data/garmin-tokens
+            printf '{"running":true,"started":%s,"source":"s6-periodic"}' "$(date +%s)" > "$status_file"
+            bashio::log.info "Computing advanced metrics..."
+            python3 /app/scripts/metrics-compute.py --once 2>&1 || bashio::log.warning "Metrics compute failed"
+        fi
         sleep "$((COMPUTE_INTERVAL_MINUTES * 60))"
     done
 ) &
@@ -449,8 +465,20 @@ while true; do
         bashio::log.warning "Metrics compute died, restarting..."
         (
             while true; do
-                bashio::log.info "Computing advanced metrics..."
-                python3 /app/scripts/metrics-compute.py --once 2>&1 || bashio::log.warning "Metrics compute failed"
+                status_file="/data/garmin-tokens/.recompute_status"
+                skip=0
+                if [ -f "$status_file" ]; then
+                    if grep -q '"running":[[:space:]]*true' "$status_file" 2>/dev/null; then
+                        bashio::log.info "metrics-compute already running — skipping periodic pass"
+                        skip=1
+                    fi
+                fi
+                if [ "$skip" -eq 0 ]; then
+                    mkdir -p /data/garmin-tokens
+                    printf '{"running":true,"started":%s,"source":"s6-periodic"}' "$(date +%s)" > "$status_file"
+                    bashio::log.info "Computing advanced metrics..."
+                    python3 /app/scripts/metrics-compute.py --once 2>&1 || bashio::log.warning "Metrics compute failed"
+                fi
                 sleep "$((COMPUTE_INTERVAL_MINUTES * 60))"
             done
         ) &
