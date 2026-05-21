@@ -106,8 +106,6 @@ Filterable list across all sport types pulled from Garmin Connect.
 Auto-detected phantom walks under 10 minutes and 500 m are filtered
 out so the list shows only sessions you actually trained.
 
-![Activities dashboard](docs/screenshots/activities-desktop.png)
-
 > 💡 The Home, Training, Coach, Sleep and Validation dashboards are
 > also included in the addon but omitted from this README pass — they
 > are part of ongoing UI-polish work tracked in the issue board. Sleep
