@@ -69,6 +69,15 @@ def ensure_advanced_metric_table(cur):
     """)
     # If the table was created by Drizzle push (without the constraint),
     # CREATE TABLE IF NOT EXISTS won't add it. Ensure it exists separately.
+    # The DO block guards against the constraint existing, but two
+    # concurrent metrics-compute runs (manual + chained-after-sync, or
+    # racing s6 periodic) can both pass the guard before either
+    # executes ALTER TABLE — at which point the second ADD CONSTRAINT
+    # fails with DuplicateTable. The .recompute_status lock added in
+    # v0.16.29 prevents the most common cause but a TOCTOU race is
+    # still possible (manual /auth/recompute vs periodic loop, or
+    # corrupted lock file). Make the SQL itself idempotent by
+    # swallowing duplicate_table / duplicate_object inside the DO.
     cur.execute("""
         DO $$
         BEGIN
@@ -85,6 +94,10 @@ def ensure_advanced_metric_table(cur):
                     ADD CONSTRAINT advanced_metric_user_date_unique
                     UNIQUE (user_id, date);
             END IF;
+        EXCEPTION
+            WHEN duplicate_table THEN NULL;
+            WHEN duplicate_object THEN NULL;
+            WHEN unique_violation THEN NULL;
         END $$;
     """)
 
@@ -104,6 +117,8 @@ def ensure_advanced_metric_table(cur):
     """)
     # If the table was created by Drizzle push (without the constraint),
     # CREATE TABLE IF NOT EXISTS won't add it. Ensure it exists separately.
+    # See the advanced_metric block above for the rationale on the
+    # EXCEPTION arms — same race window applies here.
     cur.execute("""
         DO $$
         BEGIN
@@ -124,6 +139,10 @@ def ensure_advanced_metric_table(cur):
                     ADD CONSTRAINT readiness_score_user_date_unique
                     UNIQUE (user_id, date);
             END IF;
+        EXCEPTION
+            WHEN duplicate_table THEN NULL;
+            WHEN duplicate_object THEN NULL;
+            WHEN unique_violation THEN NULL;
         END $$;
     """)
 
