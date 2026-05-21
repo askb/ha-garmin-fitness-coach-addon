@@ -888,13 +888,28 @@ def sync_vo2max(client, db, days=7):
 
         # --- Primary: Garmin's official VO2max from max-metrics API ---
         garmin_count = 0
+        api_failures: dict[str, int] = {}  # error class name -> count
+        api_failure_examples: dict[str, str] = {}  # error class name -> first message
+        dates_with_data = 0
+        dates_queried = 0
         try:
             d = cutoff
             while d <= today:
                 date_str = d.isoformat()
+                dates_queried += 1
                 try:
                     metrics = client.get_max_metrics(date_str)
-                except Exception:
+                except Exception as exc:
+                    # Used to silently swallow ALL per-date failures, which
+                    # made it impossible to tell from logs whether sparse
+                    # VO2max data was 'no qualifying run' (Garmin returned
+                    # []) vs an API outage / rate-limit / token issue.
+                    # Track per-class counts so the summary line below
+                    # surfaces it (#163 follow-up).
+                    cls = type(exc).__name__
+                    api_failures[cls] = api_failures.get(cls, 0) + 1
+                    if cls not in api_failure_examples:
+                        api_failure_examples[cls] = str(exc)[:200]
                     d += timedelta(days=1)
                     continue
 
@@ -904,6 +919,7 @@ def sync_vo2max(client, db, days=7):
 
                 # get_max_metrics returns a list of metric entries
                 entries = metrics if isinstance(metrics, list) else [metrics]
+                inserted_for_date = 0
                 for entry in entries:
                     vo2 = entry.get("generic", {}).get("vo2MaxPreciseValue") \
                         or entry.get("generic", {}).get("vo2MaxValue")
@@ -933,12 +949,37 @@ def sync_vo2max(client, db, days=7):
                             source = EXCLUDED.source
                     """, (USER_ID, metric_date, sport, round(vo2, 1), "garmin_official"))
                     garmin_count += 1
+                    inserted_for_date += 1
 
+                if inserted_for_date > 0:
+                    dates_with_data += 1
                 if garmin_count % 50 == 0 and garmin_count > 0:
                     db.commit()
                 d += timedelta(days=1)
 
             db.commit()
+
+            # Surface API-call statistics. Even if `garmin_count` is
+            # high this still tells us 'X of N dates threw' which is
+            # the signal we were missing when a user reported sparse
+            # data on 2026-05-22.
+            if api_failures:
+                total_fail = sum(api_failures.values())
+                breakdown = ", ".join(
+                    f"{cls}: {n} (e.g. {api_failure_examples[cls]!r})"
+                    for cls, n in sorted(api_failures.items())
+                )
+                print(
+                    f"  Garmin max-metrics: {dates_queried} dates queried, "
+                    f"{dates_with_data} returned data, "
+                    f"{total_fail} threw — {breakdown}",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"  Garmin max-metrics: {dates_queried} dates queried, "
+                    f"{dates_with_data} returned VO2max readings"
+                )
         except Exception as e:
             print(f"  Garmin max-metrics API failed: {e} — falling back to computed")
             db.rollback()
