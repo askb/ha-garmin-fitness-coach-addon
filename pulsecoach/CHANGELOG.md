@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.29] — 2026-05-21
+
+Refresh-pipeline overhaul: dashboards now light up automatically
+after sync without a page reload.
+
+### Auto-recompute after sync
+
+- **garmin-sync.py** chains `metrics-compute.py --once` at the end
+  of every sync run (manual or scheduled), so derived rows
+  (`readiness_score`, `advanced_metric`, `daily_athlete_summary`)
+  always reflect the freshly synced `daily_metric` + `activity`
+  rows. No more clicking "Recompute metrics" to see Home update.
+- A `.recompute_status` file lock prevents the post-sync chain
+  from overlapping with the s6 periodic compute loop or a manual
+  `/auth/recompute` invocation. The s6 loop now writes the same
+  marker so all three paths cooperate.
+- Chained recompute logs to `/data/metrics-compute.log` (rotated
+  on each chain) instead of `/dev/null`, so failures are
+  diagnosable.
+
+### Picked up from app
+
+- **Settings invalidates React Query caches** when sync OR
+  recompute transitions running → idle. Polls `/auth/sync` and
+  `/auth/recompute-status` every 3 s while a job is in flight,
+  30 s otherwise. End-to-end UX: tap **Sync now** → sync writes
+  rows → recompute auto-runs → caches invalidate → every
+  dashboard refetches and renders the new values (app#203).
+
 ## [0.16.28] — 2026-05-21
 
 Closes the 2026-05-21 screenshot review loop. Four app polish fixes
