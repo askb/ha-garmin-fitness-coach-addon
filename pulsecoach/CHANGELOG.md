@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.28] — 2026-05-21
+
+Closes the 2026-05-21 screenshot review loop. Four app polish fixes
+picked up from `main` plus a README tidy.
+
+### Picked up from app
+
+- **Zones page charts render again** — Weekly Time in Zones,
+  Training Polarization, Monthly Zone Distribution, Pace/HR
+  Efficiency, and Weekly Training Volume by Sport were silently
+  empty because the chart components consumed raw tRPC payloads
+  whose shape didn't match Recharts. Normalised the data sources
+  and fixed the efficiency date axis (app#201).
+- **Insights "This Week" card no longer inverts** — replaced
+  hardcoded `bg-zinc-900` / `border-zinc-800` / `bg-zinc-800/60`
+  with theme-aware `bg-card` / `border` / `bg-muted` tokens so the
+  weekly summary matches the rest of the page in both light and
+  dark themes (app#202).
+- **Multi-metric Trend stress line is red** — stress and sleep both
+  used `#3b82f6` (blue) and were indistinguishable; stress now uses
+  rose-500 (`#f43f5e`) (app#200).
+- **Zones legend wraps on mobile** — the Zone 5 chip no longer
+  clips on ~375 px viewports, and Pace/HR efficiency subtitle uses
+  explicit `+` / `-` signs (app#199).
+
+### Docs
+
+- Drop `activities-desktop.png` from the README screenshot gallery
+  — the descriptive copy stays.
+
 ## [0.16.27] — 2026-05-20
 
 Closes the 2026-05-20 multi-agent screenshot review loop. Twelve app
