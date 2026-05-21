@@ -1342,6 +1342,91 @@ def main():
     _write_last_sync()
     print("Garmin sync complete")
 
+    # Chain metrics recompute so derived rows (readiness_score,
+    # advanced_metric, daily_athlete_summary) pick up the freshly synced
+    # daily_metric + activity rows without the user having to click
+    # "Recompute metrics".
+    #
+    # Guards:
+    #   1. Skip if .recompute_status already shows running:true — both
+    #      the s6 periodic compute loop and the manual /auth/recompute
+    #      endpoint set this; we don't want overlapping passes.
+    #   2. Write running:true BEFORE spawning so the app's polling on
+    #      /auth/recompute-status sees a true→false falling edge when
+    #      metrics-compute.py finishes (it calls _clear_recompute_status
+    #      which only updates the file if it already exists).
+    #   3. Log to /data/metrics-compute.log so chained-run failures are
+    #      diagnosable instead of silently swallowed.
+    try:
+        import subprocess
+        import time
+
+        status_file = os.path.join(TOKEN_DIR, ".recompute_status")
+        try:
+            if os.path.exists(status_file):
+                with open(status_file) as f:
+                    sf = json.load(f)
+                if sf.get("running"):
+                    print(
+                        "metrics-compute already running "
+                        "(s6 loop or manual recompute) — "
+                        "skipping post-sync chain"
+                    )
+                    raise StopIteration
+        except StopIteration:
+            raise
+        except Exception:
+            # Corrupt / unreadable status file — treat as not-running.
+            pass
+
+        try:
+            os.makedirs(TOKEN_DIR, exist_ok=True)
+            with open(status_file, "w") as f:
+                json.dump(
+                    {
+                        "running": True,
+                        "started": time.time(),
+                        "source": "post-sync",
+                    },
+                    f,
+                )
+        except OSError as exc:
+            print(f"Warning: could not mark recompute running: {exc}")
+
+        # Inherit the parent environment so DATABASE_URL stays in sync
+        # with whatever the sync run used (no duplicated default).
+        log_path = "/data/metrics-compute.log"
+        try:
+            log_fh = open(log_path, "a", buffering=1)
+            log_fh.write(
+                f"=== chained from garmin-sync at "
+                f"{datetime.now(timezone.utc).isoformat()} ===\n"
+            )
+            log_fh.flush()
+            print("Chaining metrics-compute after sync...")
+            subprocess.Popen(
+                ["python3", "/app/scripts/metrics-compute.py", "--once"],
+                stdout=log_fh,
+                stderr=subprocess.STDOUT,
+            )
+            log_fh.close()
+            print(f"metrics-compute started in background (log: {log_path})")
+        except OSError as exc:
+            # Spawn or log-open failed — clear the running marker so the
+            # status file doesn't deadlock subsequent runs.
+            try:
+                with open(status_file, "w") as f:
+                    json.dump(
+                        {"running": False, "error": str(exc)}, f
+                    )
+            except OSError:
+                pass
+            print(f"Warning: failed to chain metrics-compute: {exc}")
+    except StopIteration:
+        pass
+    except Exception as exc:
+        print(f"Warning: chained metrics-compute setup failed: {exc}")
+
 
 if __name__ == "__main__":
     main()
