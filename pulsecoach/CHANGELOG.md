@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.30] — 2026-05-21
+
+Race-condition hotfix for `metrics-compute.py` constraint setup.
+
+### Fixed
+
+- **metrics-compute.py** `ensure_advanced_metric_table` and
+  `ensure_readiness_score_table` no longer crash with
+  `DuplicateTable: relation "advanced_metric_user_date_unique"
+  already exists` when two computes race past the `IF NOT EXISTS`
+  guard. The DO blocks now swallow `duplicate_table`,
+  `duplicate_object`, and `unique_violation` so the SQL is
+  genuinely idempotent. v0.16.29's `.recompute_status` lock made
+  the race rare but did not close the TOCTOU window.
+
 ## [0.16.29] — 2026-05-21
 
 Refresh-pipeline overhaul: dashboards now light up automatically
