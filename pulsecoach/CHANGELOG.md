@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.31] — 2026-05-22
+
+Diagnostics + capture-pipeline improvements after a sparse-VO2max
+investigation that turned out to be expected behaviour.
+
+### Fixed
+
+- **garmin-sync.py** `sync_vo2max` no longer silently swallows
+  per-date exceptions from the Garmin `get_max_metrics` API.
+  Failures are now grouped by exception class and reported in a
+  summary line, e.g.
+  `Garmin max-metrics: 8 dates queried, 1 returned data, 7 threw —
+  HTTPError: 4 (e.g. '429 Too Many Requests')`, so a real outage
+  is no longer indistinguishable from a 'no qualifying runs'
+  window. Happy-path output is also clearer:
+  `Garmin max-metrics: 8 dates queried, 1 returned VO2max readings`.
+
+### Tooling
+
+- **screenshots** `dashboard.spec.ts` now captures every
+  `DateRangeSelector` window (`7d` / `14d` / `28d` / `90d` / `180d`
+  / `1y`) on `/fitness`, emitting one PNG per label
+  (`fitness-7d-desktop.png`, etc). Catches windowed-render
+  regressions the previous single-state capture missed — e.g. a
+  28d chart rendering empty while 90d renders a graph.
+
 ## [0.16.30] — 2026-05-21
 
 Race-condition hotfix for `metrics-compute.py` constraint setup.
