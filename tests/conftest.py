@@ -111,6 +111,9 @@ def mock_garmin_client():
     client.get_stress_data.return_value = {
         "averageStressLevel": 35
     }
+    client.get_spo2_data.return_value = {}
+    client.get_respiration_data.return_value = {}
+    client.get_body_composition.return_value = {}
     client.get_activities.return_value = [
         {
             "activityId": 12345,
@@ -134,6 +137,8 @@ def mock_pg_db():
     """Return a mock psycopg2 connection and cursor (avoids PostgreSQL-specific SQL issues)."""
     conn = MagicMock()
     cursor = MagicMock()
+    cursor.fetchone.return_value = None
+    cursor.fetchmany.return_value = []
     conn.cursor.return_value = cursor
     return conn, cursor
 

@@ -16,6 +16,7 @@ authors = [
 test = [
     "pytest>=8.0",
     "pytest-asyncio",
+    "requests-mock",
 ]
 
 [tool.pytest.ini_options]

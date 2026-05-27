@@ -1,0 +1,28 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+# ==============================================================================
+
+set -euo pipefail
+# PulseCoach HA Actions — s6-overlay run script
+# ==============================================================================
+
+bashio::log.info "Starting PulseCoach HA action event service..."
+
+HA_EVENTS_ENABLED=$(bashio::config 'ha_events_enabled' || echo "true")
+LOW_READINESS_THRESHOLD=$(bashio::config 'low_readiness_threshold' || echo "50")
+MISSED_SESSION_GRACE_MIN=$(bashio::config 'missed_session_grace_min' || echo "360")
+
+export DB_HOST="127.0.0.1"
+export DB_PORT="5432"
+export DB_USER="postgres"
+export DB_PASSWORD=""
+export DB_NAME="pulsecoach"
+export DATABASE_URL="postgresql://postgres@127.0.0.1:5432/pulsecoach"
+export HA_EVENTS_ENABLED LOW_READINESS_THRESHOLD MISSED_SESSION_GRACE_MIN
+export HA_ACTIONS_POLL_SECONDS="${HA_ACTIONS_POLL_SECONDS:-60}"
+export HA_ACTIONS_CURSOR_FILE="${HA_ACTIONS_CURSOR_FILE:-/data/.ha-actions-cursor}"
+export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN:-}"
+
+exec python3 /app/scripts/ha-actions.py
