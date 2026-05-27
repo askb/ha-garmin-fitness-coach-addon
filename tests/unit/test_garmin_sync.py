@@ -63,9 +63,8 @@ class TestGetClient:
         """
         token_dir = str(tmp_path / "tokens")
         os.makedirs(token_dir)
-        # Create oauth token files so the token-resume path is taken
-        open(os.path.join(token_dir, "oauth1_token.json"), "w").close()
-        open(os.path.join(token_dir, "oauth2_token.json"), "w").close()
+        # Create native garminconnect token file so the token-resume path is taken
+        open(os.path.join(token_dir, "garmin_tokens.json"), "w").close()
 
         mock_client = MagicMock()
         garmin_sync._mock_garmin_module.Garmin.return_value = mock_client
@@ -73,15 +72,14 @@ class TestGetClient:
         with patch.object(garmin_sync, "TOKEN_DIR", token_dir):
             garmin_sync.get_client()
 
-        mock_client.garth.dump.assert_called_once_with(token_dir)
+        mock_client.client.dump.assert_called_once_with(token_dir)
 
     def test_reuses_existing_token(self, garmin_sync, tmp_path):
-        """If valid oauth token files exist, login uses the token directory."""
+        """If a native token file exists, login uses the token directory."""
         token_dir = str(tmp_path / "tokens")
         os.makedirs(token_dir)
-        # The actual code checks for oauth1_token.json and oauth2_token.json
-        open(os.path.join(token_dir, "oauth1_token.json"), "w").close()
-        open(os.path.join(token_dir, "oauth2_token.json"), "w").close()
+        # The current garminconnect flow checks for native garmin_tokens.json
+        open(os.path.join(token_dir, "garmin_tokens.json"), "w").close()
 
         mock_client = MagicMock()
         garmin_sync._mock_garmin_module.Garmin.return_value = mock_client
@@ -95,12 +93,11 @@ class TestGetClient:
     def test_falls_back_to_credentials_on_expired_token(
         self, garmin_sync, tmp_path
     ):
-        """If loading saved oauth tokens fails, falls back to credential login."""
+        """If loading saved native tokens fails, falls back to credential login."""
         token_dir = str(tmp_path / "tokens")
         os.makedirs(token_dir)
-        # Create oauth token files so the token-resume path is attempted
-        open(os.path.join(token_dir, "oauth1_token.json"), "w").close()
-        open(os.path.join(token_dir, "oauth2_token.json"), "w").close()
+        # Create native token file so the token-resume path is attempted
+        open(os.path.join(token_dir, "garmin_tokens.json"), "w").close()
 
         mock_client = MagicMock()
         # First login() call (with tokenstore) raises; second call (credentials) succeeds

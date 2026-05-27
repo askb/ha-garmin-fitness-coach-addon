@@ -23,6 +23,18 @@
     "user_timezone": {
       "name": "Timezone",
       "description": "Your local timezone for date boundaries (e.g., 'Australia/Brisbane', 'America/New_York'). Defaults to UTC."
+    },
+    "ha_events_enabled": {
+      "name": "Home Assistant Events",
+      "description": "Fire PulseCoach events into Home Assistant for automations and scenes."
+    },
+    "low_readiness_threshold": {
+      "name": "Low Readiness Threshold",
+      "description": "Readiness score below which a pulsecoach_low_readiness event is fired."
+    },
+    "missed_session_grace_min": {
+      "name": "Missed Session Grace Period",
+      "description": "Minutes to wait before missed planned sessions are considered actionable."
     }
   }
 }

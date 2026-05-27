@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0-dev.1] — 2026-05-27
+
+### Added
+
+- **ha-actions.py** polls `RecommendationAudit` rows and fires Home
+  Assistant events for recommendations, low readiness, completed
+  sessions, and missed sessions. Processing is cursor-based so restarts
+  do not replay old audit rows.
+- **Addon config** adds `ha_events_enabled`,
+  `low_readiness_threshold`, and `missed_session_grace_min` options for
+  the new action layer.
+- **s6-overlay** starts `pulsecoach-ha-actions` as a longrun service
+  alongside the existing PulseCoach services.
+
 ## [0.16.31] — 2026-05-22
 
 Diagnostics + capture-pipeline improvements after a sparse-VO2max
