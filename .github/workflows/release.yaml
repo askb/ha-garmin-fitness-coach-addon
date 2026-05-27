@@ -12,8 +12,15 @@ on:
 permissions: {}
 
 jobs:
+  gate:
+    name: 'Release Gate'
+    uses: ./.github/workflows/release-gate.yml
+    permissions:
+      contents: read
+
   validate:
     name: 'Validate'
+    needs: gate
     runs-on: ubuntu-latest
     permissions:
       contents: read
