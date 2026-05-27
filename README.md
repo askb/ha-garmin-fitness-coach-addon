@@ -583,6 +583,16 @@ CI checks out both repos, runs a multi-stage Docker build (Node.js builder →
 HA base image), and pushes multi-arch images (amd64 + aarch64) to GHCR.
 Tagged releases create GitHub Releases automatically.
 
+### Release gating
+
+The release workflow calls `release-gate.yml` before publishing. The gate
+checks the PulseCoach app repo's `main` branch and refuses to ship addon
+images when the app checks are not green, preventing releases that point at a
+broken app commit.
+
+Emergency override: temporarily comment out the `needs: gate` line in the
+release workflow, ship the urgent fix, then restore the gate and fix forward.
+
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for

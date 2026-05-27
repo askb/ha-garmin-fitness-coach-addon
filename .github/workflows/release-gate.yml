@@ -1,0 +1,113 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 Anil Belur <askb23@gmail.com>
+
+name: Release Gate
+
+on:
+  workflow_call:
+    inputs:
+      app_repo:
+        description: App repository to verify before releasing the addon.
+        required: false
+        type: string
+        default: askb/ha-garmin-fitness-coach-app
+      app_branch:
+        description: App branch that must be green before releasing the addon.
+        required: false
+        type: string
+        default: main
+      required_workflows:
+        description: Comma-separated check-run names that must be successful.
+        required: false
+        type: string
+        default: CI
+  workflow_dispatch:
+    inputs:
+      app_repo:
+        description: App repository to verify before releasing the addon.
+        required: false
+        type: string
+        default: askb/ha-garmin-fitness-coach-app
+      app_branch:
+        description: App branch that must be green before releasing the addon.
+        required: false
+        type: string
+        default: main
+      required_workflows:
+        description: Comma-separated check-run names that must be successful.
+        required: false
+        type: string
+        default: CI
+
+permissions:
+  contents: read
+
+jobs:
+  verify-app-main-green:
+    name: Verify app main is green
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Verify required app checks
+        env:
+          APP_REPO: ${{ inputs.app_repo }}
+          APP_BRANCH: ${{ inputs.app_branch }}
+          REQUIRED_WORKFLOWS: ${{ inputs.required_workflows }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          sha=$(gh api "repos/${APP_REPO}/branches/${APP_BRANCH}" --jq '.commit.sha')
+          check_runs=$(gh api \
+            "repos/${APP_REPO}/commits/${sha}/check-runs?per_page=100" \
+            --paginate \
+            --jq '.check_runs[] | select(.name != "agent") | [.name, (.conclusion // "pending")] | @tsv')
+
+          IFS=',' read -r -a required_names <<< "${REQUIRED_WORKFLOWS}"
+          failed=0
+
+          for required_name in "${required_names[@]}"; do
+            name="${required_name#"${required_name%%[![:space:]]*}"}"
+            name="${name%"${name##*[![:space:]]}"}"
+            if [[ -z "${name}" ]]; then
+              continue
+            fi
+
+            success_count=$(awk -F '\t' -v name="${name}" \
+              '$1 == name && $2 == "success" { count++ } END { print count + 0 }' \
+              <<< "${check_runs}")
+
+            if [[ "${success_count}" -eq 0 && "${name}" == "CI" ]]; then
+              ci_success_count=0
+              for ci_check in format lint typecheck test; do
+                check_success_count=$(awk -F '\t' -v name="${ci_check}" \
+                  '$1 == name && $2 == "success" { count++ } END { print count + 0 }' \
+                  <<< "${check_runs}")
+                if [[ "${check_success_count}" -gt 0 ]]; then
+                  ci_success_count=$((ci_success_count + 1))
+                fi
+              done
+              if [[ "${ci_success_count}" -eq 4 ]]; then
+                success_count=1
+              fi
+            fi
+
+            if [[ "${success_count}" -eq 0 ]]; then
+              conclusion=$(awk -F '\t' -v name="${name}" \
+                '$1 == name { print $2; found = 1; exit } END { if (!found) print "null" }' \
+                <<< "${check_runs}")
+              echo "::error::App repo ${APP_REPO}@${APP_BRANCH} (sha ${sha}) is NOT green: workflow '${name}' has conclusion='${conclusion}'. Refusing to release."
+              failed=1
+            fi
+          done
+
+          if [[ "${failed}" -ne 0 ]]; then
+            exit 1
+          fi
+
+          echo "✅ App main is green at ${sha} — addon release is allowed." \
+            >> "${GITHUB_STEP_SUMMARY}"
