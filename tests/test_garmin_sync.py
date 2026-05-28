@@ -81,6 +81,7 @@ def mock_client():
             "lightSleepSeconds": 14400,  # 240 min
             "awakeSleepSeconds": 1800,   # 30 min
             "sleepScores": {"overall": {"value": 82}},
+            "averageSkinTemperatureCelsius": 35.4,
         }
     }
     client.get_hrv_data.return_value = {"hrvSummary": {"weeklyAvg": 42}}
@@ -255,6 +256,39 @@ class TestSyncDailyStats:
         values = self._get_insert_values(cursor)
         assert "2025-01-15" in values
 
+    def test_passes_sleep_dto_skin_temp_to_db(self, garmin_sync, mock_db, mock_client):
+        """The preferred sleep DTO skin-temperature value is inserted."""
+        conn, cursor = mock_db
+        garmin_sync.sync_daily_stats(mock_client, conn, "2025-01-15")
+        values = self._get_insert_values(cursor)
+        assert values[24] == 35.4
+
+    def test_passes_none_when_skin_temp_missing(self, garmin_sync, mock_db, mock_client):
+        """Missing Garmin skin-temperature fields are inserted as NULL/None."""
+        conn, cursor = mock_db
+        sleep_dto = mock_client.get_sleep_data.return_value["dailySleepDTO"]
+        for key in garmin_sync.SKIN_TEMP_KEYS:
+            sleep_dto.pop(key, None)
+        mock_client.get_stats.return_value.pop("avgSkinTempCelsius", None)
+
+        garmin_sync.sync_daily_stats(mock_client, conn, "2025-01-15")
+
+        values = self._get_insert_values(cursor)
+        assert values[24] is None
+
+    def test_falls_back_to_stats_skin_temp(self, garmin_sync, mock_db, mock_client):
+        """The stats avgSkinTempCelsius field is used when sleep DTO lacks it."""
+        conn, cursor = mock_db
+        sleep_dto = mock_client.get_sleep_data.return_value["dailySleepDTO"]
+        for key in garmin_sync.SKIN_TEMP_KEYS:
+            sleep_dto.pop(key, None)
+        mock_client.get_stats.return_value["avgSkinTempCelsius"] = 35.678
+
+        garmin_sync.sync_daily_stats(mock_client, conn, "2025-01-15")
+
+        values = self._get_insert_values(cursor)
+        assert values[24] == 35.68
+
     def test_handles_api_error_gracefully(
         self, garmin_sync, mock_db, mock_client, capsys
     ):
@@ -273,6 +307,53 @@ class TestSyncDailyStats:
         mock_client.get_sleep_data.return_value = None
         garmin_sync.sync_daily_stats(mock_client, conn, "2025-01-15")
         conn.commit.assert_called_once()
+
+
+    def test_backfill_skin_temp_runs_once(
+        self, garmin_sync, mock_db, mock_client, tmp_path
+    ):
+        """The v0.17.1 backfill re-syncs selected dates and writes marker."""
+        conn, cursor = mock_db
+        marker = tmp_path / ".skin_temp_backfill_done"
+        cursor.fetchall.return_value = [("2025-01-15",), ("2025-01-14",)]
+
+        with patch.object(garmin_sync, "SKIN_TEMP_BACKFILL_MARKER", str(marker)), \
+             patch.object(garmin_sync, "sync_daily_stats", return_value=True) as sync_daily:
+            garmin_sync.backfill_skin_temp(mock_client, conn)
+
+        assert "skin_temp IS NULL" in cursor.execute.call_args[0][0]
+        assert sync_daily.call_args_list == [
+            call(mock_client, conn, "2025-01-15"),
+            call(mock_client, conn, "2025-01-14"),
+        ]
+        assert marker.exists()
+
+    def test_backfill_skin_temp_skips_when_marker_exists(
+        self, garmin_sync, mock_db, mock_client, tmp_path
+    ):
+        """Existing sentinel prevents repeated v0.17.1 backfill work."""
+        conn, cursor = mock_db
+        marker = tmp_path / ".skin_temp_backfill_done"
+        marker.write_text("done")
+
+        with patch.object(garmin_sync, "SKIN_TEMP_BACKFILL_MARKER", str(marker)):
+            garmin_sync.backfill_skin_temp(mock_client, conn)
+
+        cursor.execute.assert_not_called()
+
+    def test_backfill_skin_temp_does_not_mark_failed_sync(
+        self, garmin_sync, mock_db, mock_client, tmp_path
+    ):
+        """A per-day sync failure leaves the sentinel absent for retry."""
+        conn, cursor = mock_db
+        marker = tmp_path / ".skin_temp_backfill_done"
+        cursor.fetchall.return_value = [("2025-01-15",)]
+
+        with patch.object(garmin_sync, "SKIN_TEMP_BACKFILL_MARKER", str(marker)), \
+             patch.object(garmin_sync, "sync_daily_stats", return_value=False):
+            garmin_sync.backfill_skin_temp(mock_client, conn)
+
+        assert not marker.exists()
 
 
 # ---------------------------------------------------------------------------

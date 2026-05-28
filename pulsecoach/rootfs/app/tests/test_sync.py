@@ -18,7 +18,8 @@ def _load_sync_module():
         os.path.join(os.path.dirname(__file__), '..', 'scripts', 'garmin-sync.py')
     )
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    with patch.dict(sys.modules, {"garminconnect": MagicMock()}):
+        spec.loader.exec_module(module)
     return module
 
 
