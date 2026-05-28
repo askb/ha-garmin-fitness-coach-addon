@@ -14,6 +14,14 @@ ci:
     Signed-off-by: pre-commit-ci[bot] <66853113+pre-commit-ci[bot]@users.noreply.github.com>
 
 repos:
+  - repo: local
+    hooks:
+      - id: check-app-ref
+        name: check addon app ref
+        entry: scripts/check-app-ref.sh
+        language: script
+        pass_filenames: false
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

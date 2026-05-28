@@ -15,7 +15,7 @@ WORKDIR /build
 # Clone the app source from GitHub
 # Use build arg timestamp for cache busting instead of GitHub API (avoids 403 rate limits)
 ARG APP_REPO=askb/ha-garmin-fitness-coach-app
-ARG APP_REF=v0.17.1
+ARG APP_REF=v0.17.4
 ARG CACHEBUST=1
 RUN echo "Cache bust: ${CACHEBUST}" && \
     git clone --depth=1 --branch="${APP_REF}" \
