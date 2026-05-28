@@ -102,6 +102,16 @@ def register_event(requests_mock: Any, event_type: str, status_code: int = 200) 
     requests_mock.post(f"{SUPERVISOR_URL}/{event_type}", status_code=status_code, json={"ok": True})
 
 
+def test_audit_query_uses_drizzle_snake_case(monkeypatch):
+    """Assert the poller queries the Drizzle-managed audit table."""
+    module = load_ha_actions(monkeypatch, [])
+
+    assert "FROM recommendation_audit" in module.AUDIT_QUERY
+    assert "created_at > %s" in module.AUDIT_QUERY
+    assert '"RecommendationAudit"' not in module.AUDIT_QUERY
+    assert '"createdAt"' not in module.AUDIT_QUERY
+
+
 def test_cursor_advances_after_processing_three_rows(monkeypatch, requests_mock, cursor_file):
     base = datetime.now(timezone.utc) - timedelta(minutes=30)
     rows = [

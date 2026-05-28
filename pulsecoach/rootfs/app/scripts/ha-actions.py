@@ -32,16 +32,10 @@ DEFAULT_DATABASE_URL = "postgresql://postgres@127.0.0.1:5432/pulsecoach"
 HA_BASE_URL = os.environ.get("HA_BASE_URL", "http://supervisor/core").rstrip("/")
 
 AUDIT_QUERY = """
-    SELECT
-        id,
-        "userId" AS user_id,
-        date,
-        kind,
-        payload,
-        "createdAt" AS created_at
-    FROM "RecommendationAudit"
-    WHERE "createdAt" > %s
-    ORDER BY "createdAt" ASC
+    SELECT id, user_id, date, kind, payload, created_at
+    FROM recommendation_audit
+    WHERE created_at > %s
+    ORDER BY created_at ASC
 """
 
 
