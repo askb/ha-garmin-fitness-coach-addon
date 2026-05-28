@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.1] - 2026-05-28
+
+### Fixed
+
+- Garmin overnight body/skin temperature now syncs into `daily_metric.skin_temp`
+  (previously always NULL). Affects the Vitals card, readiness, baselines, sleep
+  analysis. Requires a watch with the wrist-temperature sensor (Venu 2 Plus,
+  Venu 3, Fenix 7/8, Epix 2/Pro, Forerunner 265/965/970, Enduro 3, Tactix 7+).
+  A one-time backfill re-syncs the last 90 days on first startup of v0.17.1.
+
 ## [0.17.0] - 2026-05-28 — AI-native coach loop
 
 ### Added

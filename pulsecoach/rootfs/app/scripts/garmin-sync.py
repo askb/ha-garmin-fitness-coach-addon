@@ -17,6 +17,7 @@ import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 try:
@@ -54,6 +55,12 @@ def _user_today():
 
 SYNC_STATUS_FILE = os.path.join(TOKEN_DIR, ".sync_status")
 LAST_SYNC_FILE = os.path.join(TOKEN_DIR, ".last_sync")
+SKIN_TEMP_BACKFILL_MARKER = "/data/.skin_temp_backfill_done"
+SKIN_TEMP_KEYS = (
+    "averageSkinTemperatureCelsius",
+    "averageSkinTempCelsius",
+    "avgSkinTempCelsius",
+)
 
 
 def _write_last_sync() -> None:
@@ -240,7 +247,63 @@ def _compute_sleep_debt(sleep_dto):
     return need - actual_min
 
 
-def sync_daily_stats(client, db, date_str):
+def _coerce_skin_temp(value: Any) -> float | None:
+    """Convert a Garmin skin-temperature value to Celsius rounded for storage."""
+    if value is None or value == "" or isinstance(value, bool):
+        return None
+    if not isinstance(value, (int, float, str)):
+        return None
+    try:
+        temp = float(value)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(temp) or math.isinf(temp):
+        return None
+    return round(temp, 2)
+
+
+def _find_first_skin_temp_value(payload: Any) -> Any | None:
+    """Find the first known skin-temperature key in nested Garmin payloads."""
+    if isinstance(payload, dict):
+        for key in SKIN_TEMP_KEYS:
+            if key in payload and _coerce_skin_temp(payload.get(key)) is not None:
+                return payload.get(key)
+        for value in payload.values():
+            found = _find_first_skin_temp_value(value)
+            if found is not None:
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = _find_first_skin_temp_value(item)
+            if found is not None:
+                return found
+    return None
+
+
+def _fetch_dedicated_skin_temp(client: Any, date_str: str) -> float | None:
+    """Try optional garminconnect endpoints for skin temperature."""
+    for method_name in (
+        "get_skin_temperature",
+        "get_health_snapshot",
+        "get_user_summary",
+    ):
+        method = getattr(client, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            payload = method(date_str)
+        except Exception as e:
+            print(f"  {method_name} skin temp unavailable for {date_str}: {e}")
+            continue
+        temp = _coerce_skin_temp(_find_first_skin_temp_value(payload))
+        if temp is None:
+            temp = _coerce_skin_temp(payload)
+        if temp is not None:
+            return temp
+    return None
+
+
+def sync_daily_stats(client: Any, db: Any, date_str: str) -> bool:
     """Sync daily health stats for a given date."""
     cur = db.cursor()
     try:
@@ -289,9 +352,29 @@ def sync_daily_stats(client, db, date_str):
         # Extract respiration rate
         respiration_val = None
         if respiration_data:
-            respiration_val = respiration_data.get("avgWakingRespirationValue") or respiration_data.get("avgSleepRespirationValue")
+            respiration_val = (
+                respiration_data.get("avgWakingRespirationValue")
+                or respiration_data.get("avgSleepRespirationValue")
+            )
         if respiration_val is None and stats:
             respiration_val = stats.get("respirationAvg")
+
+        # Extract Garmin overnight skin/body temperature. Prefer sleep DTO
+        # fields because they represent the overnight average.
+        skin_temp_val = None
+        for skin_temp_key in SKIN_TEMP_KEYS:
+            skin_temp_val = _coerce_skin_temp(sleep_dto.get(skin_temp_key))
+            if skin_temp_val is not None:
+                break
+        if skin_temp_val is None and stats:
+            for skin_temp_key in SKIN_TEMP_KEYS:
+                skin_temp_val = _coerce_skin_temp(stats.get(skin_temp_key))
+                if skin_temp_val is not None:
+                    break
+        if skin_temp_val is None:
+            skin_temp_val = _fetch_dedicated_skin_temp(client, date_str)
+        if skin_temp_val is not None:
+            print(f"  Skin temp for {date_str}: {skin_temp_val} °C")
 
         # Extract weight (kg) from body composition data
         weight_kg = None
@@ -307,11 +390,15 @@ def sync_daily_stats(client, db, date_str):
 
         # Compute data quality flag (percentage of key fields present)
         quality_fields = [
-            stats.get("totalSteps"), stats.get("restingHeartRate"),
+            stats.get("totalSteps"),
+            stats.get("restingHeartRate"),
             _safe_sleep_minutes(sleep_dto, "sleepTimeSeconds"),
             sleep_dto.get("sleepScores", {}).get("overall", {}).get("value"),
             hrv.get("hrvSummary", {}).get("weeklyAvg") if hrv else None,
-            stress_val, spo2_val, weight_kg,
+            stress_val,
+            spo2_val,
+            skin_temp_val,
+            weight_kg,
         ]
         present = sum(1 for f in quality_fields if f is not None)
         data_quality = round(present / len(quality_fields) * 100)
@@ -338,10 +425,10 @@ def sync_daily_stats(client, db, date_str):
                 hrv, stress_score, body_battery_start, body_battery_end,
                 floors_climbed, intensity_minutes,
                 sleep_start_time, sleep_end_time, sleep_need_minutes, sleep_debt_minutes,
-                spo2, respiration_rate,
+                spo2, respiration_rate, skin_temp,
                 weight_kg, body_fat_pct,
                 synced_at, data_quality
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, date) DO UPDATE SET
                 steps = EXCLUDED.steps,
                 calories = EXCLUDED.calories,
@@ -365,6 +452,7 @@ def sync_daily_stats(client, db, date_str):
                 sleep_debt_minutes = COALESCE(EXCLUDED.sleep_debt_minutes, daily_metric.sleep_debt_minutes),
                 spo2 = COALESCE(EXCLUDED.spo2, daily_metric.spo2),
                 respiration_rate = COALESCE(EXCLUDED.respiration_rate, daily_metric.respiration_rate),
+                skin_temp = COALESCE(EXCLUDED.skin_temp, daily_metric.skin_temp),
                 weight_kg = COALESCE(EXCLUDED.weight_kg, daily_metric.weight_kg),
                 body_fat_pct = COALESCE(EXCLUDED.body_fat_pct, daily_metric.body_fat_pct),
                 synced_at = EXCLUDED.synced_at,
@@ -383,7 +471,11 @@ def sync_daily_stats(client, db, date_str):
             _safe_sleep_minutes(sleep_dto, "awakeSleepSeconds"),
             sleep_dto.get("sleepScores", {}).get("overall", {}).get("value"),
             hrv.get("hrvSummary", {}).get("weeklyAvg") if hrv else None,
-            (stress.get("avgStressLevel") or stress.get("averageStressLevel") or stats.get("averageStressLevel")) if stress else stats.get("averageStressLevel"),
+            (
+                stress.get("avgStressLevel")
+                or stress.get("averageStressLevel")
+                or stats.get("averageStressLevel")
+            ) if stress else stats.get("averageStressLevel"),
             stats.get("bodyBatteryChargedValue"),
             stats.get("bodyBatteryDrainedValue"),
             stats.get("floorsAscended"),
@@ -394,6 +486,7 @@ def sync_daily_stats(client, db, date_str):
             _compute_sleep_debt(sleep_dto),
             spo2_val,
             respiration_val,
+            skin_temp_val,
             weight_kg,
             body_fat_pct,
             datetime.now(timezone.utc).isoformat(),
@@ -401,11 +494,61 @@ def sync_daily_stats(client, db, date_str):
         ))
         db.commit()
         print(f"  Synced daily stats for {date_str}")
+        return True
     except Exception as e:
         db.rollback()
         print(f"  Failed to sync {date_str}: {e}", file=sys.stderr)
+        return False
     finally:
         cur.close()
+
+
+def backfill_skin_temp(client: Any, db: Any) -> None:
+    """One-shot v0.17.1 re-sync for recent sleep days missing skin temperature."""
+    marker = Path(SKIN_TEMP_BACKFILL_MARKER)
+    if marker.exists():
+        return
+
+    cur = db.cursor()
+    try:
+        cur.execute("""
+            SELECT date FROM daily_metric
+            WHERE user_id = %s
+              AND skin_temp IS NULL
+              AND total_sleep_minutes IS NOT NULL
+              AND date >= CURRENT_DATE - INTERVAL '90 days'
+            ORDER BY date DESC
+        """, (USER_ID,))
+        backfill_dates = [row[0] for row in cur.fetchall()]
+    except Exception as e:
+        db.rollback()
+        print(f"  Skin temp backfill query failed: {e}", file=sys.stderr)
+        return
+    finally:
+        cur.close()
+
+    if backfill_dates:
+        print(
+            f"[skin-temp-backfill] Re-syncing {len(backfill_dates)} days "
+            "for skin temperature"
+        )
+        all_synced = True
+        for backfill_date in backfill_dates:
+            date_str = (
+                backfill_date.isoformat()
+                if hasattr(backfill_date, "isoformat")
+                else str(backfill_date)
+            )
+            all_synced = sync_daily_stats(client, db, date_str) and all_synced
+        if not all_synced:
+            print("  Skin temp backfill incomplete; marker not written", file=sys.stderr)
+            return
+
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(datetime.now(timezone.utc).isoformat())
+    except Exception as e:
+        print(f"  Skin temp backfill marker write failed: {e}", file=sys.stderr)
 
 
 def _normalize_started_at(act: dict) -> str | None:
@@ -1341,6 +1484,9 @@ def main():
         _write_sync_status("daily_stats", f"Syncing {date_str}",
                            int((days_ago / sync_days) * 50))
         sync_daily_stats(client, db, date_str)
+
+    _write_sync_status("backfill_skin_temp", "Backfilling skin temperature...", 50)
+    backfill_skin_temp(client, db)
 
     # Garmin API: get_activities(start, limit) — fetch in batches of 100
     _write_sync_status("activities", "Syncing activities...", 50)
