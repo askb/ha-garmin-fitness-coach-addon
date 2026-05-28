@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-05-28 — AI-native coach loop
+
+### Added
+
+- HA action layer polls `RecommendationAudit` and fires Home Assistant
+  Supervisor events for recommendation decisions, low readiness,
+  completed sessions, and missed sessions (addon #166).
+- Release gate workflow verifies the app repository main branch is green
+  before addon releases proceed (addon #165).
+- Packaged app now builds from the app repo `v0.17.0` tag; see the app
+  repository changelog for the full AI-native coach loop details.
+
+### Changed
+
+- Coach loop is now rules-first; LLM only frames explanations
+  (test-enforced in the app repo).
+
 ## [0.17.0-dev.1] — 2026-05-27
 
 ### Added
