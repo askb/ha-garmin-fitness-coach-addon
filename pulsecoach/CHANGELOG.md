@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.10] - 2026-05-29
+
+### Fixed
+
+- **Coach context — answers aggregate questions properly.** Previously the LLM
+  context was capped at 14 days / 10 activities, so questions like "analyse all
+  my runs done this year" returned "I only have one run in the last 14 days".
+  The coach now detects aggregate intent ("this year", "YTD", "annual",
+  "last 6 months", etc.) and widens to 365 days / up to 500 sessions, and
+  always emits a Year-to-Date activity summary grouped by sport so the model
+  can answer aggregate questions even when keyword detection misses.
+- **HA Assist intent matcher no longer hijacks the coach.** The persona swap
+  ("As a voice assistant, I can help you with controlling your smart home
+  devices…") was caused by the HA Conversation API's intent matcher running
+  before the LLM agent. The coach now detects the fallback string, refreshes
+  the cached agent id every 5 minutes, and routes through Ollama when an HA
+  Assist fallback is detected.
+
+### Changed
+
+- Bundle app v0.17.9.
+
 ## [0.17.9] - 2026-05-29
 
 ### Fixed
