@@ -231,6 +231,34 @@ Then install **PulseCoach** from the add-on store and start it.
 > **💡 Tip:** You can trigger a manual sync at any time from
 > **Settings → 🔄 Sync Now** without waiting for the next scheduled interval.
 
+### Updating to a new version
+
+Home Assistant Supervisor caches the addon store on disk and only re-reads
+release metadata every few hours. If a new version (e.g. `v0.17.10`) has
+shipped here but the **Update** button has not yet appeared in the UI:
+
+1. **Settings → Add-ons → Add-on Store → ⋮ (top-right) → Reload**.
+   This re-fetches `config.json` from this repository and shows the latest
+   `version:` field within a few seconds.
+2. Open **PulseCoach** in the store — if a newer version exists, an
+   **Update** button replaces **Open**.
+3. Click **Update** and wait for the rebuild (~5 min amd64, ~10–15 min
+   aarch64). The addon restarts automatically when it finishes.
+
+Power-user alternatives:
+
+- **CLI** (HAOS / Supervised): `ha store reload` then `ha addons update <slug>`.
+- **REST API**: `POST /supervisor/reload` against the Supervisor.
+- **HACS users**: HACS pulls release tags via the GitHub API and usually
+  picks up new releases within ~30 minutes. To force it, open HACS → ⋮ →
+  **Reload data**.
+
+If the version still does not appear after a reload, confirm the release
+is published (not draft) at
+[the releases page](https://github.com/askb/ha-garmin-fitness-coach-addon/releases)
+and that `pulsecoach/config.json` on `main` has the matching `version:` —
+HA Supervisor reads the config file, not the git tag.
+
 ## Configuration
 
 | Option | Type | Default | Required | Description |
