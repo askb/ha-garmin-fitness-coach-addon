@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.9] - 2026-05-29
+
+### Fixed
+
+- Bundle app v0.17.8.
+- Activity humanize — `Tennis_v2` now correctly renders as `Tennis` in Recent
+  Activities and everywhere `humanizeActivityName` is called.
+- Adherence overlay — mixed-window cascade now correctly overlays Garmin
+  Activity onto planless days (was silently failing due to date-key mismatch).
+- Chat renumber — `renumberOrderedLists` strengthened to handle blank lines and
+  inline paragraphs between numbered items.
+- Version badge visibility — bumped opacity and added explicit zinc colors so
+  the badge renders correctly against the ingress dark theme.
+
 ## [0.17.7] - 2026-05-28
 
 ### Changed
