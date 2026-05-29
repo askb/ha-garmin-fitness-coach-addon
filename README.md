@@ -242,13 +242,18 @@ shipped here but the **Update** button has not yet appeared in the UI:
    `version:` field within a few seconds.
 2. Open **PulseCoach** in the store — if a newer version exists, an
    **Update** button replaces **Open**.
-3. Click **Update** and wait for the rebuild (~5 min amd64, ~10–15 min
-   aarch64). The addon restarts automatically when it finishes.
+3. Click **Update**. The addon ships as a prebuilt multi-arch image on
+   GHCR (`ghcr.io/askb/pulsecoach-addon-{arch}`), so Supervisor pulls the
+   image rather than rebuilding from source — usually under a minute on
+   a decent connection. The addon restarts automatically when the pull
+   completes.
 
 Power-user alternatives:
 
 - **CLI** (HAOS / Supervised): `ha store reload` then `ha addons update <slug>`.
-- **REST API**: `POST /supervisor/reload` against the Supervisor.
+- **REST API**: `POST /store/reload` against the Supervisor to refresh
+  add-on store metadata (this is the endpoint backing `ha store reload`;
+  `POST /supervisor/reload` only reloads the Supervisor process config).
 - **HACS users**: HACS pulls release tags via the GitHub API and usually
   picks up new releases within ~30 minutes. To force it, open HACS → ⋮ →
   **Reload data**.
