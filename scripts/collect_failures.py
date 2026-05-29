@@ -99,10 +99,77 @@ def _snippet(text: str, pos: int) -> str:
     return "\n".join(all_lines[start:end])[:2000]
 
 
+def parse_vitest(text: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    # Vitest "FAIL <path> > <suite> > <test>"
+    for m in re.finditer(r"^\s*(?:×|FAIL)\s+(\S+\.test\.\S+)\s*>\s*(.+)$", text, re.MULTILINE):
+        file_ = m.group(1)
+        case = m.group(2).strip()
+        key = f"{file_}::{case}"
+        out.append(
+            {
+                "component": "vitest",
+                "title": f"vitest failure: {case[:80]}",
+                "key": key,
+                "signature": sig("vitest", key),
+                "snippet": _snippet(text, m.start()),
+            }
+        )
+    return out
+
+
+def parse_tsc(text: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    # TS2345: src/foo.ts(12,34): error TS2345: ...
+    for m in re.finditer(
+        r"^(\S+\.tsx?)\((\d+),(\d+)\):\s+error\s+(TS\d+):\s+(.+)$",
+        text, re.MULTILINE
+    ):
+        file_, line, _col, code, msg = m.groups()
+        key = f"{file_}:{line}:{code}"
+        out.append(
+            {
+                "component": "tsc",
+                "title": f"{code} in {file_}: {msg[:60]}",
+                "key": key,
+                "signature": sig("tsc", key),
+                "snippet": _snippet(text, m.start()),
+            }
+        )
+    return out
+
+
+def parse_eslint(text: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    # /path/file.ts\n  12:34  error  message  rule-id
+    current_file: str | None = None
+    for line in text.splitlines():
+        if line.startswith("/") and (line.endswith(".ts") or line.endswith(".tsx") or line.endswith(".js")):
+            current_file = line.strip()
+            continue
+        m = re.match(r"\s+(\d+):(\d+)\s+error\s+(.+?)\s+(\S+)$", line)
+        if m and current_file:
+            ln, _col, msg, rule = m.groups()
+            key = f"{current_file}:{ln}:{rule}"
+            out.append(
+                {
+                    "component": "eslint",
+                    "title": f"eslint {rule} in {Path(current_file).name}",
+                    "key": key,
+                    "signature": sig("eslint", key),
+                    "snippet": f"{current_file}:{ln} [{rule}] {msg}",
+                }
+            )
+    return out
+
+
 PARSERS = {
     "pytest": parse_pytest,
     "precommit": parse_precommit,
     "hadolint": parse_hadolint,
+    "vitest": parse_vitest,
+    "tsc": parse_tsc,
+    "eslint": parse_eslint,
 }
 
 
