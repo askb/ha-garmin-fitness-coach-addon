@@ -1,0 +1,107 @@
+# SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+---
+name: 'Self-Healing CI - Fix'
+
+on:
+  issues:
+    types: [labeled]
+
+permissions: {}
+
+concurrency:
+  group: ai-fix-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: 'Trigger guard'
+    # Defense L1: only fire for ai-fix-me label on issues created by
+    # the github-actions bot (our scan workflow). Blocks the prompt-
+    # injection path of a human filing an issue with ai-fix-me label.
+    if: >
+      github.event.label.name == 'ai-fix-me' &&
+      github.event.issue.user.login == 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - name: 'Verify kill switch'
+        id: check
+        env:
+          KILL_SWITCH: ${{ vars.AI_AUTO_FIX_ENABLED }}
+        run: |
+          # Defense L9: respect repository variable kill switch.
+          # Set AI_AUTO_FIX_ENABLED=false in Settings -> Variables to halt.
+          if [ "${KILL_SWITCH:-true}" = "false" ]; then
+            echo "AI_AUTO_FIX_ENABLED=false - aborting"
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+
+  assign:
+    name: 'Assign Copilot coding agent'
+    needs: guard
+    if: needs.guard.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: 'Look up Copilot bot id'
+        id: bot
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_AGENT_PAT || github.token }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016  # GraphQL uses literal $ placeholders
+          bot_id=$(gh api graphql -f query='
+            query($owner:String!,$repo:String!){
+              repository(owner:$owner,name:$repo){
+                suggestedActors(capabilities:[CAN_BE_ASSIGNED],first:100){
+                  nodes{__typename ...on Bot{id login}}
+                }
+              }
+            }' -F owner="${{ github.repository_owner }}" \
+               -F repo="${{ github.event.repository.name }}" \
+            --jq '.data.repository.suggestedActors.nodes[]
+                  | select(.__typename=="Bot" and .login=="copilot-swe-agent")
+                  | .id' | head -1)
+          if [ -z "$bot_id" ]; then
+            echo "::warning::Copilot coding agent not available for this repo"
+            echo "id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "id=$bot_id" >> "$GITHUB_OUTPUT"
+
+      - name: 'Assign Copilot to issue'
+        if: steps.bot.outputs.id != ''
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_AGENT_PAT || github.token }}
+          ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
+          BOT_ID: ${{ steps.bot.outputs.id }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016  # GraphQL uses literal $ placeholders
+          gh api graphql -f query='
+            mutation($issue:ID!,$actor:ID!){
+              replaceActorsForAssignable(input:{assignableId:$issue,actorIds:[$actor]}){
+                assignable{... on Issue{number}}
+              }
+            }' -F issue="$ISSUE_NODE_ID" -F actor="$BOT_ID"
+          echo "Assigned Copilot coding agent to issue #${{ github.event.issue.number }}"
+
+      - name: 'Comment fallback if no agent'
+        if: steps.bot.outputs.id == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          msg='⚠️ Copilot coding agent is not enabled for this repository.'
+          msg="$msg"$'\n\nThe `ai-fix-me` label was recognised but no '
+          msg="$msg"'automated fix can be dispatched. Enable the coding '
+          msg="$msg"'agent in repo settings or remove the label.'
+          gh issue comment "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" --body "$msg"
