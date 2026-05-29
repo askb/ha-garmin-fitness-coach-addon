@@ -52,9 +52,9 @@ your local network.
 
 A walkthrough of the main dashboards as they appear in the ingress UI
 (addon **v0.17.9**, captured **2026-05-29**). Mobile pairs for every
-screen below are captured alongside the desktop renders — see the
-[`tools/screenshots/screenshots/2026-05-29/`](tools/screenshots/screenshots/2026-05-29)
-batch directory for the matching `*-mobile.png` files.
+screen below are captured alongside the desktop renders by the
+`tools/screenshots/` Playwright harness (run locally; output directory
+is git-ignored).
 
 ### Home — Today's readiness, streak, and quick-glance chips
 Top-line readiness score, adherence streak, and chip row covering
