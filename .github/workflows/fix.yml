@@ -77,22 +77,59 @@ jobs:
           fi
           echo "id=$bot_id" >> "$GITHUB_OUTPUT"
 
-      - name: 'Assign Copilot to issue'
+      - name: 'Look up repository id'
+        id: repo
         if: steps.bot.outputs.id != ''
         env:
           GH_TOKEN: ${{ secrets.COPILOT_AGENT_PAT || github.token }}
-          ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
-          BOT_ID: ${{ steps.bot.outputs.id }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC2016  # GraphQL uses literal $ placeholders
-          gh api graphql -f query='
-            mutation($issue:ID!,$actor:ID!){
-              replaceActorsForAssignable(input:{assignableId:$issue,actorIds:[$actor]}){
-                assignable{... on Issue{number}}
-              }
-            }' -F issue="$ISSUE_NODE_ID" -F actor="$BOT_ID"
-          echo "Assigned Copilot coding agent to issue #${{ github.event.issue.number }}"
+          repo_id=$(gh api graphql -f query='
+            query($owner:String!,$repo:String!){
+              repository(owner:$owner,name:$repo){id}
+            }' -F owner="${{ github.repository_owner }}" \
+               -F repo="${{ github.event.repository.name }}" \
+            --jq '.data.repository.id')
+          echo "id=$repo_id" >> "$GITHUB_OUTPUT"
+
+      - name: 'Dispatch Copilot coding agent'
+        if: steps.bot.outputs.id != ''
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_AGENT_PAT || github.token }}
+          ISSUE_ID: ${{ github.event.issue.node_id }}
+          BOT_ID: ${{ steps.bot.outputs.id }}
+          REPO_ID: ${{ steps.repo.outputs.id }}
+        run: |
+          set -euo pipefail
+          # Use the agentAssignment payload + feature header that the
+          # Copilot coding agent expects (matches copilot-auto-assign.yml).
+          gh api graphql \
+            -H "GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection" \
+            -f query="
+              mutation {
+                replaceActorsForAssignable(input: {
+                  assignableId: \"${ISSUE_ID}\"
+                  actorIds: [\"${BOT_ID}\"]
+                  agentAssignment: {
+                    targetRepositoryId: \"${REPO_ID}\"
+                    baseRef: \"main\"
+                    customInstructions: \"\"
+                    customAgent: \"\"
+                    model: \"\"
+                  }
+                }) {
+                  assignable {
+                    ... on Issue {
+                      number
+                      assignees(first: 5) { nodes { login } }
+                    }
+                  }
+                }
+              }"
+          gh issue comment ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --body "🤖 Copilot coding agent assigned to this issue. A PR will be opened shortly."
 
       - name: 'Comment fallback if no agent'
         if: steps.bot.outputs.id == ''

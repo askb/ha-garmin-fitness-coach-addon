@@ -17,11 +17,13 @@ concurrency:
 jobs:
   guard:
     name: 'Trigger guard'
-    # Only act on PRs created by Copilot agent and labelled ai-pr
-    # (or the PR head branch is the Copilot prefix). Combined with the
-    # branch name check this filters out anything human-authored.
+    # Defense L1 (strengthened): must be opened by a bot AND have the
+    # right branch prefix or label. The label/branch alone is not
+    # sufficient because a human author can satisfy those - the
+    # author-type check is the actual gate.
     if: >
       !github.event.pull_request.draft &&
+      github.event.pull_request.user.type == 'Bot' &&
       (
         startsWith(github.event.pull_request.head.ref, 'copilot/') ||
         contains(github.event.pull_request.labels.*.name, 'ai-pr')
