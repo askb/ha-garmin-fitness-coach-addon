@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.11] - 2026-05-29
+
+### Fixed
+
+- **Coach upstream provider fallthrough.** When the HA Conversation agent's
+  upstream LLM provider (Google AI / OpenAI / Anthropic) hits a quota or
+  overload error, HA wrapped the error in a successful Conversation response
+  and the user saw "This model is currently experiencing high demand…" verbatim instead of
+  a coaching answer. Aggregate-intent questions ("analyse my runs this year")
+  tripped this more often because their bigger context payload is more
+  likely to exceed Gemini Pro's load guardrail. New `isProviderError()`
+  detector now throws on these wrappers so the existing fallback chain
+  routes through Ollama instead. Bundles app **v0.17.10** which carries
+  the fix plus 6 new vitest cases.
+- **Manifest hygiene.** `io.hass.version` Dockerfile label now tracks the
+  add-on version (`0.17.11`) so the OCI image label and the manifest no
+  longer drift apart across releases.
+
 ## [0.17.10] - 2026-05-29
 
 ### Fixed
