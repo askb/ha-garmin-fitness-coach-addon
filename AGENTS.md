@@ -14,7 +14,7 @@ there is any conflict between the two documents.
 Home Assistant addon that packages the PulseCoach fitness coaching app
 for easy installation on HAOS. Uses s6-overlay for process management,
 embedded PostgreSQL for storage, and HA Conversation API
-(OpenClaw/Claude) for AI.
+(Google Gemini / Anthropic Claude / OpenAI / Ollama) for AI.
 
 ## Repository Structure
 
