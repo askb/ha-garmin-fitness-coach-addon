@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Coach memory / RAG (nightly).** A background worker now rebuilds
+  multi-year history embeddings by calling the app's
+  `/api/internal/rebuild-memory` endpoint (default every 1440 minutes / 24h,
+  override with `MEMORY_REBUILD_INTERVAL_MINUTES`). This lets the coach
+  answer aggregate questions like "analyse all my runs this year" with
+  token-efficient semantic retrieval instead of a raw activity dump. The
+  worker only starts when an Ollama URL is configured (embeddings need
+  Ollama), is best-effort and idempotent, and is supervised/restarted by
+  the monitoring loop. Requires the bundled app to include the closed-loop
+  RAG feature.
+- **`ollama_embed_model` option** (default `nomic-embed-text`) selects the
+  embedding model for coach memory. Pull it on your Ollama host; the app
+  falls back to the chat model when it is unavailable.
+- **Internal task authentication.** The addon now generates a per-boot
+  `INTERNAL_TASK_TOKEN`, exports it to the bundled app, and sends it on the
+  loopback memory-rebuild POSTs. The app's internal endpoint is fail-closed
+  (rejects unauthenticated requests), so this keeps the nightly rebuild
+  working without exposing an unauthenticated endpoint.
+
 ## [0.17.11] - 2026-05-29
 
 ### Fixed

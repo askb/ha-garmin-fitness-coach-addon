@@ -72,7 +72,8 @@ fetches up to 6 years of historical data.
 | `garmin_email` | email | — | **Yes** | Garmin Connect login email |
 | `garmin_password` | password | — | **Yes** | Garmin Connect password |
 | `ai_backend` | list | `none` | No | AI coaching backend: `ha_conversation`, `ollama`, or `none` |
-| `ollama_url` | url | — | No | Ollama server URL (required only when `ai_backend` is `ollama`) |
+| `ollama_url` | url | — | No | Ollama server URL. Required for the `ollama` chat backend, **and** for coach memory/RAG embeddings even when `ai_backend` is `ha_conversation` or `none` (the nightly memory rebuild only runs when this is set) |
+| `ollama_embed_model` | string | `nomic-embed-text` | No | Embedding model for coach memory/RAG over multi-year history. Pull it on your Ollama host; falls back to the chat model if unavailable |
 | `sync_interval_minutes` | integer | `60` | No | Garmin data sync frequency in minutes (5 – 1440) |
 
 ## Garmin Authentication Troubleshooting

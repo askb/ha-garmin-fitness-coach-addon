@@ -72,6 +72,7 @@ restore_from_share
 SYNC_PID=""
 COMPUTE_PID=""
 NOTIFY_PID=""
+MEMORY_PID=""
 NEXTJS_PID=""
 INGRESS_PID=""
 SHUTTING_DOWN=false
@@ -81,7 +82,7 @@ cleanup() {
     bashio::log.info "Shutting down PulseCoach services..."
     # Backup before shutdown
     backup_to_share
-    for pid in $SYNC_PID $COMPUTE_PID $NOTIFY_PID $NEXTJS_PID $INGRESS_PID; do
+    for pid in $SYNC_PID $COMPUTE_PID $NOTIFY_PID $MEMORY_PID $NEXTJS_PID $INGRESS_PID; do
         if kill -0 "$pid" 2>/dev/null; then
             kill "$pid" 2>/dev/null
         fi
@@ -148,6 +149,7 @@ STRAVA_CLIENT_SECRET=$(bashio::config 'strava_client_secret' || echo "")
 STRAVA_REFRESH_TOKEN=$(bashio::config 'strava_refresh_token' || echo "")
 AI_BACKEND=$(bashio::config 'ai_backend' || echo "none")
 OLLAMA_URL=$(bashio::config 'ollama_url' || echo "")
+OLLAMA_EMBED_MODEL=$(bashio::config 'ollama_embed_model' || echo "nomic-embed-text")
 SYNC_INTERVAL=$(bashio::config 'sync_interval_minutes' || echo "60")
 USER_TIMEZONE=$(bashio::config 'user_timezone' || echo "UTC")
 
@@ -156,6 +158,7 @@ export STRAVA_CLIENT_ID STRAVA_CLIENT_SECRET STRAVA_REFRESH_TOKEN
 export AI_BACKEND
 export OLLAMA_URL
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gpt-oss:20b}"
+export OLLAMA_EMBED_MODEL="${OLLAMA_EMBED_MODEL:-nomic-embed-text}"
 export USER_TIMEZONE
 export DATABASE_URL="postgresql://postgres@127.0.0.1:5432/pulsecoach"
 export POSTGRES_URL="postgresql://postgres@127.0.0.1:5432/pulsecoach"
@@ -164,6 +167,11 @@ export NODE_ENV="production"
 export AUTH_SECRET="ha-addon-local-secret-$(cat /proc/sys/kernel/random/boot_id)"
 export AUTH_DISCORD_ID="unused"
 export AUTH_DISCORD_SECRET="unused"
+
+# Shared secret for the internal task endpoints (e.g. memory rebuild). Generated
+# once per boot and exported to Next.js, then sent as x-internal-token on the
+# loopback cron POSTs below so the endpoint stays authenticated (fail-closed).
+export INTERNAL_TASK_TOKEN="${INTERNAL_TASK_TOKEN:-$(cat /proc/sys/kernel/random/uuid)}"
 
 # HA Supervisor API token (auto-injected by Supervisor for addons with homeassistant_api: true)
 export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN:-}"
@@ -384,6 +392,30 @@ else
     bashio::log.info "No Supervisor token — skipping HA sensor push (add-on needs homeassistant_api: true)"
 fi
 
+# ─── Start coach memory rebuild in background (nightly) ──────────────────────
+# Embeds multi-year history summaries (spec 007) so the coach can answer
+# aggregate questions ("analyse all my runs this year"). Best-effort and
+# idempotent; the endpoint self-skips when memory is disabled. Requires
+# Ollama for embeddings, so only start the worker when an Ollama URL is set.
+MEMORY_REBUILD_INTERVAL_MINUTES="${MEMORY_REBUILD_INTERVAL_MINUTES:-1440}"
+if [ -n "${OLLAMA_URL}" ]; then
+    bashio::log.info "Starting coach memory rebuild (every ${MEMORY_REBUILD_INTERVAL_MINUTES} minutes)..."
+    (
+        sleep 300  # let Next.js start and the first sync/compute settle
+        while true; do
+            bashio::log.info "Rebuilding coach memory embeddings..."
+            curl -sf -m 600 -X POST \
+                -H "x-internal-token: ${INTERNAL_TASK_TOKEN}" \
+                http://127.0.0.1:3001/api/internal/rebuild-memory \
+                2>&1 || bashio::log.warning "Coach memory rebuild failed"
+            sleep "$((MEMORY_REBUILD_INTERVAL_MINUTES * 60))"
+        done
+    ) &
+    MEMORY_PID=$!
+else
+    bashio::log.info "No Ollama URL — skipping coach memory rebuild (embeddings need Ollama)"
+fi
+
 # ─── Configure AI backend ─────────────────────────────────────────────────────
 case "${AI_BACKEND}" in
     ha_conversation)
@@ -495,6 +527,22 @@ while true; do
             done
         ) &
         NOTIFY_PID=$!
+    fi
+
+    if [ -n "$MEMORY_PID" ] && ! kill -0 "$MEMORY_PID" 2>/dev/null; then
+        bashio::log.warning "Coach memory rebuild died, restarting..."
+        (
+            sleep 300
+            while true; do
+                bashio::log.info "Rebuilding coach memory embeddings..."
+                curl -sf -m 600 -X POST \
+                    -H "x-internal-token: ${INTERNAL_TASK_TOKEN}" \
+                    http://127.0.0.1:3001/api/internal/rebuild-memory \
+                    2>&1 || bashio::log.warning "Coach memory rebuild failed"
+                sleep "$((MEMORY_REBUILD_INTERVAL_MINUTES * 60))"
+            done
+        ) &
+        MEMORY_PID=$!
     fi
 
     if ! kill -0 "$NEXTJS_PID" 2>/dev/null; then
