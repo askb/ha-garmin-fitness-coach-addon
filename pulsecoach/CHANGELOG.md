@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   loopback memory-rebuild POSTs. The app's internal endpoint is fail-closed
   (rejects unauthenticated requests), so this keeps the nightly rebuild
   working without exposing an unauthenticated endpoint.
+- **Data-quality gap detection.** `metrics-compute.py` now detects missing
+  calendar days, stale sync, and missing per-day fields (HRV, resting HR,
+  sleep score) within a recent window and records them to the
+  `data_quality_log` table with provenance (no fabricated metric rows). A new
+  `sensor.pulsecoach_data_quality` surfaces the unresolved issue count plus
+  `missing_days_14d`, `stale_days`, `field_gaps`, and an `ok`/`warn`/`error`
+  status, and a persistent notification fires when sync is ≥3 days stale.
+  Window/threshold tunable via `DATA_QUALITY_WINDOW_DAYS`,
+  `DATA_QUALITY_STALE_WARN_DAYS`, `DATA_QUALITY_STALE_ERROR_DAYS`.
 
 ### Fixed
 

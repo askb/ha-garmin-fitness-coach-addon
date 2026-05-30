@@ -516,3 +516,91 @@ class TestFetchDailyLoads:
         cur = MagicMock()
         cur.fetchall.side_effect = [[], []]
         assert metrics_compute.fetch_daily_loads(cur, "user-1") == {}
+
+
+class TestDetectAndLogGaps:
+    """detect_and_log_gaps must find missing days, stale sync and field gaps."""
+
+    @staticmethod
+    def _row(d, hrv=50.0, resting_hr=48.0, sleep_score=80.0):
+        return {"d": d, "hrv": hrv, "resting_hr": resting_hr,
+                "sleep_score": sleep_score}
+
+    def _run(self, metrics_compute, rows, today, capture):
+        cur = MagicMock()
+        cur.fetchall.return_value = rows
+
+        def _capture_values(_cur, _sql, argslist):
+            capture.extend(argslist)
+
+        with patch.object(
+            metrics_compute.psycopg2.extras, "execute_values", _capture_values
+        ):
+            return metrics_compute.detect_and_log_gaps(cur, "user-1", today=today)
+
+    def test_no_rows_returns_zeroed_summary(self, metrics_compute):
+        cur = MagicMock()
+        cur.fetchall.return_value = []
+        summary = metrics_compute.detect_and_log_gaps(
+            cur, "user-1", today=date(2025, 2, 1)
+        )
+        assert summary["missing_days_window"] == 0
+        assert summary["latest_date"] is None
+
+    def test_detects_interior_missing_day(self, metrics_compute):
+        rows = [
+            self._row("2025-01-01"),
+            self._row("2025-01-02"),
+            # 2025-01-03 missing
+            self._row("2025-01-04"),
+        ]
+        inserts = []
+        summary = self._run(
+            metrics_compute, rows, date(2025, 1, 4), inserts
+        )
+        assert summary["missing_days_window"] == 1
+        assert "2025-01-03" in summary["missing_dates"]
+        # A missing_day row must be queued for insert.
+        assert any(r[2] == "missing_day" and r[1] == "2025-01-03"
+                   for r in inserts)
+
+    def test_recent_missing_day_is_warn(self, metrics_compute):
+        rows = [self._row("2025-01-01"), self._row("2025-01-04")]
+        inserts = []
+        self._run(metrics_compute, rows, date(2025, 1, 4), inserts)
+        # 2025-01-02 / -03 are within 6 days of latest -> warn severity.
+        missing = [r for r in inserts if r[2] == "missing_day"]
+        assert missing and all(r[3] == "warn" for r in missing)
+
+    def test_stale_sync_flagged_with_escalating_severity(self, metrics_compute):
+        rows = [self._row("2025-01-01")]
+        # 3 days stale -> warn
+        inserts = []
+        summary = self._run(metrics_compute, rows, date(2025, 1, 4), inserts)
+        assert summary["stale_days"] == 3
+        stale = [r for r in inserts if r[2] == "stale_data"]
+        assert stale and stale[0][3] == "warn"
+
+        # 10 days stale -> error
+        inserts2 = []
+        summary2 = self._run(metrics_compute, rows, date(2025, 1, 11), inserts2)
+        assert summary2["stale_days"] == 10
+        stale2 = [r for r in inserts2 if r[2] == "stale_data"]
+        assert stale2 and stale2[0][3] == "error"
+
+    def test_fresh_sync_not_flagged_stale(self, metrics_compute):
+        rows = [self._row("2025-01-03"), self._row("2025-01-04")]
+        inserts = []
+        summary = self._run(metrics_compute, rows, date(2025, 1, 4), inserts)
+        assert summary["stale_days"] == 0
+        assert not [r for r in inserts if r[2] == "stale_data"]
+
+    def test_missing_field_counted_and_logged(self, metrics_compute):
+        rows = [
+            self._row("2025-01-03", hrv=None),
+            self._row("2025-01-04", hrv=None),
+        ]
+        inserts = []
+        summary = self._run(metrics_compute, rows, date(2025, 1, 4), inserts)
+        assert summary["field_gaps"]["hrv"] == 2
+        assert any(r[2] == "missing_field" for r in inserts)

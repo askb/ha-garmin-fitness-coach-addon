@@ -57,6 +57,13 @@ ACWR_ACUTE_DAYS = 7       # acute rolling-mean window (Hulin et al. 2016)
 ACWR_CHRONIC_DAYS = 28    # chronic rolling-mean window (Hulin et al. 2016)
 RAMP_LOOKBACK_DAYS = 7    # ramp rate = CTL change over the trailing week
 
+# Data-quality gap detection
+GAP_WINDOW_DAYS = int(os.environ.get("DATA_QUALITY_WINDOW_DAYS", "30"))
+STALE_WARN_DAYS = int(os.environ.get("DATA_QUALITY_STALE_WARN_DAYS", "2"))
+STALE_ERROR_DAYS = int(os.environ.get("DATA_QUALITY_STALE_ERROR_DAYS", "7"))
+# Per-row fields whose absence in recent days is worth flagging.
+GAP_FIELDS = ("hrv", "resting_hr", "sleep_score")
+
 
 def get_db():
     return psycopg2.connect(DATABASE_URL)
@@ -162,6 +169,152 @@ def ensure_advanced_metric_table(cur):
             WHEN unique_violation THEN NULL;
         END $$;
     """)
+
+
+def ensure_data_quality_log_table(cur):
+    """Create the data_quality_log table if Drizzle hasn't yet.
+
+    Mirrors packages/db/src/schema.ts `DataQualityLog`. The addon may run a
+    fresh Postgres before the app's migrations apply, so guard with
+    CREATE TABLE IF NOT EXISTS (same rationale as ensure_advanced_metric_table).
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS data_quality_log (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id TEXT NOT NULL,
+            date DATE NOT NULL,
+            check_name VARCHAR(50) NOT NULL,
+            severity VARCHAR(10) NOT NULL,
+            message TEXT NOT NULL,
+            raw_value DOUBLE PRECISION,
+            expected_range JSONB,
+            resolved_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW() NOT NULL
+        );
+    """)
+
+
+def datetime_now_user_tz_date() -> date:
+    """Return today's date in the user's configured timezone."""
+    from datetime import datetime as _dt
+    return _dt.now(USER_TZ).date()
+
+
+def detect_and_log_gaps(cur, user_id: str, today=None) -> dict:
+    """Detect data gaps and write provenance rows to data_quality_log.
+
+    Honest-by-design: we never fabricate metric rows. Instead we *detect*
+    missing calendar days, stale sync, and missing per-day fields within a
+    recent window, and record them so the UI and an HA sensor can surface
+    "N days missing" transparently.
+
+    Idempotent: clears this user's previously auto-generated unresolved gap
+    rows for the window before re-inserting the current snapshot.
+
+    Returns a summary dict consumed by the run log (and, indirectly via the
+    table, by ha-notify's data-quality sensor).
+    """
+    if today is None:
+        today = datetime_now_user_tz_date()
+
+    cur.execute(
+        """
+        SELECT date::text AS d, hrv, resting_hr, sleep_score
+        FROM daily_metric
+        WHERE user_id = %s AND date IS NOT NULL
+        ORDER BY date ASC
+        """,
+        (user_id,),
+    )
+    rows = cur.fetchall()
+    summary = {
+        "latest_date": None,
+        "stale_days": 0,
+        "missing_days_window": 0,
+        "missing_dates": [],
+        "field_gaps": dict.fromkeys(GAP_FIELDS, 0),
+    }
+    if not rows:
+        return summary
+
+    present = {r["d"]: r for r in rows}
+    latest = date.fromisoformat(rows[-1]["d"])
+    summary["latest_date"] = latest.isoformat()
+    summary["stale_days"] = max(0, (today - latest).days)
+
+    # Window: the trailing GAP_WINDOW_DAYS up to the latest synced day,
+    # never starting before the first ever record.
+    earliest = date.fromisoformat(rows[0]["d"])
+    window_start = max(earliest, latest - timedelta(days=GAP_WINDOW_DAYS - 1))
+
+    missing_dates = []
+    cur_day = window_start
+    while cur_day <= latest:
+        if cur_day.isoformat() not in present:
+            missing_dates.append(cur_day.isoformat())
+        cur_day += timedelta(days=1)
+    summary["missing_dates"] = missing_dates
+    summary["missing_days_window"] = len(missing_dates)
+
+    # Per-field gaps within the last 14 days of present rows.
+    recent_cutoff = latest - timedelta(days=13)
+    for d_str, r in present.items():
+        if date.fromisoformat(d_str) < recent_cutoff:
+            continue
+        for f in GAP_FIELDS:
+            if r.get(f) is None:
+                summary["field_gaps"][f] += 1
+
+    # --- Persist: clear prior auto rows for this window, then insert. ---
+    auto_checks = ("missing_day", "stale_data", "missing_field")
+    cur.execute(
+        """
+        DELETE FROM data_quality_log
+        WHERE user_id = %s
+          AND check_name = ANY(%s)
+          AND resolved_at IS NULL
+          AND date >= %s
+        """,
+        (user_id, list(auto_checks), window_start.isoformat()),
+    )
+
+    inserts = []
+    today_iso = today.isoformat()
+    for md in missing_dates:
+        recent = date.fromisoformat(md) >= (latest - timedelta(days=6))
+        inserts.append((
+            user_id, md, "missing_day", "warn" if recent else "info",
+            f"No synced data for {md}", None, None,
+        ))
+    if summary["stale_days"] >= STALE_WARN_DAYS:
+        sev = "error" if summary["stale_days"] >= STALE_ERROR_DAYS else "warn"
+        inserts.append((
+            user_id, today_iso, "stale_data", sev,
+            f"Latest synced data is {summary['stale_days']} day(s) old "
+            f"(last: {latest.isoformat()})",
+            float(summary["stale_days"]), None,
+        ))
+    for f, count in summary["field_gaps"].items():
+        if count > 0:
+            inserts.append((
+                user_id, latest.isoformat(), "missing_field", "info",
+                f"{f} missing on {count} of the last 14 day(s)",
+                float(count), None,
+            ))
+
+    if inserts:
+        psycopg2.extras.execute_values(
+            cur,
+            """
+            INSERT INTO data_quality_log
+                (user_id, date, check_name, severity, message,
+                 raw_value, expected_range)
+            VALUES %s
+            """,
+            inserts,
+        )
+
+    return summary
 
 
 def fetch_daily_loads(cur, user_id):
@@ -623,6 +776,7 @@ def run_compute(user_id: str):
     cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         ensure_advanced_metric_table(cur)
+        ensure_data_quality_log_table(cur)
         daily_loads = fetch_daily_loads(cur, user_id)
         if not daily_loads:
             print("[metrics-compute] No daily load data found — skipping")
@@ -639,6 +793,13 @@ def run_compute(user_id: str):
         readiness_data = compute_readiness_score(cur, user_id)
         if readiness_data:
             upsert_readiness_scores(cur, user_id, readiness_data)
+
+        # Detect data gaps + stale sync, log to data_quality_log (provenance).
+        gap_summary = {}
+        try:
+            gap_summary = detect_and_log_gaps(cur, user_id)
+        except Exception as gap_err:
+            print(f"[metrics-compute] Gap detection skipped: {gap_err}", file=sys.stderr)
 
         db.commit()
 
@@ -676,6 +837,14 @@ def run_compute(user_id: str):
             f"{len(readiness_data)} readiness scores, "
             f"{'CP computed' if cp_data else 'no CP data'}"
         )
+        if gap_summary:
+            print(
+                f"[metrics-compute] Data quality — "
+                f"{gap_summary.get('missing_days_window', 0)} missing day(s) "
+                f"in last {GAP_WINDOW_DAYS}d, "
+                f"latest sync {gap_summary.get('latest_date')}, "
+                f"{gap_summary.get('stale_days', 0)}d stale"
+            )
 
         # Refresh materialized view for consistent downstream queries
         try:

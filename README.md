@@ -333,6 +333,7 @@ PulseCoach authenticates with Garmin Connect using a **web-based auth flow**:
 | `sensor.pulsecoach_injury_risk` | Risk level: Low / Moderate / High / Very High |
 | `sensor.pulsecoach_body_battery` | Current Garmin Body Battery value |
 | `sensor.pulsecoach_sleep_debt` | Accumulated sleep debt (hours) |
+| `sensor.pulsecoach_data_quality` | Unresolved sync-gap count, with `missing_days_14d` / `stale_days` / `field_gaps` / `status` attributes |
 
 ## Automation Blueprints & Templates
 

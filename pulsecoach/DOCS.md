@@ -121,6 +121,7 @@ The addon pushes 7 sensors to Home Assistant via the Supervisor API:
 | `sensor.pulsecoach_injury_risk` | Risk level: Low / Moderate / High / Very High |
 | `sensor.pulsecoach_body_battery` | Current Garmin Body Battery |
 | `sensor.pulsecoach_sleep_debt` | Accumulated sleep debt (hours) |
+| `sensor.pulsecoach_data_quality` | Unresolved sync-gap count (state) with `missing_days_14d`, `stale_days`, `field_gaps`, `status` (`ok`/`warn`/`error`) attributes |
 
 ## Resource Usage
 
