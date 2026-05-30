@@ -795,10 +795,15 @@ def run_compute(user_id: str):
             upsert_readiness_scores(cur, user_id, readiness_data)
 
         # Detect data gaps + stale sync, log to data_quality_log (provenance).
+        # Isolated in a SAVEPOINT so a gap-detection failure cannot abort the
+        # surrounding transaction and roll back the readiness/advanced metrics.
         gap_summary = {}
+        cur.execute("SAVEPOINT gap_detect")
         try:
             gap_summary = detect_and_log_gaps(cur, user_id)
+            cur.execute("RELEASE SAVEPOINT gap_detect")
         except Exception as gap_err:
+            cur.execute("ROLLBACK TO SAVEPOINT gap_detect")
             print(f"[metrics-compute] Gap detection skipped: {gap_err}", file=sys.stderr)
 
         db.commit()

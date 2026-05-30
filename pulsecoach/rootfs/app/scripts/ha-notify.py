@@ -490,8 +490,7 @@ def fetch_data_quality(cur, user_id: str) -> dict:
             FROM data_quality_log
             WHERE user_id = %s
               AND resolved_at IS NULL
-              AND date >= (CURRENT_DATE - INTERVAL '14 days')
-              AND date < CURRENT_DATE
+              AND date >= (CURRENT_DATE - INTERVAL '13 days')
             ORDER BY created_at DESC
             """,
             (user_id,),
