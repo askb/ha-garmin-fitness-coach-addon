@@ -99,17 +99,14 @@ class TestMetricsCompute:
         return module
 
     def test_ewma_decay_constants(self):
-        """Test that ATL and CTL decay constants are correct."""
-        import math
+        """Test that ATL and CTL span-EWMA smoothing factors match the engine."""
         module = self._load_module()
 
-        # ATL: 7-day time constant
-        expected_atl = 1 - math.exp(-1 / 7)
-        assert abs(module.ATL_DECAY - expected_atl) < 1e-10
+        # ATL: 7-day span EWMA -> alpha = 2 / (7 + 1) = 0.25
+        assert abs(module.ALPHA_ATL - 2 / (7 + 1)) < 1e-10
 
-        # CTL: 42-day time constant
-        expected_ctl = 1 - math.exp(-1 / 42)
-        assert abs(module.CTL_DECAY - expected_ctl) < 1e-10
+        # CTL: 42-day span EWMA -> alpha = 2 / (42 + 1)
+        assert abs(module.ALPHA_CTL - 2 / (42 + 1)) < 1e-10
 
     def test_ewma_loads_basic(self):
         """Test EWMA computation produces reasonable CTL/ATL for steady load."""
@@ -127,11 +124,12 @@ class TestMetricsCompute:
 
         assert len(results) == 60
         last = results[max(results.keys())]
-        # After 60 days of constant load, both should be building toward 50
-        assert last["ctl"] > 30   # CTL (42-day) builds slowly but meaningfully
-        assert last["atl"] > 40   # ATL (7-day) converges faster
-        # ATL converges faster than CTL, so after constant load ATL > CTL early on
-        assert last["atl"] > last["ctl"]
+        # Both EWMAs are seeded with the first value and fed a constant load,
+        # so they stay pinned at 50 throughout (engine parity behaviour).
+        assert abs(last["ctl"] - 50.0) < 1e-6
+        assert abs(last["atl"] - 50.0) < 1e-6
+        # With identical CTL/ATL under constant load, TSB collapses to zero.
+        assert abs(last["tsb"]) < 1e-6
 
     def test_ewma_tsb_is_ctl_minus_atl(self):
         """Test that TSB = CTL - ATL."""
