@@ -11,7 +11,6 @@ Run with:
 """
 
 import json
-import math
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -153,16 +152,125 @@ class TestEWMAComputation:
         assert acwr is not None and acwr > 1.3, f"ACWR should spike above 1.3 after load spike, got {acwr}"
 
 
+# ---------------------------------------------------------------------------
+# Engine parity: lock compute_ewma_loads to the app engine's canonical
+# algorithm (packages/engine/src/strain/index.ts), the single source of
+# truth. This reference is an independent re-port of the TS so the test is
+# not circular: if either implementation drifts, the assertion fails.
+# ---------------------------------------------------------------------------
+def _engine_pmc_reference(daily_loads: dict) -> dict:
+    """Independent port of computeDailyPMCSeries + computeTrainingLoads ramp."""
+    if not daily_loads:
+        return {}
+    alpha_ctl = 2 / (42 + 1)
+    alpha_atl = 2 / (7 + 1)
+    dates = sorted(daily_loads)
+    start = date.fromisoformat(dates[0])
+    end = date.fromisoformat(dates[-1])
+    series = []
+    cur = start
+    while cur <= end:
+        series.append((cur.isoformat(), daily_loads.get(cur.isoformat(), 0.0)))
+        cur += timedelta(days=1)
+    loads = [load for _, load in series]
+    ctl = loads[0]
+    atl = loads[0]
+    out: dict = {}
+    for i, (d_str, load) in enumerate(series):
+        if i > 0:
+            ctl = alpha_ctl * load + (1 - alpha_ctl) * ctl
+            atl = alpha_atl * load + (1 - alpha_atl) * atl
+        tsb = ctl - atl
+        aw = loads[max(0, i - 6):i + 1]
+        cw = loads[max(0, i - 27):i + 1]
+        acute = sum(aw) / max(1, len(aw))
+        chronic = sum(cw) / max(1, len(cw))
+        if chronic == 0:
+            acwr = 2.0 if acute > 0 else 1.0
+        else:
+            acwr = acute / chronic
+        prev = (date.fromisoformat(d_str) - timedelta(days=7)).isoformat()
+        ramp = (ctl - out[prev]["ctl"]) if prev in out else None
+        out[d_str] = {
+            "ctl": round(ctl, 2),
+            "atl": round(atl, 2),
+            "tsb": round(tsb, 2),
+            "acwr": round(acwr, 3),
+            "ramp_rate": round(ramp, 2) if ramp is not None else None,
+        }
+    return out
+
+
+class TestEngineParity:
+    """Guarantee the Python compute matches the TS engine's canonical math."""
+
+    def _series(self, n: int) -> dict:
+        base = date(2025, 1, 1)
+        loads = {}
+        for i in range(n):
+            # Deterministic, varied, with embedded rest days.
+            loads[(base + timedelta(days=i)).isoformat()] = (
+                0.0 if i % 6 == 5 else 40.0 + (i * 37) % 160
+            )
+        return loads
+
+    def test_matches_engine_reference_full_series(self, metrics_compute):
+        """Every day's CTL/ATL/TSB/ACWR/ramp matches the engine reference."""
+        loads = self._series(120)
+        got = metrics_compute.compute_ewma_loads(loads)
+        ref = _engine_pmc_reference(loads)
+        assert set(got) == set(ref)
+        for d in ref:
+            for key in ("ctl", "atl", "tsb", "acwr"):
+                assert got[d][key] == pytest.approx(ref[d][key], abs=1e-6), (
+                    f"{key} drift on {d}: {got[d][key]} != {ref[d][key]}"
+                )
+            assert got[d]["ramp_rate"] == (
+                pytest.approx(ref[d]["ramp_rate"], abs=1e-6)
+                if ref[d]["ramp_rate"] is not None
+                else None
+            )
+
+    def test_uses_span_ewma_not_time_constant(self, metrics_compute):
+        """CTL/ATL use alpha = 2/(N+1), not the drifted 1 - e^(-1/N)."""
+        loads = {date(2025, 1, 1).isoformat(): 100.0}
+        # Add one more day so an update is applied.
+        loads[date(2025, 1, 2).isoformat()] = 0.0
+        r = metrics_compute.compute_ewma_loads(loads)[date(2025, 1, 2).isoformat()]
+        # span ATL after one 0-load day from seed 100: 100*(1-0.25) = 75.0
+        assert r["atl"] == pytest.approx(75.0, abs=1e-6)
+        # span CTL: 100*(1 - 2/43) ~= 95.35
+        assert r["ctl"] == pytest.approx(100 * (1 - 2 / 43), abs=0.01)
+
+    def test_acwr_is_rolling_mean_ratio_not_atl_over_ctl(self, metrics_compute):
+        """ACWR uses 7d/28d rolling means, not the old ATL/CTL ratio."""
+        base = date(2025, 1, 1)
+        loads = {(base + timedelta(days=i)).isoformat(): 100.0 for i in range(40)}
+        r = metrics_compute.compute_ewma_loads(loads)
+        last = (base + timedelta(days=39)).isoformat()
+        # Constant load => acute mean == chronic mean => ACWR == 1.0 exactly.
+        assert r[last]["acwr"] == pytest.approx(1.0, abs=1e-9)
+
+    def test_ramp_rate_is_absolute_points_per_week(self, metrics_compute):
+        """Ramp rate is CTL(today) - CTL(7 days ago) in absolute points."""
+        base = date(2025, 1, 1)
+        loads = {(base + timedelta(days=i)).isoformat(): 80.0 for i in range(20)}
+        r = metrics_compute.compute_ewma_loads(loads)
+        day = (base + timedelta(days=14)).isoformat()
+        prev = (base + timedelta(days=7)).isoformat()
+        expected = round(r[day]["ctl"] - r[prev]["ctl"], 2)
+        assert r[day]["ramp_rate"] == pytest.approx(expected, abs=1e-6)
+
+
 class TestDecayConstants:
-    """Verify EWMA decay constants match Banister model."""
+    """Verify EWMA smoothing constants match the engine's span convention."""
 
-    def test_ctl_decay(self, metrics_compute):
-        expected = 1 - math.exp(-1 / 42)
-        assert abs(metrics_compute.CTL_DECAY - expected) < 1e-10
+    def test_ctl_alpha_is_span_42(self, metrics_compute):
+        # Engine uses alpha = 2 / (N + 1), not the time-constant 1 - e^(-1/N).
+        assert metrics_compute.ALPHA_CTL == pytest.approx(2 / (42 + 1), abs=1e-12)
 
-    def test_atl_decay(self, metrics_compute):
-        expected = 1 - math.exp(-1 / 7)
-        assert abs(metrics_compute.ATL_DECAY - expected) < 1e-10
+    def test_atl_alpha_is_span_7(self, metrics_compute):
+        assert metrics_compute.ALPHA_ATL == pytest.approx(2 / (7 + 1), abs=1e-12)
 
 
 class TestInjuryRisk:

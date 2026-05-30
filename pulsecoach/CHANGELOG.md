@@ -28,6 +28,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (rejects unauthenticated requests), so this keeps the nightly rebuild
   working without exposing an unauthenticated endpoint.
 
+### Fixed
+
+- **Training-load consistency (single source of truth).** `metrics-compute.py`
+  now computes CTL/ATL/TSB/ACWR/ramp-rate with the exact same algorithm as
+  the app's engine (`packages/engine/src/strain`), which is the canonical
+  definition. Previously the addon used a different EWMA convention
+  (time-constant `1 - e^(-1/N)`) and defined ACWR as `ATL/CTL`, while the
+  app's `/training` and `/insights` pages computed values live via the
+  engine (span EWMA `2/(N+1)`, ACWR as 7-day/28-day rolling means, ramp in
+  absolute points/week). The two could disagree on the same day — even
+  within a single coach prompt, which embedded both a live engine "Training
+  Load" section and the stored `advanced_metric` values. The addon's stored
+  values now match the engine, so the coach, proactive and workout features
+  see the same numbers the charts show. A new engine-parity test locks the
+  two implementations together so neither can drift silently.
+
 ## [0.17.11] - 2026-05-29
 
 ### Fixed
