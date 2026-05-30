@@ -14,10 +14,10 @@
     "body_battery_start": 35,
     "body_battery_end": 42,
     "spo2": 97,
-    "expected_ctl": 2.32,
-    "expected_atl": 13.1,
-    "expected_tsb": -10.78,
-    "expected_acwr": 5.658
+    "expected_ctl": 98.4,
+    "expected_atl": 98.4,
+    "expected_tsb": 0.0,
+    "expected_acwr": 1.0
   },
   {
     "date": "2025-01-02",
@@ -34,10 +34,10 @@
     "body_battery_start": 56,
     "body_battery_end": 19,
     "spo2": 97,
-    "expected_ctl": 2.99,
-    "expected_atl": 15.48,
-    "expected_tsb": -12.49,
-    "expected_acwr": 5.178
+    "expected_ctl": 95.27,
+    "expected_atl": 81.55,
+    "expected_tsb": 13.72,
+    "expected_acwr": 1.0
   },
   {
     "date": "2025-01-03",
@@ -54,10 +54,10 @@
     "body_battery_start": 78,
     "body_battery_end": 26,
     "spo2": 94,
-    "expected_ctl": 5.16,
-    "expected_atl": 26.12,
-    "expected_tsb": -20.96,
-    "expected_acwr": 5.058
+    "expected_ctl": 95.27,
+    "expected_atl": 85.01,
+    "expected_tsb": 10.26,
+    "expected_acwr": 1.0
   },
   {
     "date": "2025-01-04",
@@ -74,10 +74,10 @@
     "body_battery_start": 37,
     "body_battery_end": 29,
     "spo2": 94,
-    "expected_ctl": 8.04,
-    "expected_atl": 39.6,
-    "expected_tsb": -31.56,
-    "expected_acwr": 4.926
+    "expected_ctl": 96.77,
+    "expected_atl": 95.61,
+    "expected_tsb": 1.16,
+    "expected_acwr": 1.0
   },
   {
     "date": "2025-01-05",
@@ -94,10 +94,10 @@
     "body_battery_start": 79,
     "body_battery_end": 23,
     "spo2": 94,
-    "expected_ctl": 8.05,
-    "expected_atl": 35.44,
-    "expected_tsb": -27.39,
-    "expected_acwr": 4.404
+    "expected_ctl": 92.65,
+    "expected_atl": 73.78,
+    "expected_tsb": 18.87,
+    "expected_acwr": 1.0
   },
   {
     "date": "2025-01-06",
@@ -114,10 +114,10 @@
     "body_battery_start": 43,
     "body_battery_end": 47,
     "spo2": 96,
-    "expected_ctl": 10.48,
-    "expected_atl": 45.54,
-    "expected_tsb": -35.06,
-    "expected_acwr": 4.347
+    "expected_ctl": 93.52,
+    "expected_atl": 83.16,
+    "expected_tsb": 10.36,
+    "expected_acwr": 1.0
   },
   {
     "date": "2025-01-07",
@@ -134,10 +134,10 @@
     "body_battery_start": 59,
     "body_battery_end": 29,
     "spo2": 96,
-    "expected_ctl": 11.43,
-    "expected_atl": 46.28,
-    "expected_tsb": -34.84,
-    "expected_acwr": 4.048
+    "expected_ctl": 91.55,
+    "expected_atl": 75.15,
+    "expected_tsb": 16.4,
+    "expected_acwr": 1.0
   },
   {
     "date": "2025-01-08",
@@ -154,10 +154,10 @@
     "body_battery_start": 50,
     "body_battery_end": 30,
     "spo2": 96,
-    "expected_ctl": 13.97,
-    "expected_atl": 56.01,
-    "expected_tsb": -42.04,
-    "expected_acwr": 4.009
+    "expected_ctl": 92.84,
+    "expected_atl": 86.21,
+    "expected_tsb": 6.63,
+    "expected_acwr": 0.968
   },
   {
     "date": "2025-01-09",
@@ -174,10 +174,10 @@
     "body_battery_start": 71,
     "body_battery_end": 34,
     "spo2": 95,
-    "expected_ctl": 14.4,
-    "expected_atl": 52.81,
-    "expected_tsb": -38.42,
-    "expected_acwr": 3.669
+    "expected_ctl": 90.01,
+    "expected_atl": 72.66,
+    "expected_tsb": 17.35,
+    "expected_acwr": 1.039
   },
   {
     "date": "2025-01-10",
@@ -194,10 +194,10 @@
     "body_battery_start": 55,
     "body_battery_end": 28,
     "spo2": 95,
-    "expected_ctl": 15.84,
-    "expected_atl": 55.89,
-    "expected_tsb": -40.04,
-    "expected_acwr": 3.528
+    "expected_ctl": 89.35,
+    "expected_atl": 73.47,
+    "expected_tsb": 15.89,
+    "expected_acwr": 1.0
   },
   {
     "date": "2025-01-11",
@@ -214,10 +214,10 @@
     "body_battery_start": 40,
     "body_battery_end": 48,
     "spo2": 97,
-    "expected_ctl": 20.17,
-    "expected_atl": 75.05,
-    "expected_tsb": -54.87,
-    "expected_acwr": 3.72
+    "expected_ctl": 94.49,
+    "expected_atl": 105.05,
+    "expected_tsb": -10.56,
+    "expected_acwr": 0.989
   },
   {
     "date": "2025-01-12",
@@ -234,10 +234,10 @@
     "body_battery_start": 73,
     "body_battery_end": 12,
     "spo2": 99,
-    "expected_ctl": 19.91,
-    "expected_atl": 66.24,
-    "expected_tsb": -46.33,
-    "expected_acwr": 3.328
+    "expected_ctl": 90.51,
+    "expected_atl": 81.01,
+    "expected_tsb": 9.5,
+    "expected_acwr": 1.07
   },
   {
     "date": "2025-01-13",
@@ -254,10 +254,10 @@
     "body_battery_start": 59,
     "body_battery_end": 5,
     "spo2": 99,
-    "expected_ctl": 22.1,
-    "expected_atl": 72.48,
-    "expected_tsb": -50.38,
-    "expected_acwr": 3.28
+    "expected_ctl": 91.56,
+    "expected_atl": 89.03,
+    "expected_tsb": 2.53,
+    "expected_acwr": 1.04
   },
   {
     "date": "2025-01-14",
@@ -274,10 +274,10 @@
     "body_battery_start": 70,
     "body_battery_end": 37,
     "spo2": 98,
-    "expected_ctl": 22.9,
-    "expected_atl": 70.32,
-    "expected_tsb": -47.42,
-    "expected_acwr": 3.07
+    "expected_ctl": 89.92,
+    "expected_atl": 80.85,
+    "expected_tsb": 9.07,
+    "expected_acwr": 1.073
   },
   {
     "date": "2025-01-15",
@@ -294,10 +294,10 @@
     "body_battery_start": 61,
     "body_battery_end": 6,
     "spo2": 94,
-    "expected_ctl": 24.06,
-    "expected_atl": 70.53,
-    "expected_tsb": -46.48,
-    "expected_acwr": 2.932
+    "expected_ctl": 89.08,
+    "expected_atl": 78.61,
+    "expected_tsb": 10.47,
+    "expected_acwr": 0.996
   },
   {
     "date": "2025-01-16",
@@ -314,10 +314,10 @@
     "body_battery_start": 78,
     "body_battery_end": 39,
     "spo2": 95,
-    "expected_ctl": 24.85,
-    "expected_atl": 68.85,
-    "expected_tsb": -44.0,
-    "expected_acwr": 2.77
+    "expected_ctl": 87.63,
+    "expected_atl": 73.44,
+    "expected_tsb": 14.2,
+    "expected_acwr": 1.061
   },
   {
     "date": "2025-01-17",
@@ -334,10 +334,10 @@
     "body_battery_start": 43,
     "body_battery_end": 39,
     "spo2": 99,
-    "expected_ctl": 25.86,
-    "expected_atl": 68.7,
-    "expected_tsb": -42.84,
-    "expected_acwr": 2.656
+    "expected_ctl": 86.71,
+    "expected_atl": 72.0,
+    "expected_tsb": 14.7,
+    "expected_acwr": 1.054
   },
   {
     "date": "2025-01-18",
@@ -354,10 +354,10 @@
     "body_battery_start": 45,
     "body_battery_end": 19,
     "spo2": 94,
-    "expected_ctl": 29.37,
-    "expected_atl": 82.88,
-    "expected_tsb": -53.5,
-    "expected_acwr": 2.821
+    "expected_ctl": 90.82,
+    "expected_atl": 97.8,
+    "expected_tsb": -6.98,
+    "expected_acwr": 0.944
   },
   {
     "date": "2025-01-19",
@@ -374,10 +374,10 @@
     "body_battery_start": 33,
     "body_battery_end": 19,
     "spo2": 94,
-    "expected_ctl": 28.8,
-    "expected_atl": 72.52,
-    "expected_tsb": -43.72,
-    "expected_acwr": 2.518
+    "expected_ctl": 86.83,
+    "expected_atl": 74.63,
+    "expected_tsb": 12.21,
+    "expected_acwr": 0.986
   },
   {
     "date": "2025-01-20",
@@ -394,10 +394,10 @@
     "body_battery_start": 38,
     "body_battery_end": 41,
     "spo2": 98,
-    "expected_ctl": 30.81,
-    "expected_atl": 78.08,
-    "expected_tsb": -47.27,
-    "expected_acwr": 2.534
+    "expected_ctl": 88.11,
+    "expected_atl": 84.54,
+    "expected_tsb": 3.57,
+    "expected_acwr": 0.967
   },
   {
     "date": "2025-01-21",
@@ -414,10 +414,10 @@
     "body_battery_start": 57,
     "body_battery_end": 31,
     "spo2": 97,
-    "expected_ctl": 31.13,
-    "expected_atl": 73.57,
-    "expected_tsb": -42.44,
-    "expected_acwr": 2.363
+    "expected_ctl": 86.07,
+    "expected_atl": 74.46,
+    "expected_tsb": 11.61,
+    "expected_acwr": 0.967
   },
   {
     "date": "2025-01-22",
@@ -434,10 +434,10 @@
     "body_battery_start": 45,
     "body_battery_end": 17,
     "spo2": 95,
-    "expected_ctl": 33.03,
-    "expected_atl": 78.66,
-    "expected_tsb": -45.63,
-    "expected_acwr": 2.382
+    "expected_ctl": 87.27,
+    "expected_atl": 83.79,
+    "expected_tsb": 3.47,
+    "expected_acwr": 1.019
   },
   {
     "date": "2025-01-23",
@@ -454,10 +454,10 @@
     "body_battery_start": 65,
     "body_battery_end": 11,
     "spo2": 94,
-    "expected_ctl": 33.34,
-    "expected_atl": 74.33,
-    "expected_tsb": -40.99,
-    "expected_acwr": 2.23
+    "expected_ctl": 85.35,
+    "expected_atl": 74.37,
+    "expected_tsb": 10.98,
+    "expected_acwr": 1.018
   },
   {
     "date": "2025-01-24",
@@ -474,10 +474,10 @@
     "body_battery_start": 60,
     "body_battery_end": 18,
     "spo2": 97,
-    "expected_ctl": 34.88,
-    "expected_atl": 77.63,
-    "expected_tsb": -42.74,
-    "expected_acwr": 2.225
+    "expected_ctl": 85.99,
+    "expected_atl": 80.55,
+    "expected_tsb": 5.44,
+    "expected_acwr": 1.063
   },
   {
     "date": "2025-01-25",
@@ -494,10 +494,10 @@
     "body_battery_start": 74,
     "body_battery_end": 40,
     "spo2": 99,
-    "expected_ctl": 38.58,
-    "expected_atl": 92.88,
-    "expected_tsb": -54.29,
-    "expected_acwr": 2.407
+    "expected_ctl": 90.93,
+    "expected_atl": 108.46,
+    "expected_tsb": -17.53,
+    "expected_acwr": 1.035
   },
   {
     "date": "2025-01-26",
@@ -514,10 +514,10 @@
     "body_battery_start": 77,
     "body_battery_end": 25,
     "spo2": 94,
-    "expected_ctl": 37.93,
-    "expected_atl": 81.95,
-    "expected_tsb": -44.02,
-    "expected_acwr": 2.161
+    "expected_ctl": 87.2,
+    "expected_atl": 84.05,
+    "expected_tsb": 3.16,
+    "expected_acwr": 1.081
   },
   {
     "date": "2025-01-27",
@@ -534,10 +534,10 @@
     "body_battery_start": 34,
     "body_battery_end": 43,
     "spo2": 94,
-    "expected_ctl": 38.52,
-    "expected_atl": 79.43,
-    "expected_tsb": -40.91,
-    "expected_acwr": 2.062
+    "expected_ctl": 86.08,
+    "expected_atl": 78.79,
+    "expected_tsb": 7.29,
+    "expected_acwr": 1.0
   },
   {
     "date": "2025-01-28",
@@ -554,10 +554,10 @@
     "body_battery_start": 69,
     "body_battery_end": 10,
     "spo2": 97,
-    "expected_ctl": 38.8,
-    "expected_atl": 75.55,
-    "expected_tsb": -36.75,
-    "expected_acwr": 1.947
+    "expected_ctl": 84.41,
+    "expected_atl": 71.66,
+    "expected_tsb": 12.75,
+    "expected_acwr": 1.025
   },
   {
     "date": "2025-01-29",
@@ -574,10 +574,10 @@
     "body_battery_start": 55,
     "body_battery_end": 13,
     "spo2": 99,
-    "expected_ctl": 40.22,
-    "expected_atl": 78.73,
-    "expected_tsb": -38.5,
-    "expected_acwr": 1.957
+    "expected_ctl": 85.11,
+    "expected_atl": 78.6,
+    "expected_tsb": 6.51,
+    "expected_acwr": 1.002
   },
   {
     "date": "2025-01-30",
@@ -594,10 +594,10 @@
     "body_battery_start": 36,
     "body_battery_end": 9,
     "spo2": 98,
-    "expected_ctl": 40.44,
-    "expected_atl": 74.82,
-    "expected_tsb": -34.38,
-    "expected_acwr": 1.85
+    "expected_ctl": 83.45,
+    "expected_atl": 71.3,
+    "expected_tsb": 12.15,
+    "expected_acwr": 1.0
   },
   {
     "date": "2025-01-31",
@@ -614,10 +614,10 @@
     "body_battery_start": 58,
     "body_battery_end": 39,
     "spo2": 99,
-    "expected_ctl": 41.2,
-    "expected_atl": 74.55,
-    "expected_tsb": -33.35,
-    "expected_acwr": 1.81
+    "expected_ctl": 82.95,
+    "expected_atl": 71.67,
+    "expected_tsb": 11.28,
+    "expected_acwr": 0.963
   },
   {
     "date": "2025-02-01",
@@ -634,10 +634,10 @@
     "body_battery_start": 46,
     "body_battery_end": 12,
     "spo2": 94,
-    "expected_ctl": 43.62,
-    "expected_atl": 83.82,
-    "expected_tsb": -40.2,
-    "expected_acwr": 1.922
+    "expected_ctl": 85.8,
+    "expected_atl": 89.81,
+    "expected_tsb": -4.0,
+    "expected_acwr": 0.87
   },
   {
     "date": "2025-02-02",
@@ -654,10 +654,10 @@
     "body_battery_start": 62,
     "body_battery_end": 36,
     "spo2": 96,
-    "expected_ctl": 42.86,
-    "expected_atl": 74.14,
-    "expected_tsb": -31.28,
-    "expected_acwr": 1.73
+    "expected_ctl": 82.33,
+    "expected_atl": 70.13,
+    "expected_tsb": 12.2,
+    "expected_acwr": 0.87
   },
   {
     "date": "2025-02-03",
@@ -674,10 +674,10 @@
     "body_battery_start": 79,
     "body_battery_end": 13,
     "spo2": 99,
-    "expected_ctl": 44.54,
-    "expected_atl": 79.49,
-    "expected_tsb": -34.95,
-    "expected_acwr": 1.785
+    "expected_ctl": 83.82,
+    "expected_atl": 81.17,
+    "expected_tsb": 2.64,
+    "expected_acwr": 0.96
   },
   {
     "date": "2025-02-04",
@@ -694,10 +694,10 @@
     "body_battery_start": 34,
     "body_battery_end": 49,
     "spo2": 95,
-    "expected_ctl": 44.89,
-    "expected_atl": 76.81,
-    "expected_tsb": -31.93,
-    "expected_acwr": 1.711
+    "expected_ctl": 82.68,
+    "expected_atl": 75.73,
+    "expected_tsb": 6.95,
+    "expected_acwr": 0.972
   },
   {
     "date": "2025-02-05",
@@ -714,10 +714,10 @@
     "body_battery_start": 53,
     "body_battery_end": 7,
     "spo2": 96,
-    "expected_ctl": 46.01,
-    "expected_atl": 78.93,
-    "expected_tsb": -32.91,
-    "expected_acwr": 1.715
+    "expected_ctl": 83.15,
+    "expected_atl": 79.97,
+    "expected_tsb": 3.17,
+    "expected_acwr": 0.972
   },
   {
     "date": "2025-02-06",
@@ -734,10 +734,10 @@
     "body_battery_start": 45,
     "body_battery_end": 15,
     "spo2": 95,
-    "expected_ctl": 45.79,
-    "expected_atl": 73.25,
-    "expected_tsb": -27.47,
-    "expected_acwr": 1.6
+    "expected_ctl": 80.97,
+    "expected_atl": 69.05,
+    "expected_tsb": 11.91,
+    "expected_acwr": 0.947
   },
   {
     "date": "2025-02-07",
@@ -754,10 +754,10 @@
     "body_battery_start": 80,
     "body_battery_end": 49,
     "spo2": 94,
-    "expected_ctl": 47.36,
-    "expected_atl": 78.53,
-    "expected_tsb": -31.17,
-    "expected_acwr": 1.658
+    "expected_ctl": 82.45,
+    "expected_atl": 80.02,
+    "expected_tsb": 2.44,
+    "expected_acwr": 1.001
   },
   {
     "date": "2025-02-08",
@@ -774,10 +774,10 @@
     "body_battery_start": 80,
     "body_battery_end": 19,
     "spo2": 95,
-    "expected_ctl": 49.79,
-    "expected_atl": 88.13,
-    "expected_tsb": -38.33,
-    "expected_acwr": 1.77
+    "expected_ctl": 85.62,
+    "expected_atl": 97.66,
+    "expected_tsb": -12.04,
+    "expected_acwr": 1.035
   },
   {
     "date": "2025-02-09",
@@ -794,10 +794,10 @@
     "body_battery_start": 55,
     "body_battery_end": 48,
     "spo2": 98,
-    "expected_ctl": 48.63,
-    "expected_atl": 76.45,
-    "expected_tsb": -27.82,
-    "expected_acwr": 1.572
+    "expected_ctl": 81.66,
+    "expected_atl": 73.35,
+    "expected_tsb": 8.31,
+    "expected_acwr": 1.02
   },
   {
     "date": "2025-02-10",
@@ -814,10 +814,10 @@
     "body_battery_start": 57,
     "body_battery_end": 27,
     "spo2": 99,
-    "expected_ctl": 49.37,
-    "expected_atl": 76.91,
-    "expected_tsb": -27.54,
-    "expected_acwr": 1.558
+    "expected_ctl": 81.58,
+    "expected_atl": 74.98,
+    "expected_tsb": 6.59,
+    "expected_acwr": 0.972
   },
   {
     "date": "2025-02-11",
@@ -834,10 +834,10 @@
     "body_battery_start": 32,
     "body_battery_end": 50,
     "spo2": 97,
-    "expected_ctl": 49.47,
-    "expected_atl": 73.8,
-    "expected_tsb": -24.34,
-    "expected_acwr": 1.492
+    "expected_ctl": 80.28,
+    "expected_atl": 69.64,
+    "expected_tsb": 10.64,
+    "expected_acwr": 0.963
   },
   {
     "date": "2025-02-12",
@@ -854,10 +854,10 @@
     "body_battery_start": 69,
     "body_battery_end": 25,
     "spo2": 99,
-    "expected_ctl": 49.72,
-    "expected_atl": 71.98,
-    "expected_tsb": -22.26,
-    "expected_acwr": 1.448
+    "expected_ctl": 79.34,
+    "expected_atl": 67.25,
+    "expected_tsb": 12.08,
+    "expected_acwr": 0.908
   },
   {
     "date": "2025-02-13",
@@ -874,10 +874,10 @@
     "body_battery_start": 38,
     "body_battery_end": 17,
     "spo2": 97,
-    "expected_ctl": 49.85,
-    "expected_atl": 69.77,
-    "expected_tsb": -19.92,
-    "expected_acwr": 1.4
+    "expected_ctl": 78.22,
+    "expected_atl": 64.29,
+    "expected_tsb": 13.93,
+    "expected_acwr": 0.944
   },
   {
     "date": "2025-02-14",
@@ -894,10 +894,10 @@
     "body_battery_start": 49,
     "body_battery_end": 23,
     "spo2": 95,
-    "expected_ctl": 51.03,
-    "expected_atl": 73.78,
-    "expected_tsb": -22.76,
-    "expected_acwr": 1.446
+    "expected_ctl": 79.23,
+    "expected_atl": 73.19,
+    "expected_tsb": 6.04,
+    "expected_acwr": 0.907
   },
   {
     "date": "2025-02-15",
@@ -914,10 +914,10 @@
     "body_battery_start": 62,
     "body_battery_end": 35,
     "spo2": 99,
-    "expected_ctl": 53.46,
-    "expected_atl": 84.52,
-    "expected_tsb": -31.05,
-    "expected_acwr": 1.581
+    "expected_ctl": 82.73,
+    "expected_atl": 93.49,
+    "expected_tsb": -10.77,
+    "expected_acwr": 0.923
   },
   {
     "date": "2025-02-16",
@@ -934,10 +934,10 @@
     "body_battery_start": 44,
     "body_battery_end": 17,
     "spo2": 95,
-    "expected_ctl": 52.26,
-    "expected_atl": 73.6,
-    "expected_tsb": -21.34,
-    "expected_acwr": 1.408
+    "expected_ctl": 79.0,
+    "expected_atl": 70.75,
+    "expected_tsb": 8.25,
+    "expected_acwr": 0.928
   },
   {
     "date": "2025-02-17",
@@ -954,10 +954,10 @@
     "body_battery_start": 42,
     "body_battery_end": 50,
     "spo2": 99,
-    "expected_ctl": 52.48,
-    "expected_atl": 71.99,
-    "expected_tsb": -19.51,
-    "expected_acwr": 1.372
+    "expected_ctl": 78.18,
+    "expected_atl": 68.43,
+    "expected_tsb": 9.75,
+    "expected_acwr": 0.916
   },
   {
     "date": "2025-02-18",
@@ -974,10 +974,10 @@
     "body_battery_start": 74,
     "body_battery_end": 38,
     "spo2": 97,
-    "expected_ctl": 52.22,
-    "expected_atl": 67.93,
-    "expected_tsb": -15.71,
-    "expected_acwr": 1.301
+    "expected_ctl": 76.48,
+    "expected_atl": 61.7,
+    "expected_tsb": 14.78,
+    "expected_acwr": 0.894
   },
   {
     "date": "2025-02-19",
@@ -994,10 +994,10 @@
     "body_battery_start": 68,
     "body_battery_end": 25,
     "spo2": 97,
-    "expected_ctl": 52.47,
-    "expected_atl": 67.27,
-    "expected_tsb": -14.8,
-    "expected_acwr": 1.282
+    "expected_ctl": 75.85,
+    "expected_atl": 62.03,
+    "expected_tsb": 13.82,
+    "expected_acwr": 0.921
   },
   {
     "date": "2025-02-20",
@@ -1014,10 +1014,10 @@
     "body_battery_start": 78,
     "body_battery_end": 20,
     "spo2": 99,
-    "expected_ctl": 52.38,
-    "expected_atl": 64.76,
-    "expected_tsb": -12.38,
-    "expected_acwr": 1.236
+    "expected_ctl": 74.57,
+    "expected_atl": 58.62,
+    "expected_tsb": 15.95,
+    "expected_acwr": 0.907
   },
   {
     "date": "2025-02-21",
@@ -1034,10 +1034,10 @@
     "body_battery_start": 45,
     "body_battery_end": 22,
     "spo2": 96,
-    "expected_ctl": 52.95,
-    "expected_atl": 66.34,
-    "expected_tsb": -13.39,
-    "expected_acwr": 1.253
+    "expected_ctl": 74.67,
+    "expected_atl": 63.11,
+    "expected_tsb": 11.55,
+    "expected_acwr": 0.871
   },
   {
     "date": "2025-02-22",
@@ -1054,10 +1054,10 @@
     "body_battery_start": 34,
     "body_battery_end": 31,
     "spo2": 97,
-    "expected_ctl": 55.13,
-    "expected_atl": 76.89,
-    "expected_tsb": -21.76,
-    "expected_acwr": 1.395
+    "expected_ctl": 77.97,
+    "expected_atl": 83.74,
+    "expected_tsb": -5.77,
+    "expected_acwr": 0.874
   },
   {
     "date": "2025-02-23",
@@ -1074,10 +1074,10 @@
     "body_battery_start": 78,
     "body_battery_end": 41,
     "spo2": 97,
-    "expected_ctl": 53.95,
-    "expected_atl": 67.32,
-    "expected_tsb": -13.37,
-    "expected_acwr": 1.248
+    "expected_ctl": 74.57,
+    "expected_atl": 64.05,
+    "expected_tsb": 10.52,
+    "expected_acwr": 0.881
   },
   {
     "date": "2025-02-24",
@@ -1094,10 +1094,10 @@
     "body_battery_start": 44,
     "body_battery_end": 36,
     "spo2": 95,
-    "expected_ctl": 54.76,
-    "expected_atl": 70.15,
-    "expected_tsb": -15.39,
-    "expected_acwr": 1.281
+    "expected_ctl": 75.23,
+    "expected_atl": 70.19,
+    "expected_tsb": 5.04,
+    "expected_acwr": 0.924
   },
   {
     "date": "2025-02-25",
@@ -1114,10 +1114,10 @@
     "body_battery_start": 69,
     "body_battery_end": 39,
     "spo2": 94,
-    "expected_ctl": 54.37,
-    "expected_atl": 65.9,
-    "expected_tsb": -11.52,
-    "expected_acwr": 1.212
+    "expected_ctl": 73.5,
+    "expected_atl": 62.19,
+    "expected_tsb": 11.31,
+    "expected_acwr": 0.923
   },
   {
     "date": "2025-02-26",
@@ -1134,10 +1134,10 @@
     "body_battery_start": 59,
     "body_battery_end": 16,
     "spo2": 94,
-    "expected_ctl": 55.79,
-    "expected_atl": 72.35,
-    "expected_tsb": -16.57,
-    "expected_acwr": 1.297
+    "expected_ctl": 75.41,
+    "expected_atl": 75.24,
+    "expected_tsb": 0.16,
+    "expected_acwr": 1.017
   },
   {
     "date": "2025-02-27",
@@ -1154,10 +1154,10 @@
     "body_battery_start": 46,
     "body_battery_end": 10,
     "spo2": 97,
-    "expected_ctl": 55.36,
-    "expected_atl": 67.75,
-    "expected_tsb": -12.39,
-    "expected_acwr": 1.224
+    "expected_ctl": 73.66,
+    "expected_atl": 65.88,
+    "expected_tsb": 7.77,
+    "expected_acwr": 1.002
   },
   {
     "date": "2025-02-28",
@@ -1174,10 +1174,10 @@
     "body_battery_start": 45,
     "body_battery_end": 17,
     "spo2": 94,
-    "expected_ctl": 55.5,
-    "expected_atl": 66.88,
-    "expected_tsb": -11.38,
-    "expected_acwr": 1.205
+    "expected_ctl": 73.08,
+    "expected_atl": 64.71,
+    "expected_tsb": 8.36,
+    "expected_acwr": 0.977
   },
   {
     "date": "2025-03-01",
@@ -1194,10 +1194,10 @@
     "body_battery_start": 40,
     "body_battery_end": 43,
     "spo2": 98,
-    "expected_ctl": 58.19,
-    "expected_atl": 80.57,
-    "expected_tsb": -22.38,
-    "expected_acwr": 1.385
+    "expected_ctl": 77.57,
+    "expected_atl": 90.96,
+    "expected_tsb": -13.39,
+    "expected_acwr": 1.012
   },
   {
     "date": "2025-03-02",
@@ -1214,10 +1214,10 @@
     "body_battery_start": 66,
     "body_battery_end": 48,
     "spo2": 97,
-    "expected_ctl": 57.16,
-    "expected_atl": 71.77,
-    "expected_tsb": -14.61,
-    "expected_acwr": 1.256
+    "expected_ctl": 74.64,
+    "expected_atl": 71.84,
+    "expected_tsb": 2.79,
+    "expected_acwr": 1.029
   },
   {
     "date": "2025-03-03",
@@ -1234,10 +1234,10 @@
     "body_battery_start": 37,
     "body_battery_end": 41,
     "spo2": 94,
-    "expected_ctl": 57.79,
-    "expected_atl": 73.37,
-    "expected_tsb": -15.59,
-    "expected_acwr": 1.27
+    "expected_ctl": 75.06,
+    "expected_atl": 74.83,
+    "expected_tsb": 0.23,
+    "expected_acwr": 1.035
   },
   {
     "date": "2025-03-04",
@@ -1254,10 +1254,10 @@
     "body_battery_start": 56,
     "body_battery_end": 36,
     "spo2": 94,
-    "expected_ctl": 57.38,
-    "expected_atl": 68.99,
-    "expected_tsb": -11.61,
-    "expected_acwr": 1.202
+    "expected_ctl": 73.45,
+    "expected_atl": 66.22,
+    "expected_tsb": 7.23,
+    "expected_acwr": 1.049
   },
   {
     "date": "2025-03-05",
@@ -1274,10 +1274,10 @@
     "body_battery_start": 69,
     "body_battery_end": 39,
     "spo2": 97,
-    "expected_ctl": 58.05,
-    "expected_atl": 71.25,
-    "expected_tsb": -13.2,
-    "expected_acwr": 1.227
+    "expected_ctl": 74.03,
+    "expected_atl": 71.17,
+    "expected_tsb": 2.87,
+    "expected_acwr": 0.996
   },
   {
     "date": "2025-03-06",
@@ -1294,10 +1294,10 @@
     "body_battery_start": 78,
     "body_battery_end": 34,
     "spo2": 98,
-    "expected_ctl": 57.72,
-    "expected_atl": 67.61,
-    "expected_tsb": -9.89,
-    "expected_acwr": 1.171
+    "expected_ctl": 72.63,
+    "expected_atl": 64.35,
+    "expected_tsb": 8.28,
+    "expected_acwr": 1.004
   },
   {
     "date": "2025-03-07",
@@ -1314,10 +1314,10 @@
     "body_battery_start": 52,
     "body_battery_end": 21,
     "spo2": 96,
-    "expected_ctl": 58.63,
-    "expected_atl": 71.47,
-    "expected_tsb": -12.84,
-    "expected_acwr": 1.219
+    "expected_ctl": 73.75,
+    "expected_atl": 72.41,
+    "expected_tsb": 1.33,
+    "expected_acwr": 1.084
   },
   {
     "date": "2025-03-08",
@@ -1334,10 +1334,10 @@
     "body_battery_start": 45,
     "body_battery_end": 31,
     "spo2": 97,
-    "expected_ctl": 60.6,
-    "expected_atl": 80.91,
-    "expected_tsb": -20.31,
-    "expected_acwr": 1.335
+    "expected_ctl": 76.94,
+    "expected_atl": 89.91,
+    "expected_tsb": -12.97,
+    "expected_acwr": 1.033
   },
   {
     "date": "2025-03-09",
@@ -1354,10 +1354,10 @@
     "body_battery_start": 44,
     "body_battery_end": 30,
     "spo2": 99,
-    "expected_ctl": 59.37,
-    "expected_atl": 71.25,
-    "expected_tsb": -11.87,
-    "expected_acwr": 1.2
+    "expected_ctl": 73.75,
+    "expected_atl": 69.51,
+    "expected_tsb": 4.24,
+    "expected_acwr": 1.016
   },
   {
     "date": "2025-03-10",
@@ -1374,10 +1374,10 @@
     "body_battery_start": 77,
     "body_battery_end": 40,
     "spo2": 96,
-    "expected_ctl": 59.73,
-    "expected_atl": 71.69,
-    "expected_tsb": -11.96,
-    "expected_acwr": 1.2
+    "expected_ctl": 73.79,
+    "expected_atl": 70.78,
+    "expected_tsb": 3.01,
+    "expected_acwr": 1.0
   },
   {
     "date": "2025-03-11",
@@ -1394,10 +1394,10 @@
     "body_battery_start": 37,
     "body_battery_end": 39,
     "spo2": 99,
-    "expected_ctl": 59.28,
-    "expected_atl": 67.55,
-    "expected_tsb": -8.27,
-    "expected_acwr": 1.14
+    "expected_ctl": 72.24,
+    "expected_atl": 63.24,
+    "expected_tsb": 9.01,
+    "expected_acwr": 1.008
   },
   {
     "date": "2025-03-12",
@@ -1414,10 +1414,10 @@
     "body_battery_start": 42,
     "body_battery_end": 23,
     "spo2": 95,
-    "expected_ctl": 59.56,
-    "expected_atl": 68.02,
-    "expected_tsb": -8.47,
-    "expected_acwr": 1.142
+    "expected_ctl": 72.19,
+    "expected_atl": 65.2,
+    "expected_tsb": 6.99,
+    "expected_acwr": 0.972
   },
   {
     "date": "2025-03-13",
@@ -1434,10 +1434,10 @@
     "body_battery_start": 65,
     "body_battery_end": 23,
     "spo2": 99,
-    "expected_ctl": 59.12,
-    "expected_atl": 64.4,
-    "expected_tsb": -5.28,
-    "expected_acwr": 1.089
+    "expected_ctl": 70.73,
+    "expected_atl": 59.1,
+    "expected_tsb": 11.63,
+    "expected_acwr": 0.972
   },
   {
     "date": "2025-03-14",
@@ -1454,10 +1454,10 @@
     "body_battery_start": 60,
     "body_battery_end": 35,
     "spo2": 97,
-    "expected_ctl": 60.47,
-    "expected_atl": 71.35,
-    "expected_tsb": -10.88,
-    "expected_acwr": 1.18
+    "expected_ctl": 72.86,
+    "expected_atl": 73.48,
+    "expected_tsb": -0.61,
+    "expected_acwr": 1.005
   },
   {
     "date": "2025-03-15",
@@ -1474,10 +1474,10 @@
     "body_battery_start": 66,
     "body_battery_end": 45,
     "spo2": 99,
-    "expected_ctl": 62.51,
-    "expected_atl": 81.46,
-    "expected_tsb": -18.95,
-    "expected_acwr": 1.303
+    "expected_ctl": 76.33,
+    "expected_atl": 91.93,
+    "expected_tsb": -15.61,
+    "expected_acwr": 1.019
   },
   {
     "date": "2025-03-16",
@@ -1494,10 +1494,10 @@
     "body_battery_start": 78,
     "body_battery_end": 31,
     "spo2": 98,
-    "expected_ctl": 61.06,
-    "expected_atl": 70.72,
-    "expected_tsb": -9.66,
-    "expected_acwr": 1.158
+    "expected_ctl": 72.81,
+    "expected_atl": 69.15,
+    "expected_tsb": 3.66,
+    "expected_acwr": 1.004
   },
   {
     "date": "2025-03-17",
@@ -1514,10 +1514,10 @@
     "body_battery_start": 67,
     "body_battery_end": 32,
     "spo2": 96,
-    "expected_ctl": 61.88,
-    "expected_atl": 74.06,
-    "expected_tsb": -12.18,
-    "expected_acwr": 1.197
+    "expected_ctl": 73.88,
+    "expected_atl": 75.81,
+    "expected_tsb": -1.93,
+    "expected_acwr": 1.029
   },
   {
     "date": "2025-03-18",
@@ -1534,10 +1534,10 @@
     "body_battery_start": 72,
     "body_battery_end": 10,
     "spo2": 95,
-    "expected_ctl": 61.53,
-    "expected_atl": 70.47,
-    "expected_tsb": -8.94,
-    "expected_acwr": 1.145
+    "expected_ctl": 72.64,
+    "expected_atl": 68.63,
+    "expected_tsb": 4.0,
+    "expected_acwr": 1.039
   },
   {
     "date": "2025-03-19",
@@ -1554,10 +1554,10 @@
     "body_battery_start": 48,
     "body_battery_end": 7,
     "spo2": 95,
-    "expected_ctl": 61.83,
-    "expected_atl": 70.99,
-    "expected_tsb": -9.16,
-    "expected_acwr": 1.148
+    "expected_ctl": 72.72,
+    "expected_atl": 70.08,
+    "expected_tsb": 2.64,
+    "expected_acwr": 1.04
   },
   {
     "date": "2025-03-20",
@@ -1574,10 +1574,10 @@
     "body_battery_start": 72,
     "body_battery_end": 17,
     "spo2": 97,
-    "expected_ctl": 61.29,
-    "expected_atl": 66.68,
-    "expected_tsb": -5.4,
-    "expected_acwr": 1.088
+    "expected_ctl": 71.13,
+    "expected_atl": 62.21,
+    "expected_tsb": 8.93,
+    "expected_acwr": 1.041
   },
   {
     "date": "2025-03-21",
@@ -1594,10 +1594,10 @@
     "body_battery_start": 80,
     "body_battery_end": 24,
     "spo2": 98,
-    "expected_ctl": 61.42,
-    "expected_atl": 66.71,
-    "expected_tsb": -5.29,
-    "expected_acwr": 1.086
+    "expected_ctl": 70.94,
+    "expected_atl": 63.38,
+    "expected_tsb": 7.56,
+    "expected_acwr": 0.946
   },
   {
     "date": "2025-03-22",
@@ -1614,10 +1614,10 @@
     "body_battery_start": 47,
     "body_battery_end": 37,
     "spo2": 98,
-    "expected_ctl": 64.21,
-    "expected_atl": 81.78,
-    "expected_tsb": -17.57,
-    "expected_acwr": 1.274
+    "expected_ctl": 76.0,
+    "expected_atl": 92.51,
+    "expected_tsb": -16.51,
+    "expected_acwr": 0.994
   },
   {
     "date": "2025-03-23",
@@ -1634,10 +1634,10 @@
     "body_battery_start": 35,
     "body_battery_end": 19,
     "spo2": 99,
-    "expected_ctl": 62.87,
-    "expected_atl": 71.88,
-    "expected_tsb": -9.01,
-    "expected_acwr": 1.143
+    "expected_ctl": 72.81,
+    "expected_atl": 71.23,
+    "expected_tsb": 1.58,
+    "expected_acwr": 1.006
   },
   {
     "date": "2025-03-24",
@@ -1654,10 +1654,10 @@
     "body_battery_start": 71,
     "body_battery_end": 33,
     "spo2": 96,
-    "expected_ctl": 63.98,
-    "expected_atl": 76.98,
-    "expected_tsb": -13.0,
-    "expected_acwr": 1.203
+    "expected_ctl": 74.55,
+    "expected_atl": 80.97,
+    "expected_tsb": -6.42,
+    "expected_acwr": 1.024
   },
   {
     "date": "2025-03-25",
@@ -1674,10 +1674,10 @@
     "body_battery_start": 51,
     "body_battery_end": 25,
     "spo2": 99,
-    "expected_ctl": 63.31,
-    "expected_atl": 71.44,
-    "expected_tsb": -8.13,
-    "expected_acwr": 1.128
+    "expected_ctl": 72.73,
+    "expected_atl": 69.58,
+    "expected_tsb": 3.15,
+    "expected_acwr": 1.002
   },
   {
     "date": "2025-03-26",
@@ -1694,10 +1694,10 @@
     "body_battery_start": 32,
     "body_battery_end": 34,
     "spo2": 94,
-    "expected_ctl": 63.38,
-    "expected_atl": 70.76,
-    "expected_tsb": -7.38,
-    "expected_acwr": 1.116
+    "expected_ctl": 72.43,
+    "expected_atl": 68.76,
+    "expected_tsb": 3.67,
+    "expected_acwr": 1.01
   },
   {
     "date": "2025-03-27",
@@ -1714,10 +1714,10 @@
     "body_battery_start": 56,
     "body_battery_end": 8,
     "spo2": 95,
-    "expected_ctl": 62.82,
-    "expected_atl": 66.58,
-    "expected_tsb": -3.77,
-    "expected_acwr": 1.06
+    "expected_ctl": 70.9,
+    "expected_atl": 61.42,
+    "expected_tsb": 9.47,
+    "expected_acwr": 1.011
   },
   {
     "date": "2025-03-28",
@@ -1734,10 +1734,10 @@
     "body_battery_start": 65,
     "body_battery_end": 13,
     "spo2": 96,
-    "expected_ctl": 63.48,
-    "expected_atl": 69.85,
-    "expected_tsb": -6.37,
-    "expected_acwr": 1.1
+    "expected_ctl": 71.83,
+    "expected_atl": 68.84,
+    "expected_tsb": 2.99,
+    "expected_acwr": 1.044
   },
   {
     "date": "2025-03-29",
@@ -1754,10 +1754,10 @@
     "body_battery_start": 30,
     "body_battery_end": 40,
     "spo2": 97,
-    "expected_ctl": 65.64,
-    "expected_atl": 81.18,
-    "expected_tsb": -15.55,
-    "expected_acwr": 1.237
+    "expected_ctl": 75.7,
+    "expected_atl": 90.38,
+    "expected_tsb": -14.68,
+    "expected_acwr": 1.002
   },
   {
     "date": "2025-03-30",
@@ -1774,10 +1774,10 @@
     "body_battery_start": 56,
     "body_battery_end": 35,
     "spo2": 97,
-    "expected_ctl": 64.12,
-    "expected_atl": 70.56,
-    "expected_tsb": -6.44,
-    "expected_acwr": 1.1
+    "expected_ctl": 72.25,
+    "expected_atl": 68.14,
+    "expected_tsb": 4.11,
+    "expected_acwr": 0.997
   },
   {
     "date": "2025-03-31",
@@ -1794,9 +1794,9 @@
     "body_battery_start": 79,
     "body_battery_end": 31,
     "spo2": 96,
-    "expected_ctl": 64.37,
-    "expected_atl": 71.1,
-    "expected_tsb": -6.73,
-    "expected_acwr": 1.105
+    "expected_ctl": 72.36,
+    "expected_atl": 69.75,
+    "expected_tsb": 2.61,
+    "expected_acwr": 0.93
   }
 ]

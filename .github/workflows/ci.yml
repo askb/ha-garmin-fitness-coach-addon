@@ -20,10 +20,13 @@ jobs:
           python-version: "3.11"
 
       - name: Install test dependencies
-        run: pip install pytest psycopg2-binary garminconnect
+        run: pip install pytest requests-mock psycopg2-binary garminconnect
 
-      - name: Run tests
+      - name: Run addon runtime tests
         run: pytest pulsecoach/rootfs/app/tests/ -v
+
+      - name: Run engine parity and integration tests
+        run: pytest tests/ -v
 
   docker-build:
     runs-on: ubuntu-latest

@@ -187,23 +187,19 @@ class TestInjuryRisk:
 # ===========================================================================
 
 class TestEWMAConstants:
-    """Verify EWMA time constants used for CTL/ATL are physiologically correct."""
+    """Verify EWMA smoothing constants match the engine's span convention."""
 
-    def test_atl_decay_7day(self):
-        """ATL decay constant matches 7-day exponential window."""
-        import math
-        expected = 1 - math.exp(-1 / 7)
-        assert abs(metrics_compute.ATL_DECAY - expected) < 1e-10
+    def test_atl_alpha_span_7(self):
+        """ATL alpha matches the engine's 7-day span EWMA, 2/(7+1)."""
+        assert abs(metrics_compute.ALPHA_ATL - 2 / (7 + 1)) < 1e-12
 
-    def test_ctl_decay_42day(self):
-        """CTL decay constant matches 42-day exponential window."""
-        import math
-        expected = 1 - math.exp(-1 / 42)
-        assert abs(metrics_compute.CTL_DECAY - expected) < 1e-10
+    def test_ctl_alpha_span_42(self):
+        """CTL alpha matches the engine's 42-day span EWMA, 2/(42+1)."""
+        assert abs(metrics_compute.ALPHA_CTL - 2 / (42 + 1)) < 1e-12
 
     def test_atl_faster_than_ctl(self):
         """ATL (fatigue) responds faster than CTL (fitness)."""
-        assert metrics_compute.ATL_DECAY > metrics_compute.CTL_DECAY
+        assert metrics_compute.ALPHA_ATL > metrics_compute.ALPHA_CTL
 
 
 # ===========================================================================

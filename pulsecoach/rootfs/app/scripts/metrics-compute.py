@@ -7,7 +7,6 @@ existing daily_metric and activity data. Upserts into advanced_metric table.
 Runs on startup for full backfill, then loops every COMPUTE_INTERVAL_MINUTES.
 """
 
-import math
 import os
 import sys
 import time
@@ -36,9 +35,27 @@ except (KeyError, ValueError):
     print(f"[metrics-compute] WARNING: Invalid timezone '{_tz_name}', using UTC", file=sys.stderr)
     USER_TZ = ZoneInfo("UTC")
 
-# EWMA decay constants
-ATL_DECAY = 1 - math.exp(-1 / 7)   # 7-day time constant
-CTL_DECAY = 1 - math.exp(-1 / 42)  # 42-day time constant
+# ---------------------------------------------------------------------------
+# Banister PMC / ACWR constants.
+#
+# SINGLE SOURCE OF TRUTH: packages/engine/src/strain/index.ts in the app repo
+# is the canonical definition of CTL/ATL/TSB/ACWR/ramp-rate. This module is a
+# conformant port of that algorithm so the values stored in `advanced_metric`
+# (consumed by the coach context, proactive and workout routers) match the
+# values the app's `/training` and `/insights` pages compute live via the
+# engine. Any change to the formulas must be made in the engine first and
+# mirrored here; the parity test in tests/test_metrics_compute.py locks the
+# two implementations together.
+#
+# EWMA smoothing uses the "span" convention alpha = 2 / (N + 1), identical to
+# the engine's computeTrainingLoads / computeDailyPMCSeries (NOT the
+# time-constant 1 - e^(-1/N) convention, which drifts from the engine).
+# ---------------------------------------------------------------------------
+ALPHA_CTL = 2 / (42 + 1)  # ~0.0465 — 42-day fitness EWMA
+ALPHA_ATL = 2 / (7 + 1)   # 0.25   — 7-day fatigue EWMA
+ACWR_ACUTE_DAYS = 7       # acute rolling-mean window (Hulin et al. 2016)
+ACWR_CHRONIC_DAYS = 28    # chronic rolling-mean window (Hulin et al. 2016)
+RAMP_LOOKBACK_DAYS = 7    # ramp rate = CTL change over the trailing week
 
 
 def get_db():
@@ -180,7 +197,24 @@ def fetch_daily_loads(cur, user_id):
 
 
 def compute_ewma_loads(daily_loads: dict) -> dict:
-    """Compute CTL (42-day EWMA) and ATL (7-day EWMA) for each date.
+    """Compute CTL/ATL/TSB/ACWR/ramp-rate per date (engine-conformant).
+
+    Mirrors the app engine's computeDailyPMCSeries + computeTrainingLoads
+    (packages/engine/src/strain/index.ts), the single source of truth:
+
+    - CTL = span-EWMA of daily stress, alpha = 2/(42+1) ("fitness").
+    - ATL = span-EWMA of daily stress, alpha = 2/(7+1)  ("fatigue").
+      Both seeded with the first day's load; no update is applied on the
+      first day (matches the engine's seeding).
+    - TSB = CTL - ATL ("form").
+    - ACWR = mean(last 7 days) / mean(last 28 days) of daily load
+      (simple rolling means, Hulin et al. 2016), NOT ATL/CTL.
+    - ramp_rate = CTL today minus CTL 7 days ago, in absolute points/week
+      (Coggan guideline: caution above ~8 pts/week), NOT a percentage.
+
+    Input is a {date_str: load} mapping; the series is densified to one
+    contiguous calendar day per step with rest days zero-filled, matching
+    the zero-padded chronological input the engine expects.
 
     Returns dict: {date_str: {ctl, atl, tsb, acwr, ramp_rate}}
     """
@@ -191,25 +225,42 @@ def compute_ewma_loads(daily_loads: dict) -> dict:
     start = date.fromisoformat(dates[0])
     end = date.fromisoformat(dates[-1])
 
-    ctl = 0.0
-    atl = 0.0
-    results = {}
+    # Densify to a contiguous, zero-filled daily series (oldest first).
+    series: list[tuple[str, float]] = []
     current = start
-
     while current <= end:
         d_str = current.isoformat()
-        load = daily_loads.get(d_str, 0.0)
+        series.append((d_str, daily_loads.get(d_str, 0.0)))
+        current += timedelta(days=1)
 
-        ctl = ctl + CTL_DECAY * (load - ctl)
-        atl = atl + ATL_DECAY * (load - atl)
+    loads = [load for _, load in series]
+
+    ctl = loads[0]
+    atl = loads[0]
+    results = {}
+
+    for i, (d_str, load) in enumerate(series):
+        if i > 0:
+            ctl = ALPHA_CTL * load + (1 - ALPHA_CTL) * ctl
+            atl = ALPHA_ATL * load + (1 - ALPHA_ATL) * atl
         tsb = ctl - atl
-        acwr = (atl / ctl) if ctl > 0.5 else None
 
-        # Ramp rate: % change in CTL vs 7 days ago
-        prev_key = (current - timedelta(days=7)).isoformat()
+        # ACWR: rolling means over the trailing 7d / 28d windows.
+        acute_window = loads[max(0, i - (ACWR_ACUTE_DAYS - 1)):i + 1]
+        chronic_window = loads[max(0, i - (ACWR_CHRONIC_DAYS - 1)):i + 1]
+        acute = sum(acute_window) / max(1, len(acute_window))
+        chronic = sum(chronic_window) / max(1, len(chronic_window))
+        if chronic == 0:
+            acwr = 2.0 if acute > 0 else 1.0
+        else:
+            acwr = acute / chronic
+
+        # Ramp rate: absolute CTL change vs 7 days ago (points/week).
+        prev_key = (
+            date.fromisoformat(d_str) - timedelta(days=RAMP_LOOKBACK_DAYS)
+        ).isoformat()
         if prev_key in results:
-            prev_ctl = results[prev_key]["ctl"]
-            ramp_rate = ((ctl - prev_ctl) / prev_ctl * 100) if prev_ctl > 0.5 else None
+            ramp_rate = ctl - results[prev_key]["ctl"]
         else:
             ramp_rate = None
 
@@ -217,11 +268,9 @@ def compute_ewma_loads(daily_loads: dict) -> dict:
             "ctl": round(ctl, 2),
             "atl": round(atl, 2),
             "tsb": round(tsb, 2),
-            "acwr": round(acwr, 3) if acwr is not None else None,
+            "acwr": round(acwr, 3),
             "ramp_rate": round(ramp_rate, 2) if ramp_rate is not None else None,
         }
-
-        current += timedelta(days=1)
 
     return results
 
