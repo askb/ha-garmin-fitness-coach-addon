@@ -16,6 +16,7 @@
 
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { ROUTES as ROUTES_MANIFEST } from "../routes.mjs";
 
 const baseDir = process.argv[2] ?? "screenshots";
 const minBytes = Number(process.env.MIN_BYTES ?? "5000");
@@ -24,22 +25,15 @@ const projects = (process.env.PROJECTS ?? "desktop,mobile")
   .map((p) => p.trim())
   .filter(Boolean);
 
-// Routes the dashboard spec captures. Keep in sync with
-// tests/dashboard.spec.ts ROUTES.
-const ROUTES = [
-  "home",
-  "training",
-  "fitness",
-  "activities",
-  "sleep",
-  "trends",
-  "zones",
-  "hrv",
-  "vitals",
-  "insights",
-  "coach",
-  "validation",
-];
+// Routes the dashboard spec captures, from the shared manifest that the
+// spec (tests/dashboard.spec.ts) also imports — single source of truth, so
+// the validator and the capture spec cannot silently drift.
+const ROUTES = ROUTES_MANIFEST.map((r) => r.name);
+const WINDOWED = new Set(
+  ROUTES_MANIFEST.filter(
+    (r) => Array.isArray(r.timeframes) && r.timeframes.length > 0,
+  ).map((r) => r.name),
+);
 
 function fail(msg) {
   console.error(`❌ ${msg}`);
@@ -68,24 +62,24 @@ if (!datedDir) {
 const captureDir = join(baseDir, datedDir);
 console.log(`🔎 Validating screenshots in ${captureDir}`);
 
+// Enumerate the capture directory once and reuse it for every route×project
+// lookup. Let any unexpected filesystem error propagate so the failure mode
+// is clear rather than masquerading as a "Missing capture" message.
+const captureFiles = readdirSync(captureDir);
+
 let checked = 0;
 let ok = 0;
 for (const route of ROUTES) {
   for (const project of projects) {
-    // fitness emits per-timeframe files (fitness-7d-desktop.png …) instead
-    // of a bare fitness-desktop.png, so match by prefix for that route.
-    const isWindowed = route === "fitness";
-    let matches = [];
-    try {
-      const files = readdirSync(captureDir);
-      matches = files.filter((f) =>
-        isWindowed
-          ? f.startsWith(`${route}-`) && f.endsWith(`-${project}.png`)
-          : f === `${route}-${project}.png`,
-      );
-    } catch {
-      matches = [];
-    }
+    // Windowed routes (e.g. fitness) emit per-timeframe files
+    // (fitness-7d-desktop.png …) instead of a bare fitness-desktop.png, so
+    // match by prefix for those.
+    const isWindowed = WINDOWED.has(route);
+    const matches = captureFiles.filter((f) =>
+      isWindowed
+        ? f.startsWith(`${route}-`) && f.endsWith(`-${project}.png`)
+        : f === `${route}-${project}.png`,
+    );
 
     checked++;
     if (matches.length === 0) {

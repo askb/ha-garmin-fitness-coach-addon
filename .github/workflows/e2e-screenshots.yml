@@ -124,7 +124,7 @@ jobs:
             -e PERSONA="${PERSONA}" \
             pulsecoach sh -c '
               cd /app/packages/db &&
-              npm install --no-save tsx >/dev/null 2>&1 &&
+              npm install --no-save tsx >/dev/null &&
               echo "Seeding 90-day ${PERSONA} history…" &&
               npx tsx src/seed.ts &&
               echo "Seeding coach-loop e2e data…" &&
