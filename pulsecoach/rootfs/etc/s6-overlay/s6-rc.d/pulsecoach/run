@@ -168,6 +168,11 @@ export AUTH_SECRET="ha-addon-local-secret-$(cat /proc/sys/kernel/random/boot_id)
 export AUTH_DISCORD_ID="unused"
 export AUTH_DISCORD_SECRET="unused"
 
+# Shared secret for the internal task endpoints (e.g. memory rebuild). Generated
+# once per boot and exported to Next.js, then sent as x-internal-token on the
+# loopback cron POSTs below so the endpoint stays authenticated (fail-closed).
+export INTERNAL_TASK_TOKEN="${INTERNAL_TASK_TOKEN:-$(cat /proc/sys/kernel/random/uuid)}"
+
 # HA Supervisor API token (auto-injected by Supervisor for addons with homeassistant_api: true)
 export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN:-}"
 export HA_BASE_URL="http://supervisor/core"
@@ -400,6 +405,7 @@ if [ -n "${OLLAMA_URL}" ]; then
         while true; do
             bashio::log.info "Rebuilding coach memory embeddings..."
             curl -sf -m 600 -X POST \
+                -H "x-internal-token: ${INTERNAL_TASK_TOKEN}" \
                 http://127.0.0.1:3001/api/internal/rebuild-memory \
                 2>&1 || bashio::log.warning "Coach memory rebuild failed"
             sleep "$((MEMORY_REBUILD_INTERVAL_MINUTES * 60))"
@@ -530,6 +536,7 @@ while true; do
             while true; do
                 bashio::log.info "Rebuilding coach memory embeddings..."
                 curl -sf -m 600 -X POST \
+                    -H "x-internal-token: ${INTERNAL_TASK_TOKEN}" \
                     http://127.0.0.1:3001/api/internal/rebuild-memory \
                     2>&1 || bashio::log.warning "Coach memory rebuild failed"
                 sleep "$((MEMORY_REBUILD_INTERVAL_MINUTES * 60))"

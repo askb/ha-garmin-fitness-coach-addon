@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`ollama_embed_model` option** (default `nomic-embed-text`) selects the
   embedding model for coach memory. Pull it on your Ollama host; the app
   falls back to the chat model when it is unavailable.
+- **Internal task authentication.** The addon now generates a per-boot
+  `INTERNAL_TASK_TOKEN`, exports it to the bundled app, and sends it on the
+  loopback memory-rebuild POSTs. The app's internal endpoint is fail-closed
+  (rejects unauthenticated requests), so this keeps the nightly rebuild
+  working without exposing an unauthenticated endpoint.
 
 ## [0.17.11] - 2026-05-29
 
