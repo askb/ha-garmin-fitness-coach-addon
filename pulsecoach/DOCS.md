@@ -21,7 +21,7 @@ Home Assistant OS
 │   ├── pulsecoach orchestrator
 │   │   ├── garmin-sync.py      (Garmin Connect → PostgreSQL, every N min)
 │   │   ├── metrics-compute.py  (CTL/ATL/TSB/ACWR/CP → PostgreSQL, every 60 min)
-│   │   ├── ha-notify.py        (PostgreSQL → 7 HA sensors, every 30 min)
+│   │   ├── ha-notify.py        (PostgreSQL → 8 HA sensors, every 30 min)
 │   │   ├── Next.js standalone  (:3001, tRPC + Drizzle ORM)
 │   │   ├── ingress-proxy       (:3000 → :3001, HA path rewriting)
 │   │   └── process monitor     (restarts dead services every 60s)
@@ -110,7 +110,7 @@ Zones, Trends, and the AI Coach — is in the
 
 ## HA Sensors
 
-The addon pushes 7 sensors to Home Assistant via the Supervisor API:
+The addon pushes 8 sensors to Home Assistant via the Supervisor API:
 
 | Entity ID | Description |
 |-----------|-------------|

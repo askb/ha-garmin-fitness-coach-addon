@@ -34,8 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sensor.pulsecoach_data_quality` surfaces the unresolved issue count plus
   `missing_days_14d`, `stale_days`, `field_gaps`, and an `ok`/`warn`/`error`
   status, and a persistent notification fires when sync is ≥3 days stale.
-  Window/threshold tunable via `DATA_QUALITY_WINDOW_DAYS`,
-  `DATA_QUALITY_STALE_WARN_DAYS`, `DATA_QUALITY_STALE_ERROR_DAYS`.
+  The detection window and stale-day thresholds use sensible internal
+  defaults (30-day window; warn at 2 days, error at 7 days), read from the
+  `DATA_QUALITY_WINDOW_DAYS`, `DATA_QUALITY_STALE_WARN_DAYS`, and
+  `DATA_QUALITY_STALE_ERROR_DAYS` environment variables so they can be
+  overridden in custom builds.
 
 ### Fixed
 
