@@ -629,6 +629,19 @@ def _upsert_activity(cur, act: dict, act_id: str) -> None:
     if not isinstance(activity_type, dict):
         activity_type = {}
 
+    # Running dynamics (present on running activity summaries; None otherwise).
+    # Columns already exist in the Drizzle schema but were never populated.
+    running_dynamics = (
+        act.get("avgGroundContactTime"),       # ms
+        act.get("avgGroundContactBalance"),     # % (L/R)
+        act.get("avgVerticalOscillation"),      # cm
+        act.get("avgVerticalRatio"),            # %
+        act.get("avgStrideLength"),             # cm
+        act.get("avgRespirationRate"),          # brpm
+        act.get("elevationGain"),               # m
+        act.get("elevationLoss"),               # m
+    )
+
     cur.execute("""
         INSERT INTO activity (
             user_id, garmin_activity_id, sport_type, sub_type,
@@ -638,8 +651,11 @@ def _upsert_activity(cur, act: dict, act_id: str) -> None:
             trimp_score, strain_score,
             avg_power, normalized_power, max_power,
             avg_cadence, max_cadence,
+            avg_ground_contact_time, gct_balance,
+            vertical_oscillation, vertical_ratio, stride_length,
+            avg_respiration_rate, elevation_gain, elevation_loss,
             synced_at, raw_garmin_data
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (garmin_activity_id) DO UPDATE SET
             hr_zone_minutes = COALESCE(EXCLUDED.hr_zone_minutes, activity.hr_zone_minutes),
             trimp_score = COALESCE(EXCLUDED.trimp_score, activity.trimp_score),
@@ -649,6 +665,14 @@ def _upsert_activity(cur, act: dict, act_id: str) -> None:
             max_power = COALESCE(EXCLUDED.max_power, activity.max_power),
             avg_cadence = COALESCE(EXCLUDED.avg_cadence, activity.avg_cadence),
             max_cadence = COALESCE(EXCLUDED.max_cadence, activity.max_cadence),
+            avg_ground_contact_time = COALESCE(EXCLUDED.avg_ground_contact_time, activity.avg_ground_contact_time),
+            gct_balance = COALESCE(EXCLUDED.gct_balance, activity.gct_balance),
+            vertical_oscillation = COALESCE(EXCLUDED.vertical_oscillation, activity.vertical_oscillation),
+            vertical_ratio = COALESCE(EXCLUDED.vertical_ratio, activity.vertical_ratio),
+            stride_length = COALESCE(EXCLUDED.stride_length, activity.stride_length),
+            avg_respiration_rate = COALESCE(EXCLUDED.avg_respiration_rate, activity.avg_respiration_rate),
+            elevation_gain = COALESCE(EXCLUDED.elevation_gain, activity.elevation_gain),
+            elevation_loss = COALESCE(EXCLUDED.elevation_loss, activity.elevation_loss),
             synced_at = EXCLUDED.synced_at,
             raw_garmin_data = EXCLUDED.raw_garmin_data
     """, (
@@ -673,6 +697,7 @@ def _upsert_activity(cur, act: dict, act_id: str) -> None:
         act.get("maxPower"),
         avg_cadence,
         max_cadence,
+        *running_dynamics,
         datetime.now(timezone.utc).isoformat(),
         json.dumps(act),
     ))
