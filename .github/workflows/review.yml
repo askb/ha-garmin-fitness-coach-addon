@@ -59,6 +59,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: 'Compute changed paths'
         id: diff

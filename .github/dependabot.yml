@@ -8,6 +8,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "Chore"
     open-pull-requests-limit: 15
@@ -19,6 +21,8 @@ updates:
     directory: "/pulsecoach"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "Chore"
     open-pull-requests-limit: 5

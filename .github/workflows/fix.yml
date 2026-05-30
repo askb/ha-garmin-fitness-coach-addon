@@ -55,6 +55,7 @@ jobs:
         id: bot
         env:
           GH_TOKEN: ${{ secrets.COPILOT_AGENT_PAT || github.token }}
+          GITHUB_EVENT_REPOSITORY_NAME: ${{ github.event.repository.name }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC2016  # GraphQL uses literal $ placeholders
@@ -66,7 +67,7 @@ jobs:
                 }
               }
             }' -F owner="${{ github.repository_owner }}" \
-               -F repo="${{ github.event.repository.name }}" \
+               -F repo="${GITHUB_EVENT_REPOSITORY_NAME}" \
             --jq '.data.repository.suggestedActors.nodes[]
                   | select(.__typename=="Bot" and .login=="copilot-swe-agent")
                   | .id' | head -1)
@@ -82,6 +83,7 @@ jobs:
         if: steps.bot.outputs.id != ''
         env:
           GH_TOKEN: ${{ secrets.COPILOT_AGENT_PAT || github.token }}
+          GITHUB_EVENT_REPOSITORY_NAME: ${{ github.event.repository.name }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC2016  # GraphQL uses literal $ placeholders
@@ -89,7 +91,7 @@ jobs:
             query($owner:String!,$repo:String!){
               repository(owner:$owner,name:$repo){id}
             }' -F owner="${{ github.repository_owner }}" \
-               -F repo="${{ github.event.repository.name }}" \
+               -F repo="${GITHUB_EVENT_REPOSITORY_NAME}" \
             --jq '.data.repository.id')
           echo "id=$repo_id" >> "$GITHUB_OUTPUT"
 
