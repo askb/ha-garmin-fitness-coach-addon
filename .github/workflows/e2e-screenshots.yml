@@ -1,0 +1,175 @@
+# SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+#
+# Runs the PulseCoach addon image standalone on a hosted runner (no HAOS,
+# no KVM), seeds athlete demo data, captures the dashboard screenshots via
+# Playwright, and structurally validates the result. This is the fast,
+# hermetic per-PR / per-release UI gate.
+#
+# The addon image is self-contained: it bundles its own PostgreSQL, pushes
+# the Drizzle schema at boot, runs Next.js on :3000, and honours
+# DEV_BYPASS_AUTH=true (session user "seed-user-001", matching the seed
+# scripts). See docs-mvp/pulsecoach E2E research for the design rationale.
+---
+name: E2E Screenshots
+
+"on":
+  workflow_dispatch:
+    inputs:
+      app_ref:
+        description: "App repo git ref to build into the addon image"
+        required: false
+        default: "main"
+  pull_request:
+    branches: [main]
+    paths:
+      - "pulsecoach/**"
+      - "tools/screenshots/**"
+      - ".github/workflows/e2e-screenshots.yml"
+
+permissions: {}
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    name: Capture & validate (${{ matrix.persona }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # seed.ts is parameterised by PERSONA (app PR #227). Each persona
+        # seeds a distinct training archetype so a release captures
+        # representative screens across fitness levels. Personas other than
+        # "athlete" require an app build that includes #227 (APP_REF=main
+        # once merged); against older app refs the seed falls back to the
+        # athlete profile harmlessly.
+        persona: [athlete, recreational, beginner, detrained]
+    steps:
+      - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Resolve build config
+        id: config
+        env:
+          APP_REF_INPUT: "${{ github.event.inputs.app_ref || 'main' }}"
+        run: |
+          BUILD_FROM=$(jq -r '.build_from.amd64' pulsecoach/build.json)
+          VERSION=$(jq -r '.version' pulsecoach/config.json)
+          APP_REF="${APP_REF_INPUT}"
+          {
+            echo "build_from=${BUILD_FROM}"
+            echo "version=${VERSION}"
+            echo "app_ref=${APP_REF}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building addon v${VERSION} with app ref ${APP_REF}"
+
+      - name: Build addon image
+        run: |
+          docker build \
+            --build-arg BUILD_FROM="${{ steps.config.outputs.build_from }}" \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg APP_REF="${{ steps.config.outputs.app_ref }}" \
+            --build-arg CACHEBUST="${{ github.sha }}" \
+            -t pulsecoach-e2e \
+            pulsecoach/
+
+      - name: Start addon container
+        run: |
+          docker run -d --name pulsecoach \
+            -e DEV_BYPASS_AUTH=true \
+            -e AI_BACKEND=none \
+            -p 3000:3000 \
+            pulsecoach-e2e
+          echo "Started container $(docker ps -q -f name=pulsecoach)"
+
+      - name: Wait for Next.js (:3000)
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3000/; then
+              echo "Next.js is up after ${i} attempts."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Next.js did not become ready in time"
+          docker logs pulsecoach || true
+          exit 1
+
+      - name: Seed ${{ matrix.persona }} data
+        env:
+          POSTGRES_URL: "postgresql://postgres@127.0.0.1:5432/pulsecoach"
+          PERSONA: "${{ matrix.persona }}"
+        run: |
+          # The seed scripts are TypeScript bundled at /app/packages/db/src
+          # and self-contained (drizzle-orm + pg, relative ./schema import).
+          # Run them inside the container with tsx. PERSONA selects the
+          # training archetype (app PR #227).
+          docker exec \
+            -e POSTGRES_URL="${POSTGRES_URL}" \
+            -e PERSONA="${PERSONA}" \
+            pulsecoach sh -c '
+              cd /app/packages/db &&
+              npm install --no-save tsx >/dev/null &&
+              echo "Seeding 90-day ${PERSONA} history…" &&
+              npx tsx src/seed.ts &&
+              echo "Seeding coach-loop e2e data…" &&
+              npx tsx src/seed-e2e.ts
+            '
+
+      - name: Refresh computed metrics
+        run: |
+          # Populate advanced metrics + the daily_athlete_summary matview so
+          # charts/readiness render. Best-effort — never fail the run on this.
+          docker exec pulsecoach \
+            python3 /app/scripts/metrics-compute.py --once || true
+
+      - name: Install Playwright (chromium)
+        working-directory: tools/screenshots
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Capture screenshots
+        working-directory: tools/screenshots
+        env:
+          BASE_URL: "http://localhost:3000"
+          SCREENSHOT_DIR: "screenshots/${{ matrix.persona }}"
+        run: npm run screenshot
+
+      - name: Validate screens
+        working-directory: tools/screenshots
+        run: node scripts/validate-screens.mjs "screenshots/${{ matrix.persona }}"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: screenshots-${{ matrix.persona }}
+          path: |
+            tools/screenshots/screenshots/${{ matrix.persona }}
+            tools/screenshots/report
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Container logs
+        if: always()
+        run: docker logs pulsecoach || true
+
+      - name: Tear down
+        if: always()
+        run: docker rm -f pulsecoach || true

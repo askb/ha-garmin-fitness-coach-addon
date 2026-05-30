@@ -3,12 +3,15 @@
 
 import path from "node:path";
 import { test } from "@playwright/test";
+import { ROUTES as ROUTES_MANIFEST } from "../routes.mjs";
 
 /**
- * Routes to capture. Add or remove freely — the spec runs once per route.
+ * Routes to capture come from the shared manifest in `../routes.mjs`, the
+ * single source of truth also consumed by scripts/validate-screens.mjs so
+ * the two cannot drift. Add or remove routes there.
  *
- * `wait` lets you tune the post-load delay per route (charts on
- * /training take longer to render than the landing page).
+ * `wait` tunes the post-load delay per route (charts on /training take
+ * longer to render than the landing page).
  *
  * `timeframes` is an optional list of DateRangeSelector tab labels
  * ("7d", "14d", "28d", "90d", "180d", "1y") to click and capture
@@ -17,25 +20,8 @@ import { test } from "@playwright/test";
  * This catches windowed-data regressions like sparse VO2max readings
  * that only render correctly on the longer windows (#163 follow-up).
  */
-const ROUTES: { name: string; path: string; wait?: number; timeframes?: string[] }[] = [
-  { name: "home", path: "/", wait: 4000 },
-  { name: "training", path: "/training", wait: 8000 },
-  {
-    name: "fitness",
-    path: "/fitness",
-    wait: 8000,
-    timeframes: ["7d", "14d", "28d", "90d", "180d", "1y"],
-  },
-  { name: "activities", path: "/activities", wait: 6000 },
-  { name: "sleep", path: "/sleep", wait: 5000 },
-  { name: "trends", path: "/trends", wait: 8000 },
-  { name: "zones", path: "/zones", wait: 6000 },
-  { name: "hrv", path: "/hrv", wait: 5000 },
-  { name: "vitals", path: "/vitals", wait: 5000 },
-  { name: "insights", path: "/insights", wait: 4000 },
-  { name: "coach", path: "/coach", wait: 4000 },
-  { name: "validation", path: "/validation", wait: 6000 },
-];
+const ROUTES: { name: string; path: string; wait?: number; timeframes?: string[] }[] =
+  ROUTES_MANIFEST;
 
 const OUT_DIR = process.env.SCREENSHOT_DIR ?? "screenshots";
 
