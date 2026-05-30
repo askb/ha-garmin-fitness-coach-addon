@@ -469,6 +469,64 @@ def compute_injury_risk(acwr: float | None, tsb: float | None, ramp_rate: float 
     return (level, risk_score)
 
 
+def fetch_data_quality(cur, user_id: str) -> dict:
+    """Summarise unresolved data_quality_log entries for the HA sensor.
+
+    Returns a dict with counts + the most relevant stale-sync message. Safe
+    if the table doesn't exist yet (returns an empty/ok summary).
+    """
+    summary = {
+        "missing_days": 0,
+        "stale_days": 0,
+        "issues": 0,
+        "status": "ok",
+        "message": "All recent data present",
+        "field_gaps": [],
+    }
+    try:
+        cur.execute(
+            """
+            SELECT check_name, severity, message, raw_value, date::text AS d
+            FROM data_quality_log
+            WHERE user_id = %s
+              AND resolved_at IS NULL
+              AND date >= (CURRENT_DATE - INTERVAL '13 days')
+            ORDER BY created_at DESC
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    except Exception as exc:  # table missing / transient
+        print(f"[ha-notify] data_quality unavailable: {exc}", file=sys.stderr)
+        return summary
+
+    if not rows:
+        return summary
+
+    severities = {"info": 0, "warn": 1, "error": 2}
+    worst = 0
+    for r in rows:
+        cn = r["check_name"]
+        worst = max(worst, severities.get(r["severity"], 0))
+        if cn == "missing_day":
+            summary["missing_days"] += 1
+        elif cn == "stale_data":
+            summary["stale_days"] = int(r["raw_value"] or 0)
+            summary["message"] = r["message"]
+        elif cn == "missing_field":
+            summary["field_gaps"].append(r["message"])
+
+    summary["issues"] = sum(
+        1 for r in rows if r["severity"] in ("warn", "error")
+    )
+    summary["status"] = {0: "ok", 1: "warn", 2: "error"}[worst]
+    if summary["missing_days"] and summary["message"] == "All recent data present":
+        summary["message"] = (
+            f"{summary['missing_days']} day(s) missing in the last 14 days"
+        )
+    return summary
+
+
 def run_notifications(user_id: str):
     """Push all sensor states and check for alerts."""
     print(f"[ha-notify] Running notification pass for user {user_id}...")
@@ -709,8 +767,30 @@ def run_notifications(user_id: str):
             f"Risk: {risk_level}, Workout: {workout['workout_type']}"
         )
 
+        # sensor.pulsecoach_data_quality — transparency on sync gaps
+        dq = fetch_data_quality(cur, user_id)
+        push_sensor("sensor.pulsecoach_data_quality",
+                    dq["issues"],
+                    {
+                        "friendly_name": "PulseCoach Data Quality",
+                        "unit_of_measurement": "issues",
+                        "icon": "mdi:database-check" if dq["status"] == "ok"
+                                else "mdi:database-alert",
+                        "status": dq["status"],
+                        "missing_days_14d": dq["missing_days"],
+                        "stale_days": dq["stale_days"],
+                        "field_gaps": dq["field_gaps"],
+                        "message": dq["message"],
+                    })
+
         # --- Alert notifications ---
         alerts = []
+
+        if dq["stale_days"] >= 3:
+            alerts.append(("📡 PulseCoach Data Sync Stale",
+                          f"{dq['message']}. Check the Garmin sync — readiness and "
+                          f"load metrics may be out of date.",
+                          "gc_data_stale"))
 
         if acwr and acwr > 1.5:
             alerts.append(("🔴 High Injury Risk — ACWR",

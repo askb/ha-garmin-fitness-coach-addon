@@ -163,7 +163,7 @@ graph TD
     PG --> Metrics
     Metrics --> PG
     PG --> Notify
-    Notify -->|7 sensors| HA
+    Notify -->|sensors| HA
     PG --> NextJS
     NextJS -.-> Ollama
     NextJS -.-> HA
@@ -315,14 +315,14 @@ PulseCoach authenticates with Garmin Connect using a **web-based auth flow**:
 - **Readiness card upgrade** — confidence %, data quality dots, action text
 - **8 new database tables** — session_report, intervention, advanced_metric, athlete_baseline, data_quality_log, audit_log, reference_measurement, ai_insight
 - **metrics-compute.py** — EWMA CTL/ATL/TSB/ACWR/CP computation service
-- **ha-notify.py** — pushes 7 sensors to HA + fires injury-risk alerts
+- **ha-notify.py** — pushes Home Assistant sensors + fires injury-risk alerts
 - **AI context pipeline** — 10 structured sections in every coaching prompt
 - **239 app tests** (Jest + Playwright) and **19 addon tests** (pytest)
 - **CI workflows** — typecheck + test + Docker build on every PR
 
 ## HA Sensors
 
-`ha-notify.py` pushes 7 sensors to Home Assistant via the Supervisor API:
+`ha-notify.py` pushes a set of Home Assistant sensors via the Supervisor API, including:
 
 | Entity ID | Description |
 |-----------|-------------|
@@ -333,6 +333,7 @@ PulseCoach authenticates with Garmin Connect using a **web-based auth flow**:
 | `sensor.pulsecoach_injury_risk` | Risk level: Low / Moderate / High / Very High |
 | `sensor.pulsecoach_body_battery` | Current Garmin Body Battery value |
 | `sensor.pulsecoach_sleep_debt` | Accumulated sleep debt (hours) |
+| `sensor.pulsecoach_data_quality` | Unresolved sync-gap count, with `missing_days_14d` / `stale_days` / `field_gaps` / `status` attributes |
 
 ## Automation Blueprints & Templates
 

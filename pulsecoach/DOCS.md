@@ -21,7 +21,7 @@ Home Assistant OS
 │   ├── pulsecoach orchestrator
 │   │   ├── garmin-sync.py      (Garmin Connect → PostgreSQL, every N min)
 │   │   ├── metrics-compute.py  (CTL/ATL/TSB/ACWR/CP → PostgreSQL, every 60 min)
-│   │   ├── ha-notify.py        (PostgreSQL → 7 HA sensors, every 30 min)
+│   │   ├── ha-notify.py        (PostgreSQL → HA sensors, every 30 min)
 │   │   ├── Next.js standalone  (:3001, tRPC + Drizzle ORM)
 │   │   ├── ingress-proxy       (:3000 → :3001, HA path rewriting)
 │   │   └── process monitor     (restarts dead services every 60s)
@@ -110,7 +110,7 @@ Zones, Trends, and the AI Coach — is in the
 
 ## HA Sensors
 
-The addon pushes 7 sensors to Home Assistant via the Supervisor API:
+The addon pushes a set of Home Assistant sensors via the Supervisor API, including:
 
 | Entity ID | Description |
 |-----------|-------------|
@@ -121,6 +121,7 @@ The addon pushes 7 sensors to Home Assistant via the Supervisor API:
 | `sensor.pulsecoach_injury_risk` | Risk level: Low / Moderate / High / Very High |
 | `sensor.pulsecoach_body_battery` | Current Garmin Body Battery |
 | `sensor.pulsecoach_sleep_debt` | Accumulated sleep debt (hours) |
+| `sensor.pulsecoach_data_quality` | Unresolved sync-gap count (state) with `missing_days_14d`, `stale_days`, `field_gaps`, `status` (`ok`/`warn`/`error`) attributes |
 
 ## Resource Usage
 
