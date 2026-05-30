@@ -23,10 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: step-security/harden-runner@v2
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5  # v2
         with:
           egress-policy: audit
 
-      - uses: release-drafter/release-drafter@v7
+      - uses: release-drafter/release-drafter@693d20e7c1ce1a81d3a41962f85914253b518449  # v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
