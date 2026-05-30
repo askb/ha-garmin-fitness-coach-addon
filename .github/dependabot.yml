@@ -11,6 +11,9 @@ updates:
     commit-message:
       prefix: "Chore"
     open-pull-requests-limit: 15
+    ignore:
+      # Managed by `gh aw compile`; version-locked to the gh-aw compiler.
+      - dependency-name: "github/gh-aw-actions/**"
 
   - package-ecosystem: "docker"
     directory: "/pulsecoach"
