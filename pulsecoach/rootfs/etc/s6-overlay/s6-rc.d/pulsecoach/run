@@ -423,6 +423,13 @@ case "${AI_BACKEND}" in
             bashio::log.info "AI backend: HA Conversation API"
             bashio::log.info "  Requires a conversation agent configured in HA (Settings → Voice Assistants)"
             bashio::log.info "  Using Supervisor token for HA API access"
+            if [ -n "${OLLAMA_URL}" ]; then
+                if curl -s -o /dev/null -w "%{http_code}" "${OLLAMA_URL}/api/tags" | grep -q "200"; then
+                    bashio::log.info "  Secondary backend: Ollama at ${OLLAMA_URL} (embeddings + fallback)"
+                else
+                    bashio::log.warning "  Secondary backend Ollama not reachable at ${OLLAMA_URL} — embeddings/fallback unavailable"
+                fi
+            fi
         else
             bashio::log.warning "AI backend set to ha_conversation but no Supervisor token — falling back to rules-based"
             export AI_BACKEND="none"

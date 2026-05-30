@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Secondary Ollama probe under HA Conversation.** When `ai_backend` is
+  `ha_conversation` and an `ollama_url` is configured, startup now probes the
+  Ollama host and logs `Secondary backend: Ollama at <url> (embeddings +
+  fallback)` (or a warning when unreachable). Previously the Ollama URL was
+  only probed when `ai_backend=ollama`, so users running HA Conversation with
+  Ollama wired for embeddings/fallback had no confirmation it was reachable.
 - **Coach memory / RAG (nightly).** A background worker now rebuilds
   multi-year history embeddings by calling the app's
   `/api/internal/rebuild-memory` endpoint (default every 1440 minutes / 24h,
