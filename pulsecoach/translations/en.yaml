@@ -16,6 +16,10 @@
       "name": "Ollama URL",
       "description": "URL of your Ollama instance (only used when AI Backend is 'ollama')"
     },
+    "ollama_embed_model": {
+      "name": "Ollama Embedding Model",
+      "description": "Model used to embed history for coach memory/RAG (default 'nomic-embed-text'). Pull it on your Ollama host. Falls back to the chat model if unavailable."
+    },
     "sync_interval_minutes": {
       "name": "Sync Interval",
       "description": "How often to sync data from Garmin Connect (in minutes)"
