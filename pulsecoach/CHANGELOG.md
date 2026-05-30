@@ -39,6 +39,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DATA_QUALITY_WINDOW_DAYS`, `DATA_QUALITY_STALE_WARN_DAYS`, and
   `DATA_QUALITY_STALE_ERROR_DAYS` environment variables so they can be
   overridden in custom builds.
+- **Running-dynamics capture.** `garmin-sync.py` now populates the
+  long-existing but previously-empty activity columns
+  `avg_ground_contact_time`, `gct_balance`, `vertical_oscillation`,
+  `vertical_ratio`, `stride_length`, `avg_respiration_rate`,
+  `elevation_gain`, and `elevation_loss` from the Garmin activity summary.
+  Extraction is defensive (missing keys → `NULL`), so non-running activities
+  sync cleanly. The app already consumes these fields (activity router →
+  running-form score → activity detail page), so existing running activities
+  surface ground-contact, vertical-oscillation, stride-length and L/R
+  balance after the next sync.
 
 ### Fixed
 

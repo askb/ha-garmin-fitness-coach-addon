@@ -93,7 +93,7 @@ fetches up to 6 years of historical data.
 | **Today** | Daily readiness score (0-100), body battery, recent activities, quick insights |
 | **Training** | CTL / ATL / TSB fitness-fatigue chart, ACWR injury-risk gauge, load focus, recovery time |
 | **Fitness** | VO2max trends, VDOT score, race predictions (5K / 10K / half / marathon) with confidence intervals |
-| **Activities** | Activity detail — laps, efficiency factor, GAP, RPE, zone distribution |
+| **Activities** | Activity detail — laps, efficiency factor, GAP, RPE, zone distribution, running dynamics (ground-contact time/balance, vertical oscillation/ratio, stride length) |
 | **Insights** | Proactive AI insight cards — 6-rule engine (ACWR, TSB, HRV, sleep debt, ramp rate, interventions) |
 | **Journal** | Whoop-style daily check-in (body feel, inputs, cycle tracking) |
 | **Interventions** | Recovery intervention log with effectiveness ratings |

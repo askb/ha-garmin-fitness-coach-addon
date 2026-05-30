@@ -108,6 +108,14 @@ def mock_client():
             "hrTimeInZone_3": 600,   # 10 min
             "hrTimeInZone_4": 420,   # 7 min
             "hrTimeInZone_5": 300,   # 5 min
+            "avgGroundContactTime": 240.0,        # ms
+            "avgGroundContactBalance": 49.5,      # % L/R
+            "avgVerticalOscillation": 8.2,        # cm
+            "avgVerticalRatio": 6.1,              # %
+            "avgStrideLength": 118.0,             # cm
+            "avgRespirationRate": 38.0,           # brpm
+            "elevationGain": 120.0,               # m
+            "elevationLoss": 95.0,                # m
         },
     ]
     return client
@@ -503,6 +511,44 @@ class TestSyncActivities:
         assert hr_zones["zone3"] == 10.0   # 600 s / 60
         assert hr_zones["zone4"] == 7.0    # 420 s / 60
         assert hr_zones["zone5"] == 5.0    # 300 s / 60
+
+    def test_extracts_running_dynamics(self, garmin_sync, mock_db, mock_client):
+        """Running-dynamics fields are pulled from the activity summary.
+
+        These columns already exist in the Drizzle schema and are consumed
+        by the app (activity router -> runningFormScore -> detail page) but
+        were previously never populated by the sync. The INSERT must carry
+        ground-contact time/balance, vertical oscillation/ratio, stride
+        length, respiration rate and elevation gain/loss.
+        """
+        conn, cursor = mock_db
+        garmin_sync.sync_activities(mock_client, conn, days=7)
+        insert_call = self._get_activity_insert_call(cursor)
+        assert insert_call is not None
+        values = insert_call[0][1]
+        for expected in (240.0, 49.5, 8.2, 6.1, 118.0, 38.0, 120.0, 95.0):
+            assert expected in values
+
+    def test_running_dynamics_default_to_none(
+        self, garmin_sync, mock_db, mock_client
+    ):
+        """Activities without running dynamics (e.g. cycling) store NULLs.
+
+        Field extraction is defensive: missing keys resolve to None rather
+        than raising, so non-running activities sync cleanly.
+        """
+        conn, cursor = mock_db
+        record = mock_client.get_activities.return_value[0]
+        for key in (
+            "avgGroundContactTime", "avgGroundContactBalance",
+            "avgVerticalOscillation", "avgVerticalRatio",
+            "avgStrideLength", "avgRespirationRate",
+            "elevationGain", "elevationLoss",
+        ):
+            record.pop(key, None)
+        garmin_sync.sync_activities(mock_client, conn, days=7)
+        insert_call = self._get_activity_insert_call(cursor)
+        assert insert_call is not None  # no exception, row still inserted
 
     def test_calculates_trimp_score(self, garmin_sync, mock_db, mock_client):
         """TRIMP is computed from avg HR and duration and included in the INSERT.
