@@ -37,10 +37,10 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
 
       - name: Checkout garmin-coach app
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           repository: ${{ env.PULSECOACH_APP_REPO }}
           ref: ${{ env.GARMIN_COACH_REF }}
