@@ -43,16 +43,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Single athlete persona today (seed.ts + seed-e2e.ts). Add
-        # recreational / beginner / detrained once seed.ts is parameterised
-        # by PERSONA (see docs-mvp pulsecoach E2E research, work item 1).
-        persona: [athlete]
+        # seed.ts is parameterised by PERSONA (app PR #227). Each persona
+        # seeds a distinct training archetype so a release captures
+        # representative screens across fitness levels. Personas other than
+        # "athlete" require an app build that includes #227 (APP_REF=main
+        # once merged); against older app refs the seed falls back to the
+        # athlete profile harmlessly.
+        persona: [athlete, recreational, beginner, detrained]
     steps:
       - uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a  # v2.13.1
         with:
           egress-policy: audit
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
@@ -60,10 +65,12 @@ jobs:
 
       - name: Resolve build config
         id: config
+        env:
+          APP_REF_INPUT: "${{ github.event.inputs.app_ref || 'main' }}"
         run: |
           BUILD_FROM=$(jq -r '.build_from.amd64' pulsecoach/build.json)
           VERSION=$(jq -r '.version' pulsecoach/config.json)
-          APP_REF="${{ github.event.inputs.app_ref || 'main' }}"
+          APP_REF="${APP_REF_INPUT}"
           {
             echo "build_from=${BUILD_FROM}"
             echo "version=${VERSION}"
@@ -106,16 +113,19 @@ jobs:
       - name: Seed ${{ matrix.persona }} data
         env:
           POSTGRES_URL: "postgresql://postgres@127.0.0.1:5432/pulsecoach"
+          PERSONA: "${{ matrix.persona }}"
         run: |
           # The seed scripts are TypeScript bundled at /app/packages/db/src
           # and self-contained (drizzle-orm + pg, relative ./schema import).
-          # Run them inside the container with tsx.
+          # Run them inside the container with tsx. PERSONA selects the
+          # training archetype (app PR #227).
           docker exec \
             -e POSTGRES_URL="${POSTGRES_URL}" \
+            -e PERSONA="${PERSONA}" \
             pulsecoach sh -c '
               cd /app/packages/db &&
               npm install --no-save tsx >/dev/null 2>&1 &&
-              echo "Seeding 90-day athlete history…" &&
+              echo "Seeding 90-day ${PERSONA} history…" &&
               npx tsx src/seed.ts &&
               echo "Seeding coach-loop e2e data…" &&
               npx tsx src/seed-e2e.ts
