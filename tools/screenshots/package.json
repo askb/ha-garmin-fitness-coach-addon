@@ -6,10 +6,11 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "screenshot": "playwright test",
-    "screenshot:desktop": "playwright test --project=desktop",
-    "screenshot:mobile": "playwright test --project=mobile",
-    "screenshot:dark": "PULSECOACH_THEME=dark playwright test --project=desktop",
+    "screenshot": "playwright test tests/dashboard.spec.ts",
+    "screenshot:desktop": "playwright test tests/dashboard.spec.ts --project=desktop",
+    "screenshot:mobile": "playwright test tests/dashboard.spec.ts --project=mobile",
+    "screenshot:dark": "PULSECOACH_THEME=dark playwright test tests/dashboard.spec.ts --project=desktop",
+    "validate:content": "playwright test tests/content.spec.ts --project=desktop",
     "install-browsers": "playwright install chromium"
   },
   "devDependencies": {
