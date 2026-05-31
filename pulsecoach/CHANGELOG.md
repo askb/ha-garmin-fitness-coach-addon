@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-05-31
+
 ### Fixed
 
 - **Reject out-of-range Garmin Training Readiness at sync.** Garmin
@@ -17,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where a legitimate readiness of `0` was discarded as falsy. Prevents the
   app's Engine-vs-Garmin validation table from reporting bad data as
   agreement (companion to app #258).
+- **Bundled app updated to v0.18.1**, which renders previously-empty stacked
+  Bar/Area charts (Weekly Time in Zones, Sleep Stages, etc.) and flags
+  out-of-range readiness/VO2max values in the data-validation table
+  (app #257, #258).
+
+### Changed
+
+- CI: raised the aarch64 image build timeout to 120 minutes. The QEMU-emulated
+  aarch64 build is far slower than the native amd64 build and was being
+  cancelled by the shared job timeout.
 
 ## [0.18.0] - 2026-05-31
 
