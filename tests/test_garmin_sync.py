@@ -1046,3 +1046,62 @@ class TestMatviewRefresh:
         db.rollback.assert_called_once()
         db.commit.assert_not_called()
         cur.close.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# sync_training_readiness — 0-100 range guard (regression for app#258)
+# ---------------------------------------------------------------------------
+
+
+class TestSyncTrainingReadinessRange:
+    """Garmin Training Readiness must be stored only when within 0-100."""
+
+    @staticmethod
+    def _readiness_updates(cursor):
+        return [
+            c
+            for c in cursor.execute.call_args_list
+            if "garmin_training_readiness" in c[0][0]
+            and "UPDATE daily_metric" in c[0][0]
+        ]
+
+    def test_valid_score_is_stored(self, garmin_sync, mock_db, mock_garmin_client):
+        """An in-range score (75) is written to daily_metric."""
+        conn, cursor = mock_db
+        mock_garmin_client.get_training_readiness.return_value = {
+            "score": 75,
+            "level": "READY",
+        }
+        garmin_sync.sync_training_readiness(mock_garmin_client, conn, days=1)
+
+        updates = self._readiness_updates(cursor)
+        assert len(updates) == 1
+        assert 75 in updates[0][0][1]  # round(75) present in values tuple
+
+    @pytest.mark.parametrize("bad_score", [130, 530, -5, 1000])
+    def test_out_of_range_score_is_skipped(
+        self, garmin_sync, mock_db, mock_garmin_client, bad_score
+    ):
+        """Physiologically-impossible scores are not written."""
+        conn, cursor = mock_db
+        mock_garmin_client.get_training_readiness.return_value = {
+            "score": bad_score,
+            "level": "READY",
+        }
+        garmin_sync.sync_training_readiness(mock_garmin_client, conn, days=1)
+
+        assert self._readiness_updates(cursor) == []
+
+    def test_boundary_scores_are_stored(
+        self, garmin_sync, mock_db, mock_garmin_client
+    ):
+        """0 and 100 are valid boundaries and are stored."""
+        conn, cursor = mock_db
+        for boundary in (0, 100):
+            cursor.execute.reset_mock()
+            mock_garmin_client.get_training_readiness.return_value = {
+                "score": boundary,
+                "level": "READY",
+            }
+            garmin_sync.sync_training_readiness(mock_garmin_client, conn, days=1)
+            assert len(self._readiness_updates(cursor)) == 1

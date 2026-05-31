@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Reject out-of-range Garmin Training Readiness at sync.** Garmin
+  occasionally returns malformed readiness payloads (e.g. `130`, `530`)
+  outside the defined 0–100 scale. `sync_training_readiness` now validates
+  the score and skips physiologically-impossible values instead of storing
+  them, mirroring the existing VO2max 10–90 guard. Also fixed a latent bug
+  where a legitimate readiness of `0` was discarded as falsy. Prevents the
+  app's Engine-vs-Garmin validation table from reporting bad data as
+  agreement (companion to app #258).
+
 ## [0.18.0] - 2026-05-31
 
 ### Added
