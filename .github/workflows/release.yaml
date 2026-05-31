@@ -60,7 +60,9 @@ jobs:
     permissions:
       contents: read
       packages: write
-    timeout-minutes: 30
+    # aarch64 builds run under QEMU emulation and are far slower than the
+    # native amd64 build, so give them a much larger timeout budget.
+    timeout-minutes: ${{ matrix.arch == 'aarch64' && 120 || 30 }}
     strategy:
       matrix:
         include:
