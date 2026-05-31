@@ -1299,7 +1299,7 @@ def sync_training_readiness(client, db, days=7):
                     score = float(score)
                 except (TypeError, ValueError):
                     continue
-                if score < 0 or score > 100:
+                if not math.isfinite(score) or not 0 <= score <= 100:
                     print(
                         f"  Skipping out-of-range readiness {score} "
                         f"for {date_str} (expected 0-100)",

@@ -1092,6 +1092,20 @@ class TestSyncTrainingReadinessRange:
 
         assert self._readiness_updates(cursor) == []
 
+    @pytest.mark.parametrize("bad_score", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_score_is_skipped(
+        self, garmin_sync, mock_db, mock_garmin_client, bad_score
+    ):
+        """NaN / Infinity must not slip past the range guard."""
+        conn, cursor = mock_db
+        mock_garmin_client.get_training_readiness.return_value = {
+            "score": bad_score,
+            "level": "READY",
+        }
+        garmin_sync.sync_training_readiness(mock_garmin_client, conn, days=1)
+
+        assert self._readiness_updates(cursor) == []
+
     def test_boundary_scores_are_stored(
         self, garmin_sync, mock_db, mock_garmin_client
     ):
