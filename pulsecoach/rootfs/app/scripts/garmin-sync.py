@@ -1283,9 +1283,28 @@ def sync_training_readiness(client, db, days=7):
                 if not data:
                     continue
 
-                score = data.get("score") or data.get("readinessScore")
+                score = data.get("score")
+                if score is None:
+                    score = data.get("readinessScore")
                 level = data.get("level") or data.get("readinessLevel", "")
                 if score is None:
+                    continue
+
+                # Training Readiness is defined on a 0-100 scale. Garmin
+                # occasionally returns malformed payloads (e.g. 130, 530)
+                # that would otherwise corrupt the validation/agreement
+                # metrics downstream. Reject physiologically-impossible
+                # values rather than storing them (mirrors the vo2max guard).
+                try:
+                    score = float(score)
+                except (TypeError, ValueError):
+                    continue
+                if not math.isfinite(score) or not 0 <= score <= 100:
+                    print(
+                        f"  Skipping out-of-range readiness {score} "
+                        f"for {date_str} (expected 0-100)",
+                        file=sys.stderr,
+                    )
                     continue
 
                 # Extract contributing factors (Garmin's 6-factor breakdown)
