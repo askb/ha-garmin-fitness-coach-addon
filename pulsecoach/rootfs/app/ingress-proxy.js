@@ -15,8 +15,29 @@ const http = require("http");
 const NEXT_PORT = parseInt(process.env.NEXT_INTERNAL_PORT || "3001", 10);
 const LISTEN_PORT = parseInt(process.env.PORT || "3000", 10);
 
+/**
+ * Escape a string for safe insertion into a double-quoted HTML attribute.
+ * The ingress path comes from the X-Ingress-Path request header, which is
+ * attacker-controllable if the proxy port is reached directly (bypassing HA),
+ * so it must be escaped before being reflected into the page.
+ */
+function escapeHtmlAttr(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 const server = http.createServer((clientReq, clientRes) => {
-  const ingressPath = clientReq.headers["x-ingress-path"] || "";
+  // The ingress path is supplied by the X-Ingress-Path header. It is only
+  // trustworthy when HA sets it; if the proxy port is reached directly the
+  // value is attacker-controlled. Accept only a well-formed path so it can be
+  // safely reflected into the rewritten HTML/URLs below; otherwise ignore it.
+  const rawIngressPath = clientReq.headers["x-ingress-path"] || "";
+  const ingressPath = /^\/[A-Za-z0-9_\-/]*$/.test(rawIngressPath)
+    ? rawIngressPath
+    : "";
 
   // Strip ingress prefix from incoming URL before forwarding to Next.js
   let forwardPath = clientReq.url;
@@ -89,7 +110,7 @@ const server = http.createServer((clientReq, clientRes) => {
           // Inject ingress path into a meta tag so client JS can read it
           body = body.replace(
             "<head>",
-            `<head><meta name="ingress-path" content="${ingressPath}">`,
+            `<head><meta name="ingress-path" content="${escapeHtmlAttr(ingressPath)}">`,
           );
         }
 

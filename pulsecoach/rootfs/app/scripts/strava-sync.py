@@ -37,8 +37,22 @@ def _load_tokens():
 
 def _save_tokens(tokens):
     """Save Strava tokens to disk."""
-    TOKEN_DIR.mkdir(parents=True, exist_ok=True)
-    TOKEN_FILE.write_text(json.dumps(tokens, indent=2))
+    TOKEN_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Don't chmod through a symlink — only tighten a real directory.
+    if not TOKEN_DIR.is_symlink():
+        TOKEN_DIR.chmod(0o700)
+    # Create the file with 0600 from the start so the secret is never briefly
+    # exposed under the process umask between write and chmod. O_NOFOLLOW
+    # refuses to write through a symlink planted in place of the token file.
+    fd = os.open(
+        TOKEN_FILE,
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW,
+        0o600,
+    )
+    with os.fdopen(fd, "w") as f:
+        json.dump(tokens, f, indent=2)
+    # O_CREAT mode is ignored if the file already existed; enforce it anyway.
+    os.chmod(TOKEN_FILE, 0o600)
 
 
 def refresh_access_token(client_id, client_secret, refresh_token):
