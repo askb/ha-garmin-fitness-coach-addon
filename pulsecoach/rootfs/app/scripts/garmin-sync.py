@@ -53,6 +53,21 @@ def _user_today():
     """Get today's date in the user's configured timezone."""
     return datetime.now(USER_TZ).date()
 
+
+def _ensure_secure_dir(path: str) -> None:
+    """Create ``path`` with mode 0700, tightening it if it already exists.
+
+    ``os.makedirs`` ignores its ``mode`` argument when the directory already
+    exists, so a directory created by an earlier version with broader bits
+    would stay world-/group-readable. The explicit ``chmod`` corrects that so
+    the hardening is effective on upgrades, not just fresh installs.
+    """
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    # Don't chmod through a symlink — only tighten a real directory.
+    if not os.path.islink(path):
+        os.chmod(path, 0o700)
+
+
 SYNC_STATUS_FILE = os.path.join(TOKEN_DIR, ".sync_status")
 LAST_SYNC_FILE = os.path.join(TOKEN_DIR, ".last_sync")
 SKIN_TEMP_BACKFILL_MARKER = "/data/.skin_temp_backfill_done"
@@ -66,7 +81,7 @@ SKIN_TEMP_KEYS = (
 def _write_last_sync() -> None:
     """Record successful sync completion time for /auth/status."""
     try:
-        os.makedirs(TOKEN_DIR, exist_ok=True)
+        _ensure_secure_dir(TOKEN_DIR)
         with open(LAST_SYNC_FILE, "w") as f:
             f.write(datetime.now(timezone.utc).isoformat())
     except Exception:
@@ -76,7 +91,7 @@ def _write_last_sync() -> None:
 def _write_sync_status(phase, detail="", progress=0):
     """Write sync progress to a shared status file for the auth server."""
     import json as _json
-    os.makedirs(TOKEN_DIR, exist_ok=True)
+    _ensure_secure_dir(TOKEN_DIR)
     status = {
         "syncing": True,
         "phase": phase,
@@ -126,7 +141,7 @@ def _refresh_matview(db) -> None:
 
 def get_client():
     """Authenticate with Garmin Connect, preferring saved tokens."""
-    os.makedirs(TOKEN_DIR, exist_ok=True)
+    _ensure_secure_dir(TOKEN_DIR)
     native_token_path = os.path.join(TOKEN_DIR, "garmin_tokens.json")
     oauth1_path = os.path.join(TOKEN_DIR, "oauth1_token.json")
     oauth2_path = os.path.join(TOKEN_DIR, "oauth2_token.json")
@@ -198,8 +213,18 @@ def _migrate_garth_tokens(oauth2_path, native_token_path):
         "di_refresh_token": refresh_token,
         "di_client_id": client_id,
     }
-    with open(native_token_path, "w") as f:
+    # Create the file with 0600 from the start so the secret is never briefly
+    # exposed under the process umask between write and chmod. O_NOFOLLOW
+    # refuses to write through a symlink planted in place of the token file.
+    fd = os.open(
+        native_token_path,
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW,
+        0o600,
+    )
+    with os.fdopen(fd, "w") as f:
         json.dump(new_tokens, f, indent=2)
+    # O_CREAT mode is ignored if the file already existed; enforce it anyway.
+    os.chmod(native_token_path, 0o600)
     print(f"Migrated garth tokens to native format (client_id={client_id})")
 
 
@@ -1611,7 +1636,7 @@ def main():
             pass
 
         try:
-            os.makedirs(TOKEN_DIR, exist_ok=True)
+            _ensure_secure_dir(TOKEN_DIR)
             with open(status_file, "w") as f:
                 json.dump(
                     {

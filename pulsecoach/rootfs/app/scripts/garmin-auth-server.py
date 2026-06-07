@@ -37,8 +37,18 @@ _mfa_state = {
 
 def _save_tokens(client: "Garmin") -> None:
     """Save garth tokens to disk in native directory format."""
-    os.makedirs(TOKEN_DIR, exist_ok=True)
+    os.makedirs(TOKEN_DIR, mode=0o700, exist_ok=True)
+    # Don't chmod through a symlink — only tighten a real directory.
+    if not os.path.islink(TOKEN_DIR):
+        os.chmod(TOKEN_DIR, 0o700)
     client.garth.dump(TOKEN_DIR)
+    # Restrict token files to owner-only — they are credential material and
+    # the data dir may be reachable by other add-ons. Skip symlinks so a
+    # pre-planted link cannot redirect the chmod to an unrelated file.
+    for name in os.listdir(TOKEN_DIR):
+        path = os.path.join(TOKEN_DIR, name)
+        if os.path.isfile(path) and not os.path.islink(path):
+            os.chmod(path, 0o600)
     log.info("Tokens saved to %s", TOKEN_DIR)
 
 
