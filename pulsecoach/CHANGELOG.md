@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-06-08
+
+### Fixed
+
+- **Dashboards render real data again.** Pins the bundled app to its
+  `v0.19.0` tag, which restores the `DEV_BYPASS_AUTH` single-user auth mode
+  (app #278). A prior change had gated that bypass to non-production, so
+  with the add-on running `NODE_ENV=production` every authenticated query
+  returned `UNAUTHORIZED` and the dashboards rendered empty.
+
+### Changed
+
+- **Richer demo data on first run.** The bundled app now seeds VO2max
+  history and no longer wipes the 90-day demo history during e2e seeding
+  (app #277), so HRV, Trends and Fitness show populated charts. Refreshed
+  the README screenshots to match.
+
 ## [0.18.1] - 2026-05-31
 
 ### Fixed
