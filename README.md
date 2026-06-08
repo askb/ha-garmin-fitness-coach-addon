@@ -51,7 +51,7 @@ your local network.
 ## Screenshots
 
 A walkthrough of the main dashboards as they appear in the ingress UI
-(addon **v0.17.9**, captured **2026-05-29**). Mobile pairs for every
+(addon **v0.18.1**, captured **2026-06-08**). Mobile pairs for every
 screen below are captured alongside the desktop renders by the
 `tools/screenshots/` Playwright harness (run locally; output directory
 is git-ignored).
