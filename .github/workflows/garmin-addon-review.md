@@ -7,6 +7,9 @@ permissions:
   contents: read
   pull-requests: read
 
+features:
+  copilot-requests: true
+
 network: defaults
 
 safe-outputs:
