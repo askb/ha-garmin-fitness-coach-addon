@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Removed optional direct port mapping (`3000/tcp`).** The web UI relies
+  on Home Assistant ingress for authentication (the bundled app runs with
+  `DEV_BYPASS_AUTH=true`), so exposing the container port directly on the
+  host allowed unauthenticated access to the dashboard and API for anyone
+  who mapped the port. The UI is now reachable exclusively through the
+  authenticated HA ingress panel.
+- **Garmin tokens are no longer backed up to `/share/`.** `/share/` is
+  readable by other add-ons, so copying OAuth credential material there
+  widened its exposure. Tokens now stay in `/data/garmin-tokens/`
+  (owner-only permissions). On startup the add-on performs a one-time
+  restore of any legacy `/share/pulsecoach/garmin-tokens/` backup and then
+  deletes the exposed copies. Database backups to `/share/` are unchanged.
+
 ## [0.19.0] - 2026-06-08
 
 ### Fixed
