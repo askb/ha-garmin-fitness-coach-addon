@@ -112,6 +112,24 @@ class TestGetClient:
         assert mock_client.login.call_count == 2
 
 
+@pytest.mark.unit
+class TestTokenDetection:
+    """Tests for saved-token detection shared by main()."""
+
+    def test_accepts_native_token_file(self, garmin_sync, tmp_path):
+        """Native garminconnect tokens are sufficient for saved-token mode."""
+        (tmp_path / "garmin_tokens.json").touch()
+
+        assert garmin_sync._has_saved_garmin_tokens(str(tmp_path))
+
+    def test_accepts_legacy_token_pair(self, garmin_sync, tmp_path):
+        """Legacy oauth1/oauth2 garth tokens are still accepted."""
+        (tmp_path / "oauth1_token.json").touch()
+        (tmp_path / "oauth2_token.json").touch()
+
+        assert garmin_sync._has_saved_garmin_tokens(str(tmp_path))
+
+
 # ── Daily stats sync ─────────────────────────────────────────────────────────
 
 
@@ -292,6 +310,36 @@ class TestMain:
 
         assert mock_daily.call_count == 7
         mock_act.assert_called_once()
+
+    def test_syncs_with_native_tokens_without_credentials(
+        self, garmin_sync, mock_pg_db, mock_garmin_client, tmp_path
+    ):
+        """main() should not skip when only native token files are present."""
+        conn, _ = mock_pg_db
+        (tmp_path / "garmin_tokens.json").touch()
+        (tmp_path / ".initial_sync_done").touch()
+
+        with patch.object(garmin_sync, "GARMIN_EMAIL", ""), \
+             patch.object(garmin_sync, "GARMIN_PASSWORD", ""), \
+             patch.object(garmin_sync, "TOKEN_DIR", str(tmp_path)), \
+             patch.object(garmin_sync, "get_client", return_value=mock_garmin_client) as get_client, \
+             patch.object(garmin_sync, "get_db", return_value=conn), \
+             patch.object(garmin_sync, "_write_sync_status"), \
+             patch.object(garmin_sync, "_clear_sync_status"), \
+             patch.object(garmin_sync, "_write_last_sync"), \
+             patch.object(garmin_sync, "sync_daily_stats"), \
+             patch.object(garmin_sync, "sync_activities"), \
+             patch.object(garmin_sync, "backfill_skin_temp"), \
+             patch.object(garmin_sync, "backfill_from_raw_json"), \
+             patch.object(garmin_sync, "backfill_activity_started_at_utc"), \
+             patch.object(garmin_sync, "backfill_stress_and_sleep"), \
+             patch.object(garmin_sync, "sync_vo2max"), \
+             patch.object(garmin_sync, "sync_training_readiness"), \
+             patch.object(garmin_sync, "sync_training_status"), \
+             patch.object(garmin_sync, "_refresh_matview"):
+            garmin_sync.main()
+
+        get_client.assert_called_once()
 
 
 # ── Date range calculation ───────────────────────────────────────────────────

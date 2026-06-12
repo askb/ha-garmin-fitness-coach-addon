@@ -68,6 +68,15 @@ def _ensure_secure_dir(path: str) -> None:
         os.chmod(path, 0o700)
 
 
+def _has_saved_garmin_tokens(token_dir: str | None = None) -> bool:
+    """Return true if either native or legacy Garmin token files exist."""
+    token_dir = token_dir or TOKEN_DIR
+    return os.path.exists(os.path.join(token_dir, "garmin_tokens.json")) or (
+        os.path.exists(os.path.join(token_dir, "oauth1_token.json"))
+        and os.path.exists(os.path.join(token_dir, "oauth2_token.json"))
+    )
+
+
 SYNC_STATUS_FILE = os.path.join(TOKEN_DIR, ".sync_status")
 LAST_SYNC_FILE = os.path.join(TOKEN_DIR, ".last_sync")
 SKIN_TEMP_BACKFILL_MARKER = "/data/.skin_temp_backfill_done"
@@ -1516,10 +1525,7 @@ def sync_training_status(client, db, days=7):
 
 
 def main():
-    has_tokens = (
-        os.path.exists(os.path.join(TOKEN_DIR, "oauth1_token.json"))
-        and os.path.exists(os.path.join(TOKEN_DIR, "oauth2_token.json"))
-    )
+    has_tokens = _has_saved_garmin_tokens()
 
     if not has_tokens and (not GARMIN_EMAIL or not GARMIN_PASSWORD):
         print("No Garmin tokens or credentials configured, skipping sync")
