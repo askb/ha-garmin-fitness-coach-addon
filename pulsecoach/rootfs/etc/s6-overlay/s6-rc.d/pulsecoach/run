@@ -27,10 +27,24 @@ restore_from_share() {
     if [ -d "${SHARE_BACKUP}/garmin-tokens" ]; then
         if [ ! -f "/data/garmin-tokens/garmin_tokens.json" ] && [ ! -f "/data/garmin-tokens/oauth1_token.json" ]; then
             bashio::log.info "Restoring Garmin tokens from legacy /share/ backup..."
-            mkdir -p /data/garmin-tokens
-            chmod 700 /data/garmin-tokens
-            cp -a "${SHARE_BACKUP}/garmin-tokens/"* /data/garmin-tokens/ 2>/dev/null || true
-            find /data/garmin-tokens -type f -exec chmod 600 {} +
+            # /share/ is writable by other add-ons. Restore only the known
+            # token files and reject symlinks on both source and destination
+            # so a planted link cannot redirect later reads/writes outside
+            # /data (no blind `cp -a` of arbitrary /share/ entries).
+            if [ -L /data/garmin-tokens ]; then
+                bashio::log.warning "/data/garmin-tokens is a symlink; refusing to restore"
+            else
+                mkdir -p /data/garmin-tokens
+                chmod 700 /data/garmin-tokens
+                for tf in garmin_tokens.json oauth1_token.json oauth2_token.json session.json; do
+                    src="${SHARE_BACKUP}/garmin-tokens/${tf}"
+                    dst="/data/garmin-tokens/${tf}"
+                    if [ -f "${src}" ] && [ ! -L "${src}" ] && [ ! -L "${dst}" ]; then
+                        cp "${src}" "${dst}" 2>/dev/null || true
+                        chmod 600 "${dst}" 2>/dev/null || true
+                    fi
+                done
+            fi
         fi
         bashio::log.info "Removing legacy token backup from /share/ (tokens now stay in /data only)"
         rm -rf "${SHARE_BACKUP}/garmin-tokens"

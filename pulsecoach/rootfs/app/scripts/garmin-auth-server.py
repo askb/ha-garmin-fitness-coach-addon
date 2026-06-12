@@ -327,8 +327,15 @@ def import_tokens() -> tuple[Response, int] | Response:
 
     try:
         os.makedirs(TOKEN_DIR, mode=0o700, exist_ok=True)
-        if not os.path.islink(TOKEN_DIR):
-            os.chmod(TOKEN_DIR, 0o700)
+        # Defense-in-depth: if TOKEN_DIR itself is a symlink, an attacker
+        # could redirect credential writes into an arbitrary directory.
+        # Refuse to import rather than writing through the link.
+        if os.path.islink(TOKEN_DIR):
+            return jsonify(
+                success=False,
+                message="Token directory is a symlink; refusing to import",
+            ), 500
+        os.chmod(TOKEN_DIR, 0o700)
         # Owner-only token files, O_NOFOLLOW so a pre-planted symlink
         # cannot redirect the write to an unrelated file.
         for name, payload in (("oauth1_token.json", oauth1),
