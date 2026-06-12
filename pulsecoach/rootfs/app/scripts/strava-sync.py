@@ -259,6 +259,10 @@ def sync_activities(db, activities):
             print(f"  [strava-sync] Error syncing activity {strava_id}: {e}")
             try:
                 cur.execute("ROLLBACK TO SAVEPOINT strava_activity_upsert")
+                # ROLLBACK TO SAVEPOINT keeps the savepoint defined; release it
+                # so repeated row failures don't accumulate nested savepoints
+                # within the same transaction.
+                cur.execute("RELEASE SAVEPOINT strava_activity_upsert")
             except Exception:
                 db.rollback()
             continue
