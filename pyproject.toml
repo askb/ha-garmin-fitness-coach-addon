@@ -3,7 +3,7 @@
 
 [project]
 name = "ha-garmin-fitness-coach-addon"
-version = "0.1.0"
+version = "0.19.0"
 description = "Home Assistant addon for AI-powered Garmin fitness coaching"
 readme = "README.md"
 requires-python = ">=3.11"
