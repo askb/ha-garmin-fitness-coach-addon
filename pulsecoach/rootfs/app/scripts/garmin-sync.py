@@ -13,11 +13,14 @@ Supports two auth modes:
 import json
 import math
 import os
+import random
 import re
 import sys
+import time
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 from zoneinfo import ZoneInfo
 
 try:
@@ -39,6 +42,29 @@ GARMIN_PASSWORD = os.environ.get("GARMIN_PASSWORD", "")
 TOKEN_DIR = "/data/garmin-tokens"
 # Must match the userId used by the Next.js app (DEV_BYPASS_AUTH seed user)
 USER_ID = os.environ.get("GARMIN_USER_ID", "seed-user-001")
+GARMIN_MAX_RETRY_ATTEMPTS = 5
+GARMIN_RETRY_BASE_DELAY_SECONDS = 1.0
+GARMIN_RETRY_MAX_DELAY_SECONDS = 60.0
+def _env_float(name: str, default: float) -> float:
+    """Parse a float environment variable, falling back to default if unset
+    or non-numeric, so a bad value cannot crash the sync at import time."""
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        print(
+            f"WARNING: Invalid {name}='{raw}', falling back to {default}",
+            file=sys.stderr,
+        )
+        return default
+
+
+GARMIN_INITIAL_BACKFILL_DAY_DELAY_SECONDS = _env_float(
+    "GARMIN_INITIAL_BACKFILL_DAY_DELAY_SECONDS", 0.25
+)
+T = TypeVar("T")
 
 # Timezone for date boundary calculations (e.g., "Australia/Brisbane")
 _tz_name = os.environ.get("USER_TIMEZONE", "UTC")
@@ -66,6 +92,96 @@ def _ensure_secure_dir(path: str) -> None:
     # Don't chmod through a symlink — only tighten a real directory.
     if not os.path.islink(path):
         os.chmod(path, 0o700)
+
+
+def _has_saved_garmin_tokens(token_dir: str | None = None) -> bool:
+    """Return true if either native or legacy Garmin token files exist."""
+    token_dir = token_dir or TOKEN_DIR
+    return os.path.exists(os.path.join(token_dir, "garmin_tokens.json")) or (
+        os.path.exists(os.path.join(token_dir, "oauth1_token.json"))
+        and os.path.exists(os.path.join(token_dir, "oauth2_token.json"))
+    )
+
+
+def _exception_status_code(exc: Exception) -> int | None:
+    """Extract an HTTP status code from common client exception shapes."""
+    response = getattr(exc, "response", None)
+    status = getattr(response, "status_code", None)
+    if status is None:
+        status = getattr(exc, "status_code", None)
+    try:
+        return int(status)
+    except (TypeError, ValueError):
+        return None
+
+
+def _retry_after_seconds(exc: Exception) -> float | None:
+    """Extract Retry-After seconds from an exception response, if present."""
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None) or getattr(exc, "headers", None)
+    if not headers:
+        return None
+    retry_after = headers.get("Retry-After") if hasattr(headers, "get") else None
+    if not retry_after:
+        return None
+    try:
+        return max(0.0, float(retry_after))
+    except (TypeError, ValueError):
+        try:
+            retry_at = parsedate_to_datetime(str(retry_after))
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            return max(0.0, (retry_at - datetime.now(timezone.utc)).total_seconds())
+        except (TypeError, ValueError, IndexError, OverflowError):
+            return None
+
+
+def _is_garmin_retryable(exc: Exception) -> bool:
+    """Return true for Garmin rate-limit and transient server failures."""
+    status = _exception_status_code(exc)
+    if status == 429 or status in {500, 502, 503, 504}:
+        return True
+    message = str(exc).lower()
+    return (
+        "rate limit" in message
+        or "rate-limit" in message
+        or "too many requests" in message
+        or "http 429" in message
+        or "status code: 429" in message
+    )
+
+
+def _garmin_api_call(
+    description: str,
+    func: Callable[..., T],
+    *args: Any,
+    **kwargs: Any,
+) -> T:
+    """Call a Garmin API method with bounded exponential backoff."""
+    for attempt in range(1, GARMIN_MAX_RETRY_ATTEMPTS + 1):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            if attempt >= GARMIN_MAX_RETRY_ATTEMPTS or not _is_garmin_retryable(exc):
+                raise
+            retry_after = _retry_after_seconds(exc)
+            if retry_after is None:
+                retry_after = min(
+                    GARMIN_RETRY_MAX_DELAY_SECONDS,
+                    GARMIN_RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1)),
+                )
+            delay = retry_after + random.uniform(0, GARMIN_RETRY_BASE_DELAY_SECONDS)
+            # Bound the delay even when an upstream Retry-After header asks
+            # for an arbitrarily long wait, so backoff stays truly bounded.
+            delay = min(delay, GARMIN_RETRY_MAX_DELAY_SECONDS)
+            print(
+                f"  Garmin API retry {attempt}/{GARMIN_MAX_RETRY_ATTEMPTS} "
+                f"for {description} after {delay:.1f}s",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+
+    raise RuntimeError(f"Garmin API retry loop exhausted for {description}")
 
 
 SYNC_STATUS_FILE = os.path.join(TOKEN_DIR, ".sync_status")
@@ -316,7 +432,11 @@ def _fetch_dedicated_skin_temp(client: Any, date_str: str) -> float | None:
         if not callable(method):
             continue
         try:
-            payload = method(date_str)
+            payload = _garmin_api_call(
+                f"{method_name} skin temperature for {date_str}",
+                method,
+                date_str,
+            )
         except Exception as e:
             print(f"  {method_name} skin temp unavailable for {date_str}: {e}")
             continue
@@ -332,25 +452,43 @@ def sync_daily_stats(client: Any, db: Any, date_str: str) -> bool:
     """Sync daily health stats for a given date."""
     cur = db.cursor()
     try:
-        stats = client.get_stats(date_str)
-        sleep_data = client.get_sleep_data(date_str)
-        hrv = client.get_hrv_data(date_str)
-        stress = client.get_stress_data(date_str)
+        stats = _garmin_api_call(
+            f"get_stats for {date_str}", client.get_stats, date_str
+        )
+        sleep_data = _garmin_api_call(
+            f"get_sleep_data for {date_str}", client.get_sleep_data, date_str
+        )
+        hrv = _garmin_api_call(
+            f"get_hrv_data for {date_str}", client.get_hrv_data, date_str
+        )
+        stress = _garmin_api_call(
+            f"get_stress_data for {date_str}", client.get_stress_data, date_str
+        )
 
         # Fetch SpO2, respiration, and body composition (gracefully handle API errors)
         spo2_data = None
         respiration_data = None
         body_comp_data = None
         try:
-            spo2_data = client.get_spo2_data(date_str)
+            spo2_data = _garmin_api_call(
+                f"get_spo2_data for {date_str}", client.get_spo2_data, date_str
+            )
         except Exception as e:
             print(f"  SpO2 data unavailable for {date_str}: {e}")
         try:
-            respiration_data = client.get_respiration_data(date_str)
+            respiration_data = _garmin_api_call(
+                f"get_respiration_data for {date_str}",
+                client.get_respiration_data,
+                date_str,
+            )
         except Exception as e:
             print(f"  Respiration data unavailable for {date_str}: {e}")
         try:
-            body_comp_data = client.get_body_composition(date_str)
+            body_comp_data = _garmin_api_call(
+                f"get_body_composition for {date_str}",
+                client.get_body_composition,
+                date_str,
+            )
         except Exception as e:
             print(f"  Body composition data unavailable for {date_str}: {e}")
 
@@ -752,7 +890,12 @@ def sync_activities(client, db, days=7):
         start = 0
         while True:
             try:
-                activities = client.get_activities(start, batch_size)
+                activities = _garmin_api_call(
+                    f"get_activities start={start} limit={batch_size}",
+                    client.get_activities,
+                    start,
+                    batch_size,
+                )
             except Exception as fetch_exc:
                 print(
                     f"  get_activities(start={start}, "
@@ -1011,9 +1154,19 @@ def backfill_stress_and_sleep(client, db):
         filled = 0
         for date_str in dates:
             try:
-                stress = client.get_stress_data(date_str)
-                sleep_data = client.get_sleep_data(date_str)
-                stats = client.get_stats(date_str)
+                stress = _garmin_api_call(
+                    f"get_stress_data for {date_str}",
+                    client.get_stress_data,
+                    date_str,
+                )
+                sleep_data = _garmin_api_call(
+                    f"get_sleep_data for {date_str}",
+                    client.get_sleep_data,
+                    date_str,
+                )
+                stats = _garmin_api_call(
+                    f"get_stats for {date_str}", client.get_stats, date_str
+                )
                 sleep_dto = sleep_data.get("dailySleepDTO", {}) if sleep_data else {}
 
                 stress_val = None
@@ -1091,7 +1244,11 @@ def sync_vo2max(client, db, days=7):
                 date_str = d.isoformat()
                 dates_queried += 1
                 try:
-                    metrics = client.get_max_metrics(date_str)
+                    metrics = _garmin_api_call(
+                        f"get_max_metrics for {date_str}",
+                        client.get_max_metrics,
+                        date_str,
+                    )
                 except Exception as exc:
                     # Used to silently swallow ALL per-date failures, which
                     # made it impossible to tell from logs whether sparse
@@ -1304,7 +1461,11 @@ def sync_training_readiness(client, db, days=7):
         for days_ago in range(days):
             date_str = (today - timedelta(days=days_ago)).isoformat()
             try:
-                data = _first_dict(client.get_training_readiness(date_str))
+                data = _first_dict(_garmin_api_call(
+                    f"get_training_readiness for {date_str}",
+                    client.get_training_readiness,
+                    date_str,
+                ))
                 if not data:
                     continue
 
@@ -1400,7 +1561,11 @@ def sync_training_status(client, db, days=7):
         for days_ago in range(days):
             date_str = (today - timedelta(days=days_ago)).isoformat()
             try:
-                data = _first_dict(client.get_training_status(date_str))
+                data = _first_dict(_garmin_api_call(
+                    f"get_training_status for {date_str}",
+                    client.get_training_status,
+                    date_str,
+                ))
                 if not data:
                     continue
 
@@ -1516,10 +1681,7 @@ def sync_training_status(client, db, days=7):
 
 
 def main():
-    has_tokens = (
-        os.path.exists(os.path.join(TOKEN_DIR, "oauth1_token.json"))
-        and os.path.exists(os.path.join(TOKEN_DIR, "oauth2_token.json"))
-    )
+    has_tokens = _has_saved_garmin_tokens()
 
     if not has_tokens and (not GARMIN_EMAIL or not GARMIN_PASSWORD):
         print("No Garmin tokens or credentials configured, skipping sync")
@@ -1536,7 +1698,8 @@ def main():
 
     # First sync: full history from 2019. Subsequent syncs: 7 days only.
     HISTORY_MARKER = os.path.join(TOKEN_DIR, ".initial_sync_done")
-    if os.path.exists(HISTORY_MARKER):
+    initial_backfill = not os.path.exists(HISTORY_MARKER)
+    if not initial_backfill:
         sync_days = 7
     else:
         # Calculate days from 2019-01-01 to today
@@ -1553,6 +1716,12 @@ def main():
         _write_sync_status("daily_stats", f"Syncing {date_str}",
                            int((days_ago / sync_days) * 50))
         sync_daily_stats(client, db, date_str)
+        if (
+            initial_backfill
+            and GARMIN_INITIAL_BACKFILL_DAY_DELAY_SECONDS > 0
+            and days_ago < sync_days - 1
+        ):
+            time.sleep(GARMIN_INITIAL_BACKFILL_DAY_DELAY_SECONDS)
 
     _write_sync_status("backfill_skin_temp", "Backfilling skin temperature...", 50)
     backfill_skin_temp(client, db)

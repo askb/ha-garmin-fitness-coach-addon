@@ -112,6 +112,55 @@ class TestGetClient:
         assert mock_client.login.call_count == 2
 
 
+@pytest.mark.unit
+class TestTokenDetection:
+    """Tests for saved-token detection shared by main()."""
+
+    def test_accepts_native_token_file(self, garmin_sync, tmp_path):
+        """Native garminconnect tokens are sufficient for saved-token mode."""
+        (tmp_path / "garmin_tokens.json").touch()
+
+        assert garmin_sync._has_saved_garmin_tokens(str(tmp_path))
+
+    def test_accepts_legacy_token_pair(self, garmin_sync, tmp_path):
+        """Legacy oauth1/oauth2 garth tokens are still accepted."""
+        (tmp_path / "oauth1_token.json").touch()
+        (tmp_path / "oauth2_token.json").touch()
+
+        assert garmin_sync._has_saved_garmin_tokens(str(tmp_path))
+
+
+@pytest.mark.unit
+class TestGarminApiRetry:
+    """Tests for Garmin API retry/backoff helper."""
+
+    def test_retries_rate_limit_then_returns(self, garmin_sync):
+        """HTTP 429 failures are retried with bounded backoff."""
+
+        class Response:
+            status_code = 429
+            headers = {}
+
+        class RateLimited(Exception):
+            response = Response()
+
+        calls = {"count": 0}
+
+        def flaky_call():
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise RateLimited("Too Many Requests")
+            return {"ok": True}
+
+        with patch.object(garmin_sync.time, "sleep") as sleep, \
+             patch.object(garmin_sync.random, "uniform", return_value=0.0):
+            result = garmin_sync._garmin_api_call("test endpoint", flaky_call)
+
+        assert result == {"ok": True}
+        assert calls["count"] == 2
+        sleep.assert_called_once()
+
+
 # ── Daily stats sync ─────────────────────────────────────────────────────────
 
 
@@ -293,6 +342,36 @@ class TestMain:
         assert mock_daily.call_count == 7
         mock_act.assert_called_once()
 
+    def test_syncs_with_native_tokens_without_credentials(
+        self, garmin_sync, mock_pg_db, mock_garmin_client, tmp_path
+    ):
+        """main() should not skip when only native token files are present."""
+        conn, _ = mock_pg_db
+        (tmp_path / "garmin_tokens.json").touch()
+        (tmp_path / ".initial_sync_done").touch()
+
+        with patch.object(garmin_sync, "GARMIN_EMAIL", ""), \
+             patch.object(garmin_sync, "GARMIN_PASSWORD", ""), \
+             patch.object(garmin_sync, "TOKEN_DIR", str(tmp_path)), \
+             patch.object(garmin_sync, "get_client", return_value=mock_garmin_client) as get_client, \
+             patch.object(garmin_sync, "get_db", return_value=conn), \
+             patch.object(garmin_sync, "_write_sync_status"), \
+             patch.object(garmin_sync, "_clear_sync_status"), \
+             patch.object(garmin_sync, "_write_last_sync"), \
+             patch.object(garmin_sync, "sync_daily_stats"), \
+             patch.object(garmin_sync, "sync_activities"), \
+             patch.object(garmin_sync, "backfill_skin_temp"), \
+             patch.object(garmin_sync, "backfill_from_raw_json"), \
+             patch.object(garmin_sync, "backfill_activity_started_at_utc"), \
+             patch.object(garmin_sync, "backfill_stress_and_sleep"), \
+             patch.object(garmin_sync, "sync_vo2max"), \
+             patch.object(garmin_sync, "sync_training_readiness"), \
+             patch.object(garmin_sync, "sync_training_status"), \
+             patch.object(garmin_sync, "_refresh_matview"):
+            garmin_sync.main()
+
+        get_client.assert_called_once()
+
 
 # ── Date range calculation ───────────────────────────────────────────────────
 
@@ -432,12 +511,14 @@ class TestSyncTrainingReadiness:
         """If one date raises, the loop continues for the remaining days."""
         conn, cursor = mock_pg_db
         client = MagicMock()
-        # First call fails, second succeeds
+        # First day raises a non-retryable error; second day succeeds.
         client.get_training_readiness.side_effect = [
-            Exception("API rate-limited"),
+            Exception("API unavailable"),
             {"score": 60, "level": "GOOD"},
         ]
-        garmin_sync.sync_training_readiness(client, conn, days=2)
+        with patch.object(garmin_sync.time, "sleep"), \
+             patch.object(garmin_sync.random, "uniform", return_value=0.0):
+            garmin_sync.sync_training_readiness(client, conn, days=2)
 
         assert client.get_training_readiness.call_count == 2
         # Only one UPDATE should be issued (for the day that succeeded)

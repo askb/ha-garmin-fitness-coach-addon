@@ -35,6 +35,15 @@ _mfa_state = {
 }
 
 
+def _has_saved_garmin_tokens(token_dir: str | None = None) -> bool:
+    """Return true if either native or legacy Garmin token files exist."""
+    token_dir = token_dir or TOKEN_DIR
+    return os.path.exists(os.path.join(token_dir, "garmin_tokens.json")) or (
+        os.path.exists(os.path.join(token_dir, "oauth1_token.json"))
+        and os.path.exists(os.path.join(token_dir, "oauth2_token.json"))
+    )
+
+
 def _save_tokens(client: "Garmin") -> None:
     """Save garth tokens to disk in native directory format."""
     os.makedirs(TOKEN_DIR, mode=0o700, exist_ok=True)
@@ -263,8 +272,8 @@ def trigger_sync() -> tuple[Response, int] | Response:
     except Exception:
         pass
 
-    # Check if tokens exist
-    if not os.path.exists(os.path.join(TOKEN_DIR, "oauth1_token.json")):
+    # Check if either native garminconnect tokens or legacy garth tokens exist.
+    if not _has_saved_garmin_tokens():
         return jsonify(success=False, message="Not connected to Garmin"), 400
 
     # Launch sync in background. Capture stdout/stderr to a rotated log so

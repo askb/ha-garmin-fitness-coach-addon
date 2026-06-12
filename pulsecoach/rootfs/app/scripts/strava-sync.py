@@ -14,6 +14,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import psycopg2
 import requests
@@ -25,7 +26,8 @@ TOKEN_FILE = TOKEN_DIR / "strava_tokens.json"
 STRAVA_API_BASE = "https://www.strava.com/api/v3"
 STRAVA_TOKEN_URL = "https://www.strava.com/api/v3/oauth/token"
 
-USER_ID = "default"
+LEGACY_USER_ID = "default"
+USER_ID = os.environ.get("GARMIN_USER_ID", "seed-user-001")
 
 
 def _load_tokens():
@@ -168,6 +170,38 @@ def ensure_strava_column(db):
     db.commit()
 
 
+def migrate_legacy_strava_user_id(db: Any) -> None:
+    """Move legacy Strava activity rows onto the shared PulseCoach user id."""
+    if USER_ID == LEGACY_USER_ID:
+        return
+
+    cur = db.cursor()
+    try:
+        cur.execute("""
+            UPDATE activity
+            SET user_id = %s
+            WHERE user_id = %s
+              AND (
+                source_platform = 'strava'
+                OR strava_activity_id IS NOT NULL
+              )
+        """, (USER_ID, LEGACY_USER_ID))
+        migrated = getattr(cur, "rowcount", 0)
+        if not isinstance(migrated, int):
+            migrated = 0
+        db.commit()
+        if migrated:
+            print(
+                f"[strava-sync] Migrated {migrated} legacy Strava "
+                "activities to shared user id"
+            )
+    except Exception as exc:
+        db.rollback()
+        print(f"[strava-sync] Legacy user id migration skipped: {exc}")
+    finally:
+        cur.close()
+
+
 def sync_activities(db, activities):
     """Upsert Strava activities into the activity table."""
     cur = db.cursor()
@@ -189,6 +223,7 @@ def sync_activities(db, activities):
         trimp = _compute_trimp(duration_min, avg_hr, max_hr)
 
         try:
+            cur.execute("SAVEPOINT strava_activity_upsert")
             cur.execute("""
                 INSERT INTO activity (
                     user_id, strava_activity_id, sport_type,
@@ -218,10 +253,18 @@ def sync_activities(db, activities):
                 act.get("average_watts"), act.get("average_cadence"),
                 "strava", datetime.now(timezone.utc).isoformat(),
             ))
+            cur.execute("RELEASE SAVEPOINT strava_activity_upsert")
             synced += 1
         except Exception as e:
             print(f"  [strava-sync] Error syncing activity {strava_id}: {e}")
-            db.rollback()
+            try:
+                cur.execute("ROLLBACK TO SAVEPOINT strava_activity_upsert")
+                # ROLLBACK TO SAVEPOINT keeps the savepoint defined; release it
+                # so repeated row failures don't accumulate nested savepoints
+                # within the same transaction.
+                cur.execute("RELEASE SAVEPOINT strava_activity_upsert")
+            except Exception:
+                db.rollback()
             continue
 
     db.commit()
@@ -249,6 +292,7 @@ def main():
     db = psycopg2.connect(DATABASE_URL)
     try:
         ensure_strava_column(db)
+        migrate_legacy_strava_user_id(db)
 
         # Determine sync window: last 7 days for incremental, full history for first sync
         marker = TOKEN_DIR / ".strava_initial_sync_done"
