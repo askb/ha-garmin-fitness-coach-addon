@@ -335,11 +335,28 @@ def import_tokens() -> tuple[Response, int] | Response:
                        message="Both oauth1_token and oauth2_token required"), 400
 
     try:
-        os.makedirs(TOKEN_DIR, exist_ok=True)
-        with open(os.path.join(TOKEN_DIR, "oauth1_token.json"), "w") as f:
-            json.dump(oauth1, f)
-        with open(os.path.join(TOKEN_DIR, "oauth2_token.json"), "w") as f:
-            json.dump(oauth2, f)
+        os.makedirs(TOKEN_DIR, mode=0o700, exist_ok=True)
+        # Defense-in-depth: if TOKEN_DIR itself is a symlink, an attacker
+        # could redirect credential writes into an arbitrary directory.
+        # Refuse to import rather than writing through the link.
+        if os.path.islink(TOKEN_DIR):
+            return jsonify(
+                success=False,
+                message="Token directory is a symlink; refusing to import",
+            ), 500
+        os.chmod(TOKEN_DIR, 0o700)
+        # Owner-only token files, O_NOFOLLOW so a pre-planted symlink
+        # cannot redirect the write to an unrelated file.
+        for name, payload in (("oauth1_token.json", oauth1),
+                              ("oauth2_token.json", oauth2)):
+            fd = os.open(
+                os.path.join(TOKEN_DIR, name),
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW,
+                0o600,
+            )
+            with os.fdopen(fd, "w") as f:
+                json.dump(payload, f)
+            os.chmod(os.path.join(TOKEN_DIR, name), 0o600)
 
         # Verify tokens work
         client = _load_client()

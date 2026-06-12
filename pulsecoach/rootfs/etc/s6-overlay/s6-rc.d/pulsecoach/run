@@ -21,12 +21,36 @@ fi
 
 # ─── Restore tokens & database from /share/ (survives uninstall) ─────────────
 restore_from_share() {
-    # Restore Garmin tokens
-    if [ -d "${SHARE_BACKUP}/garmin-tokens" ] && [ ! -f "/data/garmin-tokens/garmin_tokens.json" ] && [ ! -f "/data/garmin-tokens/oauth1_token.json" ]; then
-        bashio::log.info "Restoring Garmin tokens from /share/ backup..."
-        mkdir -p /data/garmin-tokens
-        cp -a "${SHARE_BACKUP}/garmin-tokens/"* /data/garmin-tokens/ 2>/dev/null || true
+    # Legacy one-time token restore: older versions backed up Garmin tokens
+    # to /share/, which is readable by other add-ons. Restore once if /data
+    # has no tokens, then remove the exposed copies from /share/.
+    if [ -d "${SHARE_BACKUP}/garmin-tokens" ]; then
+        if [ ! -f "/data/garmin-tokens/garmin_tokens.json" ] && [ ! -f "/data/garmin-tokens/oauth1_token.json" ]; then
+            bashio::log.info "Restoring Garmin tokens from legacy /share/ backup..."
+            # /share/ is writable by other add-ons. Restore only the known
+            # token files and reject symlinks on both source and destination
+            # so a planted link cannot redirect later reads/writes outside
+            # /data (no blind `cp -a` of arbitrary /share/ entries).
+            if [ -L /data/garmin-tokens ]; then
+                bashio::log.warning "/data/garmin-tokens is a symlink; refusing to restore"
+            else
+                mkdir -p /data/garmin-tokens
+                chmod 700 /data/garmin-tokens
+                for tf in garmin_tokens.json oauth1_token.json oauth2_token.json session.json; do
+                    src="${SHARE_BACKUP}/garmin-tokens/${tf}"
+                    dst="/data/garmin-tokens/${tf}"
+                    if [ -f "${src}" ] && [ ! -L "${src}" ] && [ ! -L "${dst}" ]; then
+                        cp "${src}" "${dst}" 2>/dev/null || true
+                        chmod 600 "${dst}" 2>/dev/null || true
+                    fi
+                done
+            fi
+        fi
+        bashio::log.info "Removing legacy token backup from /share/ (tokens now stay in /data only)"
+        rm -rf "${SHARE_BACKUP}/garmin-tokens"
     fi
+    # Same cleanup for pre-rename backups
+    rm -rf /share/garmincoach/garmin-tokens 2>/dev/null || true
     # Restore PostgreSQL dump (after DB is ready, called later)
 }
 
@@ -50,12 +74,9 @@ restore_database() {
 }
 
 backup_to_share() {
-    bashio::log.info "Backing up tokens & database to /share/..."
-    mkdir -p "${SHARE_BACKUP}/garmin-tokens"
-    # Backup tokens
-    if [ -d "/data/garmin-tokens" ]; then
-        cp -a /data/garmin-tokens/* "${SHARE_BACKUP}/garmin-tokens/" 2>/dev/null || true
-    fi
+    bashio::log.info "Backing up database to /share/..."
+    # NOTE: tokens are deliberately NOT backed up — /share/ is readable by
+    # other add-ons, so credential material stays in /data only.
     # Backup database (compressed)
     if pg_isready -h 127.0.0.1 -p 5432 -q 2>/dev/null; then
         pg_dump -h 127.0.0.1 -U postgres pulsecoach 2>/dev/null | \

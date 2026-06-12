@@ -21,9 +21,6 @@
     "addon_config:rw",
     "share:rw"
   ],
-  "ports": {
-    "3000/tcp": null
-  },
   "options": {
     "garmin_email": "",
     "garmin_password": "",
