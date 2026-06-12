@@ -130,6 +130,37 @@ class TestTokenDetection:
         assert garmin_sync._has_saved_garmin_tokens(str(tmp_path))
 
 
+@pytest.mark.unit
+class TestGarminApiRetry:
+    """Tests for Garmin API retry/backoff helper."""
+
+    def test_retries_rate_limit_then_returns(self, garmin_sync):
+        """HTTP 429 failures are retried with bounded backoff."""
+
+        class Response:
+            status_code = 429
+            headers = {}
+
+        class RateLimited(Exception):
+            response = Response()
+
+        calls = {"count": 0}
+
+        def flaky_call():
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise RateLimited("Too Many Requests")
+            return {"ok": True}
+
+        with patch.object(garmin_sync.time, "sleep") as sleep, \
+             patch.object(garmin_sync.random, "uniform", return_value=0.0):
+            result = garmin_sync._garmin_api_call("test endpoint", flaky_call)
+
+        assert result == {"ok": True}
+        assert calls["count"] == 2
+        sleep.assert_called_once()
+
+
 # ── Daily stats sync ─────────────────────────────────────────────────────────
 
 
@@ -485,9 +516,11 @@ class TestSyncTrainingReadiness:
             Exception("API rate-limited"),
             {"score": 60, "level": "GOOD"},
         ]
-        garmin_sync.sync_training_readiness(client, conn, days=2)
+        with patch.object(garmin_sync.time, "sleep"), \
+             patch.object(garmin_sync.random, "uniform", return_value=0.0):
+            garmin_sync.sync_training_readiness(client, conn, days=2)
 
-        assert client.get_training_readiness.call_count == 2
+        assert client.get_training_readiness.call_count == 3
         # Only one UPDATE should be issued (for the day that succeeded)
         update_calls = [
             c for c in cursor.execute.call_args_list
