@@ -511,16 +511,16 @@ class TestSyncTrainingReadiness:
         """If one date raises, the loop continues for the remaining days."""
         conn, cursor = mock_pg_db
         client = MagicMock()
-        # First call fails, second succeeds
+        # First day raises a non-retryable error; second day succeeds.
         client.get_training_readiness.side_effect = [
-            Exception("API rate-limited"),
+            Exception("API unavailable"),
             {"score": 60, "level": "GOOD"},
         ]
         with patch.object(garmin_sync.time, "sleep"), \
              patch.object(garmin_sync.random, "uniform", return_value=0.0):
             garmin_sync.sync_training_readiness(client, conn, days=2)
 
-        assert client.get_training_readiness.call_count == 3
+        assert client.get_training_readiness.call_count == 2
         # Only one UPDATE should be issued (for the day that succeeded)
         update_calls = [
             c for c in cursor.execute.call_args_list

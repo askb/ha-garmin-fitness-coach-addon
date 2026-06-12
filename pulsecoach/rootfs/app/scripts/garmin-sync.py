@@ -45,8 +45,24 @@ USER_ID = os.environ.get("GARMIN_USER_ID", "seed-user-001")
 GARMIN_MAX_RETRY_ATTEMPTS = 5
 GARMIN_RETRY_BASE_DELAY_SECONDS = 1.0
 GARMIN_RETRY_MAX_DELAY_SECONDS = 60.0
-GARMIN_INITIAL_BACKFILL_DAY_DELAY_SECONDS = float(
-    os.environ.get("GARMIN_INITIAL_BACKFILL_DAY_DELAY_SECONDS", "0.25")
+def _env_float(name: str, default: float) -> float:
+    """Parse a float environment variable, falling back to default if unset
+    or non-numeric, so a bad value cannot crash the sync at import time."""
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        print(
+            f"WARNING: Invalid {name}='{raw}', falling back to {default}",
+            file=sys.stderr,
+        )
+        return default
+
+
+GARMIN_INITIAL_BACKFILL_DAY_DELAY_SECONDS = _env_float(
+    "GARMIN_INITIAL_BACKFILL_DAY_DELAY_SECONDS", 0.25
 )
 T = TypeVar("T")
 
@@ -155,6 +171,9 @@ def _garmin_api_call(
                     GARMIN_RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1)),
                 )
             delay = retry_after + random.uniform(0, GARMIN_RETRY_BASE_DELAY_SECONDS)
+            # Bound the delay even when an upstream Retry-After header asks
+            # for an arbitrarily long wait, so backoff stays truly bounded.
+            delay = min(delay, GARMIN_RETRY_MAX_DELAY_SECONDS)
             print(
                 f"  Garmin API retry {attempt}/{GARMIN_MAX_RETRY_ATTEMPTS} "
                 f"for {description} after {delay:.1f}s",
