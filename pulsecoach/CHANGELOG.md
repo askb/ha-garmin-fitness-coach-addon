@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Removed optional direct port mapping (`3000/tcp`).** The web UI relies
+  on Home Assistant ingress for authentication (the bundled app runs with
+  `DEV_BYPASS_AUTH=true`), so exposing the container port directly on the
+  host allowed unauthenticated access to the dashboard and API for anyone
+  who mapped the port. The UI is now reachable exclusively through the
+  authenticated HA ingress panel.
+
 ## [0.19.0] - 2026-06-08
 
 ### Fixed
