@@ -230,6 +230,9 @@ def print_report(meetings: list[dict], people: list[dict], color: bool) -> None:
 
 
 def write_csvs(meetings: list[dict], people: list[dict], outdir: str) -> None:
+    with open(os.path.join(outdir, "meeting_stress.json"), "w") as f:
+        json.dump({"generated": datetime.now(timezone.utc).isoformat(),
+                   "meetings": meetings, "people": people}, f, indent=1)
     with open(os.path.join(outdir, "meeting_scores.csv"), "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["dbpm", "z", "elev", "title", "attendees"])
@@ -379,14 +382,20 @@ def make_demo(seed: int = 7) -> tuple[list[dict], HrSeries]:
 # CLI
 # --------------------------------------------------------------------------- #
 def main(argv: list[str] | None = None) -> int:
+    share = "/share/pulsecoach"
+    default_events = os.path.join(share, "calendar_events.json")
+
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--events", help="calendar_events.json")
-    ap.add_argument("--hr-cache", default="cache", help="dir of hr_YYYY-MM-DD.json files")
+    ap.add_argument("--events",
+                    default=default_events if os.path.exists(default_events) else None,
+                    help="calendar_events.json (default: /share/pulsecoach/ if present)")
+    ap.add_argument("--hr-cache", default="/data/hr-cache" if os.path.isdir("/data") else "cache",
+                    help="dir of hr_YYYY-MM-DD.json files")
     ap.add_argument("--fetch", action="store_true", help="pull HR live from Garmin (needs tokens)")
     ap.add_argument("--demo", action="store_true", help="run on synthetic post-like data")
     ap.add_argument("--lambda", dest="lam", type=float, default=DEFAULT_LAMBDA)
     ap.add_argument("--max-attendees", type=int, default=DEFAULT_MAX_ATTENDEES)
-    ap.add_argument("--outdir", default=".")
+    ap.add_argument("--outdir", default=share if os.path.isdir(share) else ".")
     ap.add_argument("--no-color", action="store_true")
     args = ap.parse_args(argv)
 
@@ -421,5 +430,21 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _clear_status() -> None:
+    """Clear the auth-server's run lock (same convention as metrics-compute)."""
+    path = os.path.join(os.environ.get("GARMIN_TOKEN_DIR", "/data/garmin-tokens"),
+                        ".meeting_stress_status")
+    try:
+        if os.path.exists(path):
+            with open(path, "w") as f:
+                json.dump({"running": False, "finished": datetime.now(timezone.utc).isoformat()}, f)
+    except OSError:
+        pass
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        code = main()
+    finally:
+        _clear_status()
+    raise SystemExit(code)

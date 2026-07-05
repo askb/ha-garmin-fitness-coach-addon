@@ -5,12 +5,15 @@
 
 Run: python -m pytest tests/test_meeting_stress.py   (or: python tests/test_meeting_stress.py)
 """
-import os
-import sys
+import importlib.util
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-import meeting_stress as ms  # noqa: E402
+_SCRIPT = (Path(__file__).resolve().parents[1] / "pulsecoach" / "rootfs"
+           / "app" / "scripts" / "meeting-stress.py")
+_spec = importlib.util.spec_from_file_location("meeting_stress", _SCRIPT)
+ms = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(ms)
 
 DAY = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
