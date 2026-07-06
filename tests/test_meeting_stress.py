@@ -89,7 +89,28 @@ def test_solo_and_oversize_meetings_skipped():
     assert ms.score_meetings(events, series) == []
 
 
+def test_gcal_item_mapping():
+    item = {
+        "summary": "planning",
+        "start": {"dateTime": "2026-07-01T09:00:00+10:00"},
+        "end": {"dateTime": "2026-07-01T09:30:00+10:00"},
+        "attendees": [
+            {"displayName": "Alice", "email": "alice@x.org"},
+            {"email": "bob@x.org", "responseStatus": "declined"},
+            {"email": "room-3@resource.calendar.google.com", "resource": True},
+            {"email": "me@x.org", "self": True},
+            {"email": "carol@x.org"},
+        ],
+    }
+    ev = ms._gcal_item_to_event(item)
+    assert ev["attendees"] == ["Alice", "carol"], ev
+    # all-day events (date, no dateTime) are dropped
+    assert ms._gcal_item_to_event({"start": {"date": "2026-07-01"},
+                                   "end": {"date": "2026-07-02"}}) is None
+
+
 if __name__ == "__main__":
     test_ridge_deconfounds_bystander()
     test_solo_and_oversize_meetings_skipped()
+    test_gcal_item_mapping()
     print("ok")

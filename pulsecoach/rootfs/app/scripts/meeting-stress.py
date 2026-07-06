@@ -8,8 +8,9 @@
 # scores each meeting vs a local 90-min baseline (dbpm / z / elev), then fits
 # a ridge regression over attendee presence to de-confound who-attends-with-whom.
 #
-# Inputs are files only: a calendar_events.json and an HR series (cache files
-# or --demo synthetic). No audio, no recording, no calendar auth.
+# Calendar input: a linked Google Calendar (read-only OAuth token generated
+# by scripts/generate-gcal-token.py) or a calendar_events.json file. HR comes
+# from Garmin (cache files or --demo synthetic). No audio, no recording.
 #
 # stdlib only (matches repo scripts); ridge is a hand-rolled ~kxk solve.
 ##############################################################################
@@ -382,6 +383,128 @@ def make_demo(seed: int = 7) -> tuple[list[dict], HrSeries]:
 
 
 # --------------------------------------------------------------------------- #
+# Google Calendar (linked-calendar mode)
+# --------------------------------------------------------------------------- #
+GCAL_TOKEN_PATH = "/data/gcal-token.json"
+GCAL_DROP_PATH = "/share/pulsecoach/gcal-token.json"
+
+
+def _adopt_gcal_token() -> None:
+    """Move a user-dropped token from /share (world-readable) into /data.
+
+    ponytail: overwrite is deliberate — dropping a fresh token in /share IS the
+    refresh mechanism (users have no direct /data access). Anything that can
+    write /share already controls calendar input wholesale.
+    """
+    if os.path.exists(GCAL_DROP_PATH) and os.path.isdir("/data"):
+        import shutil
+
+        shutil.move(GCAL_DROP_PATH, GCAL_TOKEN_PATH)
+        os.chmod(GCAL_TOKEN_PATH, 0o600)
+        print("Adopted gcal-token.json from /share into /data")
+
+
+def gcal_linked() -> bool:
+    """True when a Google Calendar refresh token is available."""
+    _adopt_gcal_token()
+    return os.path.exists(GCAL_TOKEN_PATH)
+
+
+def _gcal_item_to_event(item: dict) -> dict | None:
+    """Map one Calendar API item to our event schema; None if unusable."""
+    start = item.get("start", {}).get("dateTime")
+    end = item.get("end", {}).get("dateTime")
+    if not start or not end:
+        return None  # all-day event
+    attendees = []
+    for att in item.get("attendees", []):
+        if (att.get("responseStatus") == "declined"
+                or att.get("resource") or att.get("self")):
+            continue
+        name = att.get("displayName") or att.get("email", "").split("@")[0]
+        if name:
+            attendees.append(name)
+    if not attendees:
+        return None
+    return {
+        "start": start,
+        "end": end,
+        "title": item.get("summary", "(untitled)"),
+        "attendees": sorted(set(attendees)),
+    }
+
+
+def fetch_events_gcal(days: int) -> list[dict]:
+    """Pull the last `days` of primary-calendar events via the Calendar API.
+
+    Uses the refresh token from generate-gcal-token.py; recurrences arrive
+    pre-expanded (singleEvents). Declined attendees, rooms, and self are
+    dropped — same policy as ics_to_events.py.
+    """
+    import urllib.parse
+    import urllib.request
+
+    with open(GCAL_TOKEN_PATH) as f:
+        tok = json.load(f)
+
+    body = urllib.parse.urlencode({
+        "client_id": tok["client_id"],
+        "client_secret": tok["client_secret"],
+        "refresh_token": tok["refresh_token"],
+        "grant_type": "refresh_token",
+    }).encode()
+    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=body)
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        tok_resp = json.load(resp)
+    access = tok_resp.get("access_token")
+    if not access:
+        # Don't echo the payload — it may carry sensitive fields.
+        err = tok_resp.get("error", "unknown_error")
+        raise RuntimeError(
+            f"Google token refresh failed ({err}) — re-run generate-gcal-token.py"
+        )
+
+    now = datetime.now(timezone.utc)
+    base_params = {
+        "timeMin": (now - timedelta(days=days)).isoformat(),
+        "timeMax": now.isoformat(),
+        "singleEvents": "true",
+        "orderBy": "startTime",
+        "maxResults": "250",
+    }
+    url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+    events: list[dict] = []
+    page_token = ""
+    while True:
+        params = dict(base_params)
+        if page_token:
+            params["pageToken"] = page_token
+        req = urllib.request.Request(
+            f"{url}?{urllib.parse.urlencode(params)}",
+            headers={"Authorization": f"Bearer {access}"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.load(resp)
+        if "error" in data:
+            err = data["error"]
+            raise RuntimeError(
+                f"Calendar API error {err.get('code')}: {err.get('message')}"
+            )
+
+        for item in data.get("items", []):
+            ev = _gcal_item_to_event(item)
+            if ev:
+                events.append(ev)
+
+        page_token = data.get("nextPageToken", "")
+        if not page_token:
+            break
+
+    print(f"Fetched {len(events)} meetings from Google Calendar (last {days}d)")
+    return events
+
+
+# --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
 def main(argv: list[str] | None = None) -> int:
@@ -389,9 +512,8 @@ def main(argv: list[str] | None = None) -> int:
     default_events = os.path.join(share, "calendar_events.json")
 
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--events",
-                    default=default_events if os.path.exists(default_events) else None,
-                    help="calendar_events.json (default: /share/pulsecoach/ if present)")
+    ap.add_argument("--events", default=None,
+                    help="calendar_events.json (overrides linked calendar)")
     ap.add_argument("--hr-cache", default="/data/hr-cache" if os.path.isdir("/data") else "cache",
                     help="dir of hr_YYYY-MM-DD.json files")
     ap.add_argument("--fetch", action="store_true", help="pull HR live from Garmin (needs tokens)")
@@ -399,16 +521,25 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lambda", dest="lam", type=float, default=DEFAULT_LAMBDA)
     ap.add_argument("--max-attendees", type=int, default=DEFAULT_MAX_ATTENDEES)
     ap.add_argument("--outdir", default=share if os.path.isdir(share) else ".")
+    ap.add_argument("--days", type=int, default=30,
+                    help="linked-calendar lookback window (days)")
     ap.add_argument("--no-color", action="store_true")
     args = ap.parse_args(argv)
 
     if args.demo:
         events, series = make_demo()
     else:
-        if not args.events:
-            ap.error("--events is required (or use --demo)")
-        with open(args.events) as f:
-            events = json.load(f)
+        # Priority: explicit --events > linked calendar > dropped events file.
+        if args.events:
+            with open(args.events) as f:
+                events = json.load(f)
+        elif gcal_linked():
+            events = fetch_events_gcal(args.days)
+        elif os.path.exists(default_events):
+            with open(default_events) as f:
+                events = json.load(f)
+        else:
+            ap.error("--events is required (or link Google Calendar / use --demo)")
         if args.fetch:
             dates = sorted({parse_ts(e["start"]) for e in events})
             dates = sorted({datetime.fromtimestamp(d, timezone.utc).strftime("%Y-%m-%d") for d in dates})

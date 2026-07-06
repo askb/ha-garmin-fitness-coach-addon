@@ -12,3 +12,4 @@ garmincoach/ha-garmin-fitness-coach-app/
 # OS files
 .DS_Store
 Thumbs.db
+gcal-token.json
