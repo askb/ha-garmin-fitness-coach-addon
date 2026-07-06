@@ -109,8 +109,30 @@ def test_gcal_item_mapping():
                                    "end": {"date": "2026-07-02"}}) is None
 
 
+def test_interactions_jsonl():
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "interactions.jsonl"
+        path.write_text(
+            '{"person": "Mum", "minutes": 45, "end": "2026-07-01T18:00:00+10:00"}\n'
+            "not json at all\n"
+            '{"person": "", "minutes": 30, "end": "2026-07-01T19:00:00+10:00"}\n'
+            '{"person": "Dave", "minutes": 0, "end": "2026-07-01T20:00:00+10:00"}\n'
+        )
+        evs = ms.load_interactions(str(path))
+    assert len(evs) == 1, evs
+    ev = evs[0]
+    assert ev["attendees"] == ["Mum"]
+    assert ms.parse_ts(ev["end"]) - ms.parse_ts(ev["start"]) == 45 * 60
+    # missing file -> empty, no crash
+    assert ms.load_interactions("/nonexistent/interactions.jsonl") == []
+
+
 if __name__ == "__main__":
     test_ridge_deconfounds_bystander()
     test_solo_and_oversize_meetings_skipped()
     test_gcal_item_mapping()
+    test_interactions_jsonl()
     print("ok")

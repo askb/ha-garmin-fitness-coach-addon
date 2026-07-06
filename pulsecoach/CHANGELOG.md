@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.2] - 2026-07-06
+
+### Added
+
+- **Out-of-calendar interaction logging.** meeting-stress now merges
+  `/share/pulsecoach/interactions.jsonl` (one JSON object per line:
+  `{"person", "minutes", "end"}`) as one-person events — log coffee
+  chats, family visits, or gym sessions from Home Assistant via a
+  `shell_command` (dashboard buttons, voice, NFC, zone automations) and
+  they rank in the same leaderboard as work meetings. Malformed lines
+  are skipped.
+
 ## [0.20.1] - 2026-07-06
 
 ### Fixed
