@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-07-06
+
+### Fixed
+
+- **Stress Board unreachable under HA ingress.** Bundled app updated to
+  v0.20.1: the board's API calls now use the ingress-prefixed base path
+  instead of absolute `/api/*` (which resolved to HA core).
+
 ## [0.20.0] - 2026-07-06
 
 ### Added
