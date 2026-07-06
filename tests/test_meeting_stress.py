@@ -109,16 +109,19 @@ def test_gcal_item_mapping():
                                    "end": {"date": "2026-07-02"}}) is None
 
 
-def test_interactions_jsonl(tmp_path=None):
+def test_interactions_jsonl():
     import tempfile
+    from pathlib import Path
 
-    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as f:
-        f.write('{"person": "Mum", "minutes": 45, "end": "2026-07-01T18:00:00+10:00"}\n')
-        f.write("not json at all\n")
-        f.write('{"person": "", "minutes": 30, "end": "2026-07-01T19:00:00+10:00"}\n')
-        f.write('{"person": "Dave", "minutes": 0, "end": "2026-07-01T20:00:00+10:00"}\n')
-        path = f.name
-    evs = ms.load_interactions(path)
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "interactions.jsonl"
+        path.write_text(
+            '{"person": "Mum", "minutes": 45, "end": "2026-07-01T18:00:00+10:00"}\n'
+            "not json at all\n"
+            '{"person": "", "minutes": 30, "end": "2026-07-01T19:00:00+10:00"}\n'
+            '{"person": "Dave", "minutes": 0, "end": "2026-07-01T20:00:00+10:00"}\n'
+        )
+        evs = ms.load_interactions(str(path))
     assert len(evs) == 1, evs
     ev = evs[0]
     assert ev["attendees"] == ["Mum"]

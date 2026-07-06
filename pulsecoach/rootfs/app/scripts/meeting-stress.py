@@ -518,29 +518,31 @@ def load_interactions(path: str = INTERACTIONS_PATH) -> list[dict]:
     append-only log written by HA shell_command stays forgiving.
     """
     events: list[dict] = []
-    if not os.path.exists(path):
-        return events
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-                person = str(rec["person"]).strip()
-                minutes = float(rec.get("minutes", 30))
-                end_s = parse_ts(str(rec["end"]))
-            except (KeyError, ValueError, TypeError):
-                continue
-            if not person or minutes <= 0:
-                continue
-            end_dt = datetime.fromtimestamp(end_s, timezone.utc)
-            events.append({
-                "start": (end_dt - timedelta(minutes=minutes)).isoformat(),
-                "end": end_dt.isoformat(),
-                "title": f"interaction: {person}",
-                "attendees": [person],
-            })
+    try:
+        with open(path) as f:
+            lines = f.readlines()
+    except OSError:
+        return events  # forgiving log: missing/unreadable == empty
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+            person = str(rec["person"]).strip()
+            minutes = float(rec.get("minutes", 30))
+            end_s = parse_ts(str(rec["end"]))
+        except (KeyError, ValueError, TypeError):
+            continue
+        if not person or minutes <= 0:
+            continue
+        end_dt = datetime.fromtimestamp(end_s, timezone.utc)
+        events.append({
+            "start": (end_dt - timedelta(minutes=minutes)).isoformat(),
+            "end": end_dt.isoformat(),
+            "title": f"interaction: {person}",
+            "attendees": [person],
+        })
     if events:
         print(f"Merged {len(events)} logged interactions")
     return events
