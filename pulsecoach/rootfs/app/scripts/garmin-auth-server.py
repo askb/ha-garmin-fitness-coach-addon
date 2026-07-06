@@ -482,11 +482,9 @@ def trigger_meeting_stress() -> tuple[Response, int] | Response:
             json.dump({"running": True, "started": time.time()}, f)
         log_fh = open("/data/meeting-stress.log", "w", buffering=1)
         try:
-            cmd = ["python3", "/app/scripts/meeting-stress.py", "--fetch", "--no-color"]
-            if os.path.exists(events_file):
-                cmd += ["--events", events_file]
+            # Script resolves the source: linked calendar > dropped events file.
             subprocess.Popen(
-                cmd,
+                ["python3", "/app/scripts/meeting-stress.py", "--fetch", "--no-color"],
                 env=os.environ.copy(),
                 stdout=log_fh,
                 stderr=subprocess.STDOUT,

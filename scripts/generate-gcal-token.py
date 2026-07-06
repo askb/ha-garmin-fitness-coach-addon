@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import http.server
 import json
+import os
 import secrets
 import sys
 import threading
@@ -106,7 +107,8 @@ def main() -> int:
         "grant_type": "authorization_code",
         "redirect_uri": redirect_uri,
     }).encode()
-    with urllib.request.urlopen(urllib.request.Request(TOKEN_URL, data=body)) as resp:
+    req = urllib.request.Request(TOKEN_URL, data=body)
+    with urllib.request.urlopen(req, timeout=60) as resp:
         tok = json.load(resp)
 
     refresh = tok.get("refresh_token")
@@ -114,7 +116,8 @@ def main() -> int:
         print("Token response had no refresh_token — re-run (prompt=consent should force it).")
         return 1
 
-    with open(OUT_FILE, "w") as f:
+    fd = os.open(OUT_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
         json.dump({"client_id": client_id, "client_secret": client_secret,
                    "refresh_token": refresh}, f, indent=1)
     print(f"\n✓ Wrote {OUT_FILE}")

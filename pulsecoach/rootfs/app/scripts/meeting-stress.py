@@ -390,7 +390,12 @@ GCAL_DROP_PATH = "/share/pulsecoach/gcal-token.json"
 
 
 def _adopt_gcal_token() -> None:
-    """Move a user-dropped token from /share (world-readable) into /data."""
+    """Move a user-dropped token from /share (world-readable) into /data.
+
+    ponytail: overwrite is deliberate — dropping a fresh token in /share IS the
+    refresh mechanism (users have no direct /data access). Anything that can
+    write /share already controls calendar input wholesale.
+    """
     if os.path.exists(GCAL_DROP_PATH) and os.path.isdir("/data"):
         import shutil
 
@@ -507,9 +512,8 @@ def main(argv: list[str] | None = None) -> int:
     default_events = os.path.join(share, "calendar_events.json")
 
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--events",
-                    default=default_events if os.path.exists(default_events) else None,
-                    help="calendar_events.json (default: /share/pulsecoach/ if present)")
+    ap.add_argument("--events", default=None,
+                    help="calendar_events.json (overrides linked calendar)")
     ap.add_argument("--hr-cache", default="/data/hr-cache" if os.path.isdir("/data") else "cache",
                     help="dir of hr_YYYY-MM-DD.json files")
     ap.add_argument("--fetch", action="store_true", help="pull HR live from Garmin (needs tokens)")
@@ -525,11 +529,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.demo:
         events, series = make_demo()
     else:
+        # Priority: explicit --events > linked calendar > dropped events file.
         if args.events:
             with open(args.events) as f:
                 events = json.load(f)
         elif gcal_linked():
             events = fetch_events_gcal(args.days)
+        elif os.path.exists(default_events):
+            with open(default_events) as f:
+                events = json.load(f)
         else:
             ap.error("--events is required (or link Google Calendar / use --demo)")
         if args.fetch:
