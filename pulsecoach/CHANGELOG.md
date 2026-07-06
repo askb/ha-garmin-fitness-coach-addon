@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-07-06
+
+### Added
+
+- **Meeting stress leaderboard.** Scores each calendar meeting's heart-rate
+  elevation against a ±90-min local baseline (dbpm/z/elev) and ranks
+  attendees by ridge marginal effect to de-confound co-attendance. New
+  auth-server endpoints `POST /auth/meeting-stress` and
+  `GET /auth/meeting-stress-status`; results land in
+  `/share/pulsecoach/` (JSON + CSVs) and power the app's Stress Board
+  screen.
+- **Google Calendar linking.** Drop a `gcal-token.json` (generated once by
+  `scripts/generate-gcal-token.py`, read-only calendar scope) into
+  `/share/pulsecoach/` — the addon adopts it into `/data` (0600) and pulls
+  meetings with attendees live from the Calendar API. Falls back to a
+  `calendar_events.json` file (see `scripts/ics_to_events.py`).
+- **Bundled app updated to v0.20.0** with the Stress Board screen.
+
 ### Security
 
 - **Removed optional direct port mapping (`3000/tcp`).** The web UI relies
