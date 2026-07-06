@@ -431,8 +431,11 @@ def trigger_meeting_stress() -> tuple[Response, int] | Response:
             message=f"Drop your calendar export at {events_file} first "
                     "(see scripts/ics_to_events.py in the repo)",
         ), 400
-    if not os.path.exists(os.path.join(TOKEN_DIR, "oauth1_token.json")) and \
-            not os.path.exists(os.path.join(TOKEN_DIR, "garmin_tokens.json")):
+    has_tokens = any(
+        os.path.exists(os.path.join(TOKEN_DIR, name))
+        for name in ("garmin_tokens.json", "oauth1_token.json", "oauth2_token.json")
+    )
+    if not has_tokens:
         return jsonify(success=False, message="Not connected to Garmin"), 400
 
     status_file = os.path.join(TOKEN_DIR, ".meeting_stress_status")

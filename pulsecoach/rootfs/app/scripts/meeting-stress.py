@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2026 The Linux Foundation
+# SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
 ##############################################################################
 # Meeting Stress Leaderboard — which coworker spikes my heart rate.
 #
@@ -254,6 +254,8 @@ def write_csvs(meetings: list[dict], people: list[dict], outdir: str) -> None:
 def load_hr_cache(cache_dir: str) -> HrSeries:
     """Load every cache/hr_*.json ([[epoch_s, bpm], ...]) into one sorted series."""
     series: HrSeries = []
+    if not os.path.isdir(cache_dir):
+        return series  # first run without --fetch: fall through to friendly error
     for name in sorted(os.listdir(cache_dir)):
         if name.startswith("hr_") and name.endswith(".json"):
             with open(os.path.join(cache_dir, name)) as f:
@@ -282,7 +284,8 @@ def _migrate_garth_tokens(token_dir: str) -> None:
     client_id = ""
     try:
         part = access_token.split(".")[1]
-        jwt = json.loads(base64.b64decode(part + "=" * (4 - len(part) % 4)))
+        pad = -len(part) % 4
+        jwt = json.loads(base64.urlsafe_b64decode(part + "=" * pad))
         client_id = jwt.get("client_id", "")
     except Exception:
         pass

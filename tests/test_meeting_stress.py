@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2026 The Linux Foundation
+# SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
 """Self-check for meeting_stress: baseline math + ridge de-confounding.
 
 Run: python -m pytest tests/test_meeting_stress.py   (or: python tests/test_meeting_stress.py)

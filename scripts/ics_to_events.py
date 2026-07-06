@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2026 The Linux Foundation
+# SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
 ##############################################################################
 # Convert a Google Calendar .ics export into calendar_events.json for
 # meeting_stress.py. Expands recurring events (RRULE/EXDATE), keeps only
@@ -25,10 +25,15 @@ except ImportError:
     raise SystemExit(1)
 
 
+def _strip_mailto(value: str) -> str:
+    """Remove mailto: prefix case-insensitively (Google exports use MAILTO: too)."""
+    return value[7:] if value[:7].lower() == "mailto:" else value
+
+
 def _name(att) -> str:
     """Prefer CN display name, fall back to the email local part."""
     cn = att.params.get("CN", "")
-    email = str(att).removeprefix("mailto:")
+    email = _strip_mailto(str(att))
     if cn and "@" not in cn:
         return cn
     return email.split("@")[0]
@@ -54,7 +59,7 @@ def convert(ics_path: str, self_email: str, start: date, end: date) -> list[dict
             raw = [raw]
         attendees = []
         for att in raw:
-            email = str(att).removeprefix("mailto:").lower()
+            email = _strip_mailto(str(att)).lower()
             if att.params.get("PARTSTAT", "").upper() == "DECLINED":
                 continue  # they weren't there
             if att.params.get("CUTYPE", "").upper() in ("RESOURCE", "ROOM"):
