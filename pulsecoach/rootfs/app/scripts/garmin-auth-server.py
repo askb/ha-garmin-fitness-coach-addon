@@ -444,18 +444,22 @@ def recompute_status() -> Response:
 def trigger_meeting_stress() -> tuple[Response, int] | Response:
     """Score calendar meetings against Garmin HR (background run).
 
-    Reads /share/pulsecoach/calendar_events.json; writes leaderboard JSON+CSVs
+    Calendar source: a linked Google Calendar (/data/gcal-token.json) or a
+    calendar_events.json dropped in /share/pulsecoach/. Results are written
     back to /share/pulsecoach/.
     """
     import subprocess
     import time
 
     events_file = "/share/pulsecoach/calendar_events.json"
-    if not os.path.exists(events_file):
+    gcal_linked = (os.path.exists("/data/gcal-token.json")
+                   or os.path.exists("/share/pulsecoach/gcal-token.json"))
+    if not os.path.exists(events_file) and not gcal_linked:
         return jsonify(
             success=False,
-            message=f"Drop your calendar export at {events_file} first "
-                    "(see scripts/ics_to_events.py in the repo)",
+            message="No calendar source: link Google Calendar "
+                    "(scripts/generate-gcal-token.py) or drop "
+                    f"calendar_events.json at {events_file}",
         ), 400
     has_tokens = any(
         os.path.exists(os.path.join(TOKEN_DIR, name))
@@ -478,9 +482,11 @@ def trigger_meeting_stress() -> tuple[Response, int] | Response:
             json.dump({"running": True, "started": time.time()}, f)
         log_fh = open("/data/meeting-stress.log", "w", buffering=1)
         try:
+            cmd = ["python3", "/app/scripts/meeting-stress.py", "--fetch", "--no-color"]
+            if os.path.exists(events_file):
+                cmd += ["--events", events_file]
             subprocess.Popen(
-                ["python3", "/app/scripts/meeting-stress.py",
-                 "--events", events_file, "--fetch", "--no-color"],
+                cmd,
                 env=os.environ.copy(),
                 stdout=log_fh,
                 stderr=subprocess.STDOUT,
@@ -503,7 +509,12 @@ def trigger_meeting_stress() -> tuple[Response, int] | Response:
 @app.route("/auth/meeting-stress-status", methods=["GET"])
 def meeting_stress_status() -> Response:
     """Running state + latest leaderboard, if any."""
-    out: dict = {"running": False}
+    out: dict = {
+        "running": False,
+        "calendar_linked": os.path.exists("/data/gcal-token.json")
+        or os.path.exists("/share/pulsecoach/gcal-token.json"),
+        "events_file": os.path.exists("/share/pulsecoach/calendar_events.json"),
+    }
     status_file = os.path.join(TOKEN_DIR, ".meeting_stress_status")
     try:
         if os.path.exists(status_file):
