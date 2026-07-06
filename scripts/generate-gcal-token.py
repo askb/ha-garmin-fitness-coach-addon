@@ -21,6 +21,7 @@ from __future__ import annotations
 import http.server
 import json
 import secrets
+import sys
 import threading
 import urllib.parse
 import urllib.request
@@ -33,9 +34,24 @@ PORT = 8765
 OUT_FILE = "gcal-token.json"
 
 
+def _load_creds() -> tuple[str, str]:
+    """Client id+secret from a downloaded client_secret_*.json arg, or prompts."""
+    if len(sys.argv) > 1:
+        with open(sys.argv[1]) as f:
+            data = json.load(f)
+        blob = data.get("installed") or data.get("web") or {}
+        cid, csec = blob.get("client_id", ""), blob.get("client_secret", "")
+        if cid and csec:
+            if "web" in data:
+                print("NOTE: this is a 'web' OAuth client — make sure "
+                      f"http://127.0.0.1:{PORT} is in its Authorized redirect URIs.")
+            return cid, csec
+        print(f"Could not find client_id/secret in {sys.argv[1]}")
+    return input("OAuth client ID: ").strip(), input("OAuth client secret: ").strip()
+
+
 def main() -> int:
-    client_id = input("OAuth client ID: ").strip()
-    client_secret = input("OAuth client secret: ").strip()
+    client_id, client_secret = _load_creds()
     state = secrets.token_urlsafe(16)
     redirect_uri = f"http://127.0.0.1:{PORT}"
     code_holder: dict = {}
