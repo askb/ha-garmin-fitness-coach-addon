@@ -505,6 +505,48 @@ def fetch_events_gcal(days: int) -> list[dict]:
 
 
 # --------------------------------------------------------------------------- #
+# HA-logged interactions (out-of-calendar contacts)
+# --------------------------------------------------------------------------- #
+INTERACTIONS_PATH = "/share/pulsecoach/interactions.jsonl"
+
+
+def load_interactions(path: str = INTERACTIONS_PATH) -> list[dict]:
+    """Read interactions logged from Home Assistant as one-person events.
+
+    One JSON object per line: {"person": str, "minutes": num, "end": ISO8601}.
+    The window is [end - minutes, end]. Malformed lines are skipped so an
+    append-only log written by HA shell_command stays forgiving.
+    """
+    events: list[dict] = []
+    if not os.path.exists(path):
+        return events
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+                person = str(rec["person"]).strip()
+                minutes = float(rec.get("minutes", 30))
+                end_s = parse_ts(str(rec["end"]))
+            except (KeyError, ValueError, TypeError):
+                continue
+            if not person or minutes <= 0:
+                continue
+            end_dt = datetime.fromtimestamp(end_s, timezone.utc)
+            events.append({
+                "start": (end_dt - timedelta(minutes=minutes)).isoformat(),
+                "end": end_dt.isoformat(),
+                "title": f"interaction: {person}",
+                "attendees": [person],
+            })
+    if events:
+        print(f"Merged {len(events)} logged interactions")
+    return events
+
+
+# --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
 def main(argv: list[str] | None = None) -> int:
@@ -540,6 +582,7 @@ def main(argv: list[str] | None = None) -> int:
                 events = json.load(f)
         else:
             ap.error("--events is required (or link Google Calendar / use --demo)")
+        events += load_interactions()
         if args.fetch:
             dates = sorted({parse_ts(e["start"]) for e in events})
             dates = sorted({datetime.fromtimestamp(d, timezone.utc).strftime("%Y-%m-%d") for d in dates})
