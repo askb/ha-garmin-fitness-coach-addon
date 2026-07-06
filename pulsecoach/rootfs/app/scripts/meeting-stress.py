@@ -8,8 +8,9 @@
 # scores each meeting vs a local 90-min baseline (dbpm / z / elev), then fits
 # a ridge regression over attendee presence to de-confound who-attends-with-whom.
 #
-# Inputs are files only: a calendar_events.json and an HR series (cache files
-# or --demo synthetic). No audio, no recording, no calendar auth.
+# Calendar input: a linked Google Calendar (read-only OAuth token generated
+# by scripts/generate-gcal-token.py) or a calendar_events.json file. HR comes
+# from Garmin (cache files or --demo synthetic). No audio, no recording.
 #
 # stdlib only (matches repo scripts); ridge is a hand-rolled ~kxk solve.
 ##############################################################################
@@ -449,7 +450,14 @@ def fetch_events_gcal(days: int) -> list[dict]:
     }).encode()
     req = urllib.request.Request("https://oauth2.googleapis.com/token", data=body)
     with urllib.request.urlopen(req, timeout=30) as resp:
-        access = json.load(resp)["access_token"]
+        tok_resp = json.load(resp)
+    access = tok_resp.get("access_token")
+    if not access:
+        # Don't echo the payload — it may carry sensitive fields.
+        err = tok_resp.get("error", "unknown_error")
+        raise RuntimeError(
+            f"Google token refresh failed ({err}) — re-run generate-gcal-token.py"
+        )
 
     now = datetime.now(timezone.utc)
     base_params = {
@@ -472,6 +480,11 @@ def fetch_events_gcal(days: int) -> list[dict]:
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.load(resp)
+        if "error" in data:
+            err = data["error"]
+            raise RuntimeError(
+                f"Calendar API error {err.get('code')}: {err.get('message')}"
+            )
 
         for item in data.get("items", []):
             ev = _gcal_item_to_event(item)

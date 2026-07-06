@@ -55,6 +55,7 @@ def main() -> int:
     state = secrets.token_urlsafe(16)
     redirect_uri = f"http://127.0.0.1:{PORT}"
     code_holder: dict = {}
+    got_callback = threading.Event()
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):  # noqa: N802
@@ -68,6 +69,7 @@ def main() -> int:
             self.send_header("Content-Type", "text/plain")
             self.end_headers()
             self.wfile.write(msg)
+            got_callback.set()
 
         def log_message(self, *a):  # silence request logging
             pass
@@ -87,7 +89,8 @@ def main() -> int:
     url = f"{AUTH_URL}?{params}"
     print(f"\nOpening browser for consent...\n{url}\n")
     webbrowser.open(url)
-    input("Press Enter after approving in the browser... ")
+    print("Waiting for browser approval (up to 5 minutes)...")
+    got_callback.wait(timeout=300)
 
     code = code_holder.get("code")
     if not code:
