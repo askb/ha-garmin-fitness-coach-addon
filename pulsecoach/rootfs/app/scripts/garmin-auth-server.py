@@ -440,5 +440,86 @@ def recompute_status() -> Response:
     return jsonify({"running": False})
 
 
+@app.route("/auth/meeting-stress", methods=["POST"])
+def trigger_meeting_stress() -> tuple[Response, int] | Response:
+    """Score calendar meetings against Garmin HR (background run).
+
+    Reads /share/pulsecoach/calendar_events.json; writes leaderboard JSON+CSVs
+    back to /share/pulsecoach/.
+    """
+    import subprocess
+    import time
+
+    events_file = "/share/pulsecoach/calendar_events.json"
+    if not os.path.exists(events_file):
+        return jsonify(
+            success=False,
+            message=f"Drop your calendar export at {events_file} first "
+                    "(see scripts/ics_to_events.py in the repo)",
+        ), 400
+    has_tokens = any(
+        os.path.exists(os.path.join(TOKEN_DIR, name))
+        for name in ("garmin_tokens.json", "oauth1_token.json", "oauth2_token.json")
+    )
+    if not has_tokens:
+        return jsonify(success=False, message="Not connected to Garmin"), 400
+
+    status_file = os.path.join(TOKEN_DIR, ".meeting_stress_status")
+    try:
+        if os.path.exists(status_file):
+            with open(status_file) as f:
+                if json.load(f).get("running"):
+                    return jsonify(success=False, message="Already running"), 409
+    except Exception:
+        pass
+
+    try:
+        with open(status_file, "w") as f:
+            json.dump({"running": True, "started": time.time()}, f)
+        log_fh = open("/data/meeting-stress.log", "w", buffering=1)
+        try:
+            subprocess.Popen(
+                ["python3", "/app/scripts/meeting-stress.py",
+                 "--events", events_file, "--fetch", "--no-color"],
+                env=os.environ.copy(),
+                stdout=log_fh,
+                stderr=subprocess.STDOUT,
+            )
+        finally:
+            log_fh.close()
+        log.info("Meeting stress run triggered")
+        return jsonify(success=True, message="Meeting stress run started",
+                       results="/share/pulsecoach/meeting_stress.json")
+    except Exception as exc:
+        try:
+            with open(status_file, "w") as f:
+                json.dump({"running": False, "error": str(exc)}, f)
+        except OSError:
+            pass
+        log.error("Failed to trigger meeting stress: %s", exc)
+        return jsonify(success=False, message=f"Failed: {exc}"), 500
+
+
+@app.route("/auth/meeting-stress-status", methods=["GET"])
+def meeting_stress_status() -> Response:
+    """Running state + latest leaderboard, if any."""
+    out: dict = {"running": False}
+    status_file = os.path.join(TOKEN_DIR, ".meeting_stress_status")
+    try:
+        if os.path.exists(status_file):
+            with open(status_file) as f:
+                out.update(json.load(f))
+    except Exception:
+        pass
+    try:
+        results = "/share/pulsecoach/meeting_stress.json"
+        if os.path.exists(results):
+            with open(results) as f:
+                out["results"] = json.load(f)
+    except Exception:
+        pass
+    return jsonify(out)
+
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=8099)
