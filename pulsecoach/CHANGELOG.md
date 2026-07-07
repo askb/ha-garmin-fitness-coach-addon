@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-07-07
+
+### Added
+
+- **Stress Board mask toggle** (bundled app v0.21.0) — one-tap privacy
+  mode for screenshots: attendees render as stable initials and meeting
+  titles as generic labels. Real names remain the default.
+
 ## [0.20.3] - 2026-07-07
 
 ### Security
