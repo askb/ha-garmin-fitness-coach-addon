@@ -46,6 +46,10 @@ your local network.
   averages and notable-change detection
 - 🩺 **Readiness Score** — Evidence-based daily score (0-100) using HRV, sleep,
   training load, and stress (Buchheit 2014)
+- 🚨 **Stress Board** — Scores calendar meetings against your heart rate
+  (90-min local baseline, ridge regression over attendees) to rank which
+  people spike — or calm — your HR; links Google Calendar and merges
+  HA-logged out-of-calendar interactions
 - 🔒 **Fully Private** — All data stays local; AI runs on your hardware
 
 ## Screenshots
@@ -167,6 +171,17 @@ graph TD
     PG --> NextJS
     NextJS -.-> Ollama
     NextJS -.-> HA
+
+    GCal["Google Calendar API"]
+    Stress["meeting-stress.py<br/>(on demand)"]
+    Share["/share/pulsecoach<br/>events · interactions · results"]
+
+    Auth -->|POST /auth/meeting-stress| Stress
+    GCal -.->|attendees| Stress
+    Garmin -.->|all-day HR| Stress
+    Share --> Stress
+    Stress --> Share
+    NextJS -->|Stress Board UI| Auth
 ```
 
 ```text
