@@ -102,11 +102,58 @@ fetches up to 6 years of historical data.
 | **Coach** | AI specialist agents (sport scientist, psychologist, nutritionist, recovery coach) |
 | **Power** | Critical power curve, power-duration chart, W′ |
 | **Zones** | HR zone distribution, Seiler polarization index, calendar heatmap |
+| **Stress Board** | Meeting stress leaderboard — per-person ridge marginal effects (calming ↔ stress) and per-meeting dbpm / z / elevation vs a ±90-min local HR baseline |
 | **Settings** | Garmin account connection, AI backend configuration, sync controls |
 
 A visual walkthrough of the main pages — Home, Fitness, Training,
 Zones, Trends, and the AI Coach — is in the
 [repository README](https://github.com/askb/ha-garmin-fitness-coach-addon#screenshots).
+
+## Stress Board (Meeting Stress Leaderboard)
+
+Ranks the people you meet by their marginal effect on your heart rate.
+Inspired by the viral "I hooked my Whoop to my work calendar" experiment —
+but using Garmin's all-day HR (~2-min samples), no reverse engineering.
+
+**Method:** each meeting is scored against a ±90-min local HR baseline
+(excluding other meetings): `dbpm` (mean elevation), `z` (significance),
+`elev` (% of samples above baseline). A ridge regression over the
+meetings × attendees matrix then estimates each person's marginal bpm
+effect, de-confounding people who co-attend (your manager isn't blamed
+just for being in every meeting). People with n < 3 meetings are marked
+*thin data*; meetings with more than 8 attendees are skipped as noise.
+
+### Calendar sources (any combination)
+
+1. **Linked Google Calendar (recommended)** — one-time setup:
+   1. Create an OAuth client (Desktop type) in Google Cloud Console and
+      enable the Calendar API.
+   2. On your computer run
+      `python3 scripts/generate-gcal-token.py <client_secret.json>`
+      (from this repo) — browser consent, read-only calendar scope.
+   3. Copy the resulting `gcal-token.json` to `/share/pulsecoach/`.
+      The addon adopts it into `/data` (0600) on the next run.
+2. **Events file** — export an `.ics`, convert with
+   `python3 scripts/ics_to_events.py export.ics --self you@example.org`,
+   and drop `calendar_events.json` in `/share/pulsecoach/`.
+3. **HA-logged interactions** — log out-of-calendar contacts (coffee
+   chats, family visits) to `/share/pulsecoach/interactions.jsonl` via an
+   HA `shell_command`; one JSON object per line:
+   `{"person": "Mum", "minutes": 30, "end": "2026-07-06T18:00:00+10:00"}`.
+   A ready-made dashboard + scripts (preset buttons, freeform and
+   backdated logging) lives in the companion HA config.
+
+### Running
+
+Open **Stress Board** from the web UI menu and hit **▶ run** — or
+`POST /auth/meeting-stress` on the auth server. Results:
+`/share/pulsecoach/meeting_stress.json` plus `meeting_scores.csv` and
+`person_scores.csv`. Heart rate is cached per-day in `/data/hr-cache/`.
+
+**Caveats:** correlation ≠ causation — treat it as a conversation piece,
+not evidence. Raw HR also rises from *talking* (1:1s where you speak a
+lot score higher). Accuracy improves mainly with more weeks of data and
+consistent watch wear.
 
 ## HA Sensors
 
@@ -149,6 +196,12 @@ health data is sent to external servers.
   (e.g., OpenAI) depending on your setup.
 - **AI Coaching** (`ollama`): All inference runs locally on your hardware.
 - **AI Coaching** (`none`): No external calls of any kind.
+- **Stress Board / Google Calendar**: the OAuth token is read-only
+  (`calendar.readonly`), stored at `/data/gcal-token.json` (0600), and
+  used only to fetch your own events + attendee names. Leaderboards are
+  computed locally and written to `/share/pulsecoach/` — they contain
+  **other people's names**; treat the CSVs as private and think twice
+  before sharing screenshots with unmasked names.
 
 ## Support
 
