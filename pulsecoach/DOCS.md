@@ -145,8 +145,11 @@ there instead.
 
 ## Privacy
 
-All data processing happens **locally** on your Home Assistant instance. No
-health data is sent to external servers.
+All data **processing** happens locally on your Home Assistant instance.
+The only external exchanges are the ones you configure: fetching your own
+data from Garmin Connect (and optionally Google Calendar), and — only if
+you pick a cloud Conversation agent — AI coaching prompts. Nothing else
+leaves your network.
 
 - **Garmin Connect**: The addon authenticates directly against Garmin
   Connect; data flows only between Garmin's servers and your HA instance.
