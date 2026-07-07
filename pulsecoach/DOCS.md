@@ -171,27 +171,43 @@ The addon pushes a set of Home Assistant sensors via the Supervisor API, includi
 | `sensor.pulsecoach_sleep_debt` | Accumulated sleep debt (hours) |
 | `sensor.pulsecoach_data_quality` | Unresolved sync-gap count (state) with `missing_days_14d`, `stale_days`, `field_gaps`, `status` (`ok`/`warn`/`error`) attributes |
 
-## Resource Usage
+## Hardware Requirements & Resource Usage
+
+**Minimum supported hardware: Raspberry Pi 4 (or any amd64/aarch64 box)
+with 2–4 GiB of RAM free for add-ons.** The addon runs a full stack —
+PostgreSQL 16, a Next.js server, and several Python services — so
+boards below an RPi 4 (or heavily loaded 2 GiB systems) will struggle.
 
 | Component | RAM | CPU |
 |---|---|---|
 | Next.js server | ~80 MB | < 1 % idle |
-| PostgreSQL database | ~30 MB | < 1 % |
-| Garmin sync (periodic) | ~30 MB peak | burst |
-| **Total** | **~140 MB** | **< 2 % idle** |
+| PostgreSQL database | ~30 MB (grows with history) | < 1 % |
+| Garmin sync / metrics (periodic) | ~30–100 MB peak | burst |
+| **Steady state** | **~150–300 MB** | **< 2 % idle** |
 
-The addon requires a minimum of **256 MB** available RAM. Running the
-`ollama` backend locally will need additional resources depending on the
-model size.
+Storage: allow **~5 GB** for the PostgreSQL data volume as multi-year
+history accumulates. Running the `ollama` AI backend locally is a
+separate, much larger requirement (model dependent — typically 8 GB+)
+and is not recommended on an RPi 4; use `ha_conversation` or `none`
+there instead.
 
 ## Privacy
 
-All data processing happens **locally** on your Home Assistant instance. No
-health data is sent to external servers.
+All data **processing** happens locally on your Home Assistant instance.
+The only external exchanges are the ones you configure: fetching your own
+data from Garmin Connect (and optionally Google Calendar), and — only if
+you pick a cloud Conversation agent — AI coaching prompts. Nothing else
+leaves your network.
 
-- **Garmin Connect**: The addon authenticates and fetches data using the
-  official Garmin Connect API. Data flows only between Garmin's servers and
-  your HA instance.
+- **Garmin Connect**: The addon authenticates directly against Garmin
+  Connect; data flows only between Garmin's servers and your HA instance.
+- **Unofficial API disclaimer**: the Garmin sync uses the same
+  credential-based method as the popular
+  [cyberjunky Garmin integration](https://github.com/cyberjunky/home-assistant-garmin_connect)
+  — not Garmin's partner-only developer API. Your credentials never leave
+  your Home Assistant instance, but Garmin may change or restrict this
+  access at any time, which can temporarily break syncing until the addon
+  is updated.
 - **AI Coaching** (`ha_conversation`): Prompts are sent to whatever
   Conversation agent you have configured in HA — this may be a cloud service
   (e.g., OpenAI) depending on your setup.

@@ -183,6 +183,10 @@ export OLLAMA_EMBED_MODEL="${OLLAMA_EMBED_MODEL:-nomic-embed-text}"
 export USER_TIMEZONE
 export DATABASE_URL="postgresql://postgres@127.0.0.1:5432/pulsecoach"
 export POSTGRES_URL="postgresql://postgres@127.0.0.1:5432/pulsecoach"
+# Single-user auth passthrough: HA ingress is the authentication layer, so
+# the bundled app runs with its own auth bypassed (documented single-user
+# model — see app repo #278). The variable name is historical; a rename to
+# INGRESS_AUTH_PASSTHROUGH is pending in the app repo.
 export DEV_BYPASS_AUTH="true"
 export NODE_ENV="production"
 export AUTH_SECRET="ha-addon-local-secret-$(cat /proc/sys/kernel/random/boot_id)"

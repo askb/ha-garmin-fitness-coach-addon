@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.3] - 2026-07-07
+
+### Security
+
+- **AppArmor profile added** (`apparmor.txt`) — confines the addon's
+  services (s6, PostgreSQL, Python, Node.js) and raises the HA security
+  rating.
+- **Removed redundant `DEV_BYPASS_AUTH` from the addon manifest.** The
+  variable (single-user auth passthrough behind authenticated HA ingress)
+  was exported by the service run script *and* duplicated in
+  `config.json`; the manifest copy is gone and the run script documents
+  the intent. A rename to `INGRESS_AUTH_PASSTHROUGH` is pending in the
+  app repo.
+
+### Changed
+
+- **Docs**: hardware requirements (minimum Raspberry Pi 4 class,
+  2–4 GiB RAM free, ~5 GB storage) and a Garmin unofficial-API
+  disclaimer.
+
 ## [0.20.2] - 2026-07-06
 
 ### Added
