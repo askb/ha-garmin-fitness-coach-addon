@@ -132,7 +132,8 @@ just for being in every meeting). People with n < 3 meetings are marked
       `python3 scripts/generate-gcal-token.py <client_secret.json>`
       (from this repo) — browser consent, read-only calendar scope.
    3. Copy the resulting `gcal-token.json` to `/share/pulsecoach/`.
-      The addon adopts it into `/data` (0600) on the next run.
+      The next **Stress Board run** (not an addon restart) adopts it
+      into `/data` with 0600 permissions.
 2. **Events file** — export an `.ics`, convert with
    `python3 scripts/ics_to_events.py export.ics --self you@example.org`,
    and drop `calendar_events.json` in `/share/pulsecoach/`.

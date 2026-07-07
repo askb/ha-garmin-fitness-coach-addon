@@ -174,7 +174,7 @@ graph TD
 
     GCal["Google Calendar API"]
     Stress["meeting-stress.py<br/>(on demand)"]
-    Share[("/share/pulsecoach<br/>events · interactions · results")]
+    Share["/share/pulsecoach<br/>events · interactions · results"]
 
     Auth -->|POST /auth/meeting-stress| Stress
     GCal -.->|attendees| Stress
