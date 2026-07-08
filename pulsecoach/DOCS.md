@@ -123,6 +123,13 @@ effect, de-confounding people who co-attend (your manager isn't blamed
 just for being in every meeting). People with n < 3 meetings are marked
 *thin data*; meetings with more than 8 attendees are skipped as noise.
 
+The **🙈 mask toggle** (top-right of the board) aliases every attendee to
+initials and rewrites meeting titles to `meeting #N`, so you can share a
+screenshot without leaking who's who — this is the masked view (demo
+data, all fictional):
+
+![Stress Board — masked view with demo data](../docs/screenshots/stress-board-desktop.png)
+
 ### Calendar sources (any combination)
 
 1. **Linked Google Calendar (recommended)** — one-time setup:
