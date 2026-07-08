@@ -128,6 +128,21 @@ fallback), and missing-window diagnostics so you can spot sync gaps.
 
 ![Validation dashboard](docs/screenshots/validation-desktop.png)
 
+### Stress Board — Meeting stress leaderboard
+Correlates calendar meetings and their attendees against your heart
+rate to rank who spikes (or calms) it. Per-person **ridge marginal
+effect** de-confounds co-attendance, and per-meeting `dbpm` / `z` /
+`elev` are scored against a ±90-min local HR baseline. The **🙈 mask
+toggle** aliases every name to initials and collapses meeting titles to
+`meeting #N` for shareable screenshots — the capture below is the masked
+view with synthetic demo data (all people and meetings are fictional).
+
+![Stress Board (masked, demo data)](docs/screenshots/stress-board-desktop.png)
+
+> Correlation ≠ causation — a leaderboard for laughs, not a clinical HR
+> readout. Thin data (n < 3) ranks are noise. Idea credit:
+> [@the2ndfloorguy](https://x.com/the2ndfloorguy).
+
 ## Architecture
 
 ```mermaid
