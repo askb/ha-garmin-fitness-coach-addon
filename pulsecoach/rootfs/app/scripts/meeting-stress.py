@@ -83,25 +83,56 @@ def _pstdev(xs: list[float]) -> float:
 # Per-meeting scoring
 # --------------------------------------------------------------------------- #
 def score_meetings(events: list[dict], series: HrSeries,
-                   max_attendees: int = DEFAULT_MAX_ATTENDEES) -> list[dict]:
-    """Score each usable meeting vs its local baseline. Returns rows with dbpm/z/elev."""
+                   max_attendees: int = DEFAULT_MAX_ATTENDEES,
+                   skipped: list[dict] | None = None) -> list[dict]:
+    """Score each usable meeting vs its local baseline. Returns rows with dbpm/z/elev.
+
+    When ``skipped`` is provided, every event that can't be scored is appended
+    to it as a dict with keys ``title``, ``attendees`` and ``reason`` so callers
+    can tell the user *why* something (e.g. a just-logged interaction) never
+    reached the board.
+    """
     intervals = [(parse_ts(e["start"]), parse_ts(e["end"])) for e in events]
     win = BASELINE_MIN * 60
     rows: list[dict] = []
 
+    def _skip(ev: dict, attendees: list[str], reason: str) -> None:
+        if skipped is not None:
+            skipped.append({
+                "title": ev.get("title", "(untitled)"),
+                # town-halls can carry hundreds of attendees; the summary only
+                # needs a sample, so cap to keep meeting_stress.json small.
+                "attendees": attendees[:20],
+                "reason": reason,
+            })
+
     for idx, ev in enumerate(events):
         attendees = [a for a in ev.get("attendees", []) if a]
-        if not attendees or len(attendees) > max_attendees:
-            continue  # solo or town-hall: skip
+        if not attendees:
+            _skip(ev, attendees, "no_attendees")
+            continue  # solo: skip
+        if len(attendees) > max_attendees:
+            _skip(ev, attendees, "too_many_attendees")
+            continue  # town-hall: skip
         s, e = intervals[idx]
         if e - s >= 6 * 3600:
+            _skip(ev, attendees, "too_long")
             continue  # all-day / multi-hour block: skip
 
         meeting = _bpm_between(series, s, e)
+        if not meeting:
+            # No HR inside the meeting window — usually the window isn't synced
+            # yet (e.g. an interaction logged for "right now"). Resolvable by a
+            # Garmin sync + re-run.
+            _skip(ev, attendees, "no_hr")
+            continue
         # baseline = surrounding window minus *every* meeting (incl. this one)
         base = _bpm_baseline(series, s - win, e + win, intervals)
-        if not meeting or len(base) < MIN_BASELINE_SAMPLES:
-            continue  # not enough signal
+        if len(base) < MIN_BASELINE_SAMPLES:
+            # HR exists but too little quiet surrounding time to form a baseline
+            # (e.g. back-to-back meetings). Waiting for a sync won't fix this.
+            _skip(ev, attendees, "thin_baseline")
+            continue
 
         mean_m, mean_b = _mean(meeting), _mean(base)
         std_b = max(_pstdev(base), 1.0)  # floor: avoid div-by-zero / z blow-up
@@ -230,10 +261,43 @@ def print_report(meetings: list[dict], people: list[dict], color: bool) -> None:
     print()
 
 
-def write_csvs(meetings: list[dict], people: list[dict], outdir: str) -> None:
+def summarize_skipped(skipped: list[dict]) -> dict:
+    """Roll skipped events into a compact summary the UI can act on.
+
+    ``no_hr`` is the actionable bucket: events (often just-logged
+    interactions) dropped because Garmin hadn't synced heart rate for that
+    window yet — resolvable by a sync + re-run. ``thin_baseline`` (too little
+    surrounding quiet time, e.g. back-to-back meetings) and structural skips
+    (solo / town-hall / all-day) are counted in ``by_reason`` but not surfaced
+    as "wait for sync", since waiting won't fix them.
+    """
+    by_reason: dict[str, int] = {}
+    for s in skipped:
+        by_reason[s["reason"]] = by_reason.get(s["reason"], 0) + 1
+    no_hr = [s for s in skipped if s["reason"] == "no_hr"]
+    interactions_no_hr = sum(
+        1 for s in no_hr if str(s["title"]).startswith("interaction: ")
+    )
+    return {
+        "total": len(skipped),
+        "by_reason": by_reason,
+        "no_hr": len(no_hr),
+        "interactions_no_hr": interactions_no_hr,
+        # human-readable titles for the actionable ones (interactions un-prefixed)
+        "no_hr_titles": [
+            str(s["title"]).removeprefix("interaction: ") for s in no_hr
+        ][:10],
+    }
+
+
+def write_csvs(meetings: list[dict], people: list[dict], outdir: str,
+               skipped_summary: dict | None = None) -> None:
+    payload: dict = {"generated": datetime.now(timezone.utc).isoformat(),
+                     "meetings": meetings, "people": people}
+    if skipped_summary is not None:
+        payload["skipped"] = skipped_summary
     with open(os.path.join(outdir, "meeting_stress.json"), "w") as f:
-        json.dump({"generated": datetime.now(timezone.utc).isoformat(),
-                   "meetings": meetings, "people": people}, f, indent=1)
+        json.dump(payload, f, indent=1)
     with open(os.path.join(outdir, "meeting_scores.csv"), "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["dbpm", "z", "elev", "title", "attendees"])
@@ -597,16 +661,27 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         return 1
 
-    meetings = score_meetings(events, series, args.max_attendees)
-    if not meetings:
-        print("No scorable meetings (all solo / too big / outside HR coverage).", file=sys.stderr)
-        return 1
-    people = leaderboard(meetings, args.lam)
+    skipped: list[dict] = []
+    meetings = score_meetings(events, series, args.max_attendees, skipped=skipped)
+    summary = summarize_skipped(skipped)
+    people = leaderboard(meetings, args.lam) if meetings else []
 
     color = sys.stdout.isatty() and not args.no_color
-    print_report(meetings, people, color)
-    write_csvs(meetings, people, args.outdir)
-    return 0
+    if meetings:
+        print_report(meetings, people, color)
+    else:
+        print("No scorable meetings yet — see the skipped summary in "
+              "meeting_stress.json for per-event reasons.",
+              file=sys.stderr)
+    if summary["no_hr"]:
+        note = f"{summary['no_hr']} event(s) had no heart-rate coverage yet"
+        if summary["interactions_no_hr"]:
+            note += f" (incl. {summary['interactions_no_hr']} logged interaction(s))"
+        print(note + " — they'll appear after the next Garmin sync + re-run.",
+              file=sys.stderr)
+    # Always persist results (even empty) so the UI can surface the skip notice.
+    write_csvs(meetings, people, args.outdir, summary)
+    return 0 if meetings else 1
 
 
 def _clear_status() -> None:

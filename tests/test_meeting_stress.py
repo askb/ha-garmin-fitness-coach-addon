@@ -130,9 +130,73 @@ def test_interactions_jsonl():
     assert ms.load_interactions("/nonexistent/interactions.jsonl") == []
 
 
+def test_skipped_reports_no_hr_interactions():
+    """Interactions with no HR coverage are dropped but reported, not silent."""
+    # One scorable calendar meeting (has surrounding HR) + one interaction that
+    # falls entirely outside the HR series (as when logged before today synced).
+    meet_start = DAY.replace(hour=9)
+    meet_end = meet_start + timedelta(minutes=40)
+    inter_start = DAY.replace(hour=20)  # after the series ends -> no HR
+    inter_end = inter_start + timedelta(minutes=30)
+    events = [
+        {"start": meet_start.isoformat(), "end": meet_end.isoformat(),
+         "title": "standup", "attendees": ["alice", "bob"]},
+        {"start": inter_start.isoformat(), "end": inter_end.isoformat(),
+         "title": "interaction: Mum", "attendees": ["Mum"]},
+    ]
+    # 07:00 -> 11:00 HR backbone (covers the meeting, not the evening interaction).
+    day7 = int(DAY.replace(hour=7).timestamp())
+    series = [(day7 + k * 60, 62.0) for k in range(0, 4 * 60, 2)]
+
+    skipped: list[dict] = []
+    rows = ms.score_meetings(events, series, skipped=skipped)
+    # meeting scored, interaction dropped for no HR.
+    assert len(rows) == 1 and rows[0]["title"] == "standup", rows
+    reasons = [s["reason"] for s in skipped]
+    assert "no_hr" in reasons, skipped
+
+    summary = ms.summarize_skipped(skipped)
+    assert summary["no_hr"] == 1, summary
+    assert summary["interactions_no_hr"] == 1, summary
+    assert "Mum" in summary["no_hr_titles"], summary  # prefix stripped
+
+
+def test_thin_baseline_is_distinct_from_no_hr():
+    """A meeting with HR but too little surrounding quiet time is thin_baseline,
+    not no_hr — so the 'wait for sync' message stays accurate."""
+    # HR exists only for a narrow 20-min band == the meeting itself, so the
+    # ±90-min baseline has almost no samples outside the meeting.
+    m_start = DAY.replace(hour=9)
+    m_end = m_start + timedelta(minutes=20)
+    events = [{"start": m_start.isoformat(), "end": m_end.isoformat(),
+               "title": "standup", "attendees": ["alice", "bob"]}]
+    series = [(int(m_start.timestamp()) + k * 60, 62.0) for k in range(0, 20, 2)]
+
+    skipped: list[dict] = []
+    rows = ms.score_meetings(events, series, skipped=skipped)
+    assert rows == [], rows
+    assert [s["reason"] for s in skipped] == ["thin_baseline"], skipped
+    summary = ms.summarize_skipped(skipped)
+    assert summary["no_hr"] == 0, summary            # not the sync-pending bucket
+    assert summary["by_reason"]["thin_baseline"] == 1, summary
+
+
+def test_score_meetings_without_skipped_is_backward_compatible():
+    """Omitting the skipped arg still returns just the scored rows (no crash)."""
+    events = [{"start": DAY.replace(hour=9).isoformat(),
+               "end": DAY.replace(hour=9, minute=30).isoformat(),
+               "title": "solo", "attendees": []}]
+    series = [(int(DAY.replace(hour=7).timestamp()) + k * 60, 62.0)
+              for k in range(0, 600, 2)]
+    assert ms.score_meetings(events, series) == []
+
+
 if __name__ == "__main__":
     test_ridge_deconfounds_bystander()
     test_solo_and_oversize_meetings_skipped()
     test_gcal_item_mapping()
     test_interactions_jsonl()
+    test_skipped_reports_no_hr_interactions()
+    test_thin_baseline_is_distinct_from_no_hr()
+    test_score_meetings_without_skipped_is_backward_compatible()
     print("ok")
