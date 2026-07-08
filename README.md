@@ -131,25 +131,28 @@ fallback), and missing-window diagnostics so you can spot sync gaps.
 ## Architecture
 
 ```mermaid
-graph TD
-    subgraph "Home Assistant OS"
-        subgraph "PulseCoach Addon (s6-overlay)"
-            S6["s6-overlay init"]
-            PG["postgresql<br/>(longrun)"]
-            Auth["garmin-auth<br/>(longrun, Flask :8099)"]
-            GC["pulsecoach orchestrator<br/>(longrun)"]
-            Sync["garmin-sync.py<br/>(loop, every N min)"]
-            Metrics["metrics-compute.py<br/>(120s delay, every 60 min)"]
-            Notify["ha-notify.py<br/>(180s delay, every 30 min)"]
-            NextJS["Next.js standalone<br/>(:3001)"]
-            Ingress["ingress-proxy<br/>(:3000 → :3001)"]
-            Monitor["process monitor<br/>(every 60s)"]
+flowchart TD
+    subgraph HAOS["🏠 Home Assistant OS"]
+        subgraph ADDON["📦 PulseCoach Addon · s6-overlay"]
+            S6["⚙️ s6-overlay init"]
+            PG[("🐘 postgresql<br/>longrun")]
+            Auth["🔐 garmin-auth<br/>Flask :8099"]
+            GC["🎛️ pulsecoach orchestrator<br/>longrun"]
+            Sync["🔄 garmin-sync.py<br/>loop · every N min"]
+            Metrics["📊 metrics-compute.py<br/>120s delay · every 60 min"]
+            Notify["🔔 ha-notify.py<br/>180s delay · every 30 min"]
+            NextJS["▲ Next.js standalone<br/>:3001"]
+            Ingress["🔀 ingress-proxy<br/>:3000 → :3001"]
+            Monitor["🩺 process monitor<br/>every 60s"]
+            Stress["💓 meeting-stress.py<br/>on demand"]
+            Share[/"📁 /share/pulsecoach<br/>events · interactions · results"/]
         end
-        HA["Home Assistant Core"]
-        Ollama["Ollama Addon<br/>(optional)"]
+        HA["🏡 Home Assistant Core"]
+        Ollama["🦙 Ollama Addon<br/>optional"]
     end
 
-    Garmin["Garmin Connect API"]
+    Garmin["⌚ Garmin Connect API"]
+    GCal["📅 Google Calendar API"]
 
     S6 --> PG
     S6 --> Auth
@@ -172,16 +175,35 @@ graph TD
     NextJS -.-> Ollama
     NextJS -.-> HA
 
-    GCal["Google Calendar API"]
-    Stress["meeting-stress.py<br/>(on demand)"]
-    Share["/share/pulsecoach<br/>events · interactions · results"]
-
     Auth -->|POST /auth/meeting-stress| Stress
     GCal -.->|attendees| Stress
     Garmin -.->|all-day HR| Stress
     Share --> Stress
     Stress --> Share
     NextJS -->|Stress Board UI| Auth
+
+    classDef init fill:#f59e0b,stroke:#b45309,color:#1a1200,stroke-width:1px;
+    classDef store fill:#2563eb,stroke:#1e40af,color:#eff6ff,stroke-width:1px;
+    classDef service fill:#8b5cf6,stroke:#6d28d9,color:#f5f3ff,stroke-width:1px;
+    classDef orch fill:#0d9488,stroke:#0f766e,color:#ecfeff,stroke-width:1px;
+    classDef pyjob fill:#22c55e,stroke:#15803d,color:#04240f,stroke-width:1px;
+    classDef proxy fill:#64748b,stroke:#475569,color:#f8fafc,stroke-width:1px;
+    classDef external fill:#f43f5e,stroke:#be123c,color:#fff1f2,stroke-width:1px;
+    classDef ha fill:#03a9f4,stroke:#0277bd,color:#e1f5fe,stroke-width:1px;
+    classDef local fill:#6366f1,stroke:#4338ca,color:#eef2ff,stroke-width:1px;
+
+    class S6 init;
+    class PG,Share store;
+    class Auth,NextJS service;
+    class GC orch;
+    class Sync,Metrics,Notify,Stress pyjob;
+    class Ingress,Monitor proxy;
+    class Garmin,GCal external;
+    class Ollama local;
+    class HA ha;
+
+    style HAOS fill:#0f172a,stroke:#334155,color:#e2e8f0;
+    style ADDON fill:#111827,stroke:#374151,color:#e5e7eb;
 ```
 
 ```text
