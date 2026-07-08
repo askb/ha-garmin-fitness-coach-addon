@@ -144,6 +144,13 @@ just for being in every meeting). People with n < 3 meetings are marked
    A ready-made dashboard + scripts (preset buttons, freeform and
    backdated logging) lives in the companion HA config.
 
+   > **Interactions only appear after a run *and* once heart rate exists
+   > for that time.** A contact you log for *right now* won't score until
+   > Garmin syncs that window — the board shows a "⚠ N events had no
+   > heart-rate coverage yet (incl. logged interactions)" notice and picks
+   > them up on the next **▶ run**. Backdate the `end` to a time you've
+   > already synced to see it immediately.
+
 ### Running
 
 Open **Stress Board** from the web UI menu and hit **▶ run** — or
