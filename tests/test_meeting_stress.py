@@ -15,6 +15,11 @@ _spec = importlib.util.spec_from_file_location("meeting_stress", _SCRIPT)
 ms = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ms)
 
+_GCAL = _SCRIPT.with_name("gcal.py")
+_gspec = importlib.util.spec_from_file_location("gcal", _GCAL)
+gcal = importlib.util.module_from_spec(_gspec)
+_gspec.loader.exec_module(gcal)
+
 DAY = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
 
@@ -102,11 +107,56 @@ def test_gcal_item_mapping():
             {"email": "carol@x.org"},
         ],
     }
-    ev = ms._gcal_item_to_event(item)
+    ev = gcal._item_to_event(item)
     assert ev["attendees"] == ["Alice", "carol"], ev
     # all-day events (date, no dateTime) are dropped
-    assert ms._gcal_item_to_event({"start": {"date": "2026-07-01"},
-                                   "end": {"date": "2026-07-02"}}) is None
+    assert gcal._item_to_event({"start": {"date": "2026-07-01"},
+                                "end": {"date": "2026-07-02"}}) is None
+
+
+def test_gcal_fetch_multi_calendar_dedup(monkeypatch):
+    """fetch_events() merges selected calendars and dedups by (iCalUID, start)."""
+
+    def _item(uid, hour, title, who):
+        return {
+            "iCalUID": uid,
+            "summary": title,
+            "start": {"dateTime": f"2026-07-01T{hour:02d}:00:00+10:00"},
+            "end": {"dateTime": f"2026-07-01T{hour:02d}:30:00+10:00"},
+            "attendees": [{"email": f"{who}@x.org"}],
+        }
+
+    # Same meeting (uid-shared) appears on both calendars; each also has a
+    # unique meeting. Dedup must keep the shared one exactly once → 3 total.
+    per_cal = {
+        "primary": [_item("uid-shared", 9, "standup", "alice"),
+                    _item("uid-a", 10, "1:1", "bob")],
+        "team@x.org": [_item("uid-shared", 9, "standup", "alice"),
+                       _item("uid-b", 11, "review", "carol")],
+    }
+    monkeypatch.setattr(gcal, "load_token", lambda: {"ok": True})
+    monkeypatch.setattr(gcal, "_refresh_access_token", lambda tok: "access")
+    monkeypatch.setattr(gcal, "selected_calendar_ids",
+                        lambda: ["primary", "team@x.org"])
+    monkeypatch.setattr(gcal, "_list_events_for_calendar",
+                        lambda access, cid, days: per_cal[cid])
+
+    events = gcal.fetch_events(14)
+    titles = sorted(e["title"] for e in events)
+    assert titles == ["1:1", "review", "standup"], titles
+
+    # Recurring series: two occurrences share one iCalUID (singleEvents=true)
+    # but differ by start — they must NOT be de-duplicated into one.
+    rec = [
+        _item("uid-rec", 9, "weekly", "alice"),
+        {**_item("uid-rec", 9, "weekly", "alice"),
+         "start": {"dateTime": "2026-07-08T09:00:00+10:00"},
+         "end": {"dateTime": "2026-07-08T09:30:00+10:00"}},
+    ]
+    monkeypatch.setattr(gcal, "selected_calendar_ids", lambda: ["primary"])
+    monkeypatch.setattr(gcal, "_list_events_for_calendar",
+                        lambda access, cid, days: rec)
+    assert len(gcal.fetch_events(14)) == 2
 
 
 def test_interactions_jsonl():

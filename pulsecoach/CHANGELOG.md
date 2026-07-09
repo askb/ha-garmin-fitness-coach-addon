@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-07-09
+
+### Added
+
+- **In-UI Google Calendar linking** — the addon now accepts a Google
+  Calendar token from the dashboard by pasting the `gcal-token.json`
+  produced by `scripts/generate-gcal-token.py`, so you no longer copy the
+  file into `/share`. Credentials are verified against Google before being
+  stored owner-only in `/data`, and can be cleared again with Unlink.
+- **Multiple calendars** — pick which of your Google calendars feed the
+  Stress Board (defaults to the primary calendar). Events shared across
+  calendars are de-duplicated by `iCalUID` plus start time (so recurring
+  meeting instances stay distinct). New endpoints `/auth/gcal-link`,
+  `/auth/gcal-unlink`, and `/auth/gcal-calendars`; calendar fetch logic
+  moved into a shared `gcal.py` module. The dashboard UI for these lands in
+  the bundled app update.
+
 ## [0.21.0] - 2026-07-07
 
 ### Added

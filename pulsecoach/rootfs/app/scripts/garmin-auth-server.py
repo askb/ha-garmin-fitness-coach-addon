@@ -14,6 +14,8 @@ from typing import Optional
 
 from flask import Flask, Response, jsonify, request
 
+import gcal
+
 try:
     from garminconnect import Garmin
 except ImportError as exc:
@@ -528,6 +530,85 @@ def meeting_stress_status() -> Response:
     except Exception:
         pass
     return jsonify(out)
+
+
+@app.route("/auth/gcal-link", methods=["POST"])
+def gcal_link() -> tuple[Response, int] | Response:
+    """Link a Google Calendar by pasting a generate-gcal-token.py token.
+
+    Body: {client_id, client_secret, refresh_token}. The credentials are
+    verified against Google (a real refresh) before being written owner-only
+    to /data, so a bad paste fails loudly instead of silently at run time.
+    """
+    data = request.get_json(silent=True) or {}
+    client_id = str(data.get("client_id", "")).strip()
+    client_secret = str(data.get("client_secret", "")).strip()
+    refresh_token = str(data.get("refresh_token", "")).strip()
+    if not (client_id and client_secret and refresh_token):
+        return jsonify(
+            success=False,
+            message="Paste the full gcal-token.json "
+                    "(client_id, client_secret, refresh_token).",
+        ), 400
+    try:
+        gcal.validate_token(client_id, client_secret, refresh_token)
+    except gcal.GcalError as exc:
+        return jsonify(success=False,
+                       message=f"Google rejected the token: {exc}"), 400
+    try:
+        gcal.save_token(client_id, client_secret, refresh_token)
+    except gcal.GcalError as exc:
+        return jsonify(success=False, message=str(exc)), 500
+    # A successful refresh doesn't guarantee Calendar read scope, so probe the
+    # Calendar API now. If it fails, unlink so the UI never claims "linked"
+    # while the board would later fail to fetch events.
+    try:
+        gcal.list_calendars()
+    except gcal.GcalError as exc:
+        gcal.unlink()
+        return jsonify(
+            success=False,
+            message=f"Token lacks Google Calendar access: {exc}",
+        ), 400
+    log.info("Google Calendar linked via UI")
+    return jsonify(success=True, message="Google Calendar linked")
+
+
+@app.route("/auth/gcal-unlink", methods=["POST"])
+def gcal_unlink() -> tuple[Response, int] | Response:
+    """Remove the linked Google Calendar token and calendar selection."""
+    try:
+        gcal.unlink()
+        return jsonify(success=True, message="Google Calendar unlinked")
+    except OSError as exc:
+        return jsonify(success=False, message=str(exc)), 500
+
+
+@app.route("/auth/gcal-calendars", methods=["GET", "POST"])
+def gcal_calendars() -> tuple[Response, int] | Response:
+    """List the account's calendars (GET) or save the selection (POST).
+
+    GET returns [{id, summary, primary, selected}]; POST accepts
+    {calendar_ids: [...]} and persists which calendars feed the Stress Board.
+    """
+    if not gcal.linked():
+        return jsonify(success=False,
+                       message="No Google Calendar linked"), 400
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        ids = data.get("calendar_ids")
+        if not isinstance(ids, list):
+            return jsonify(success=False,
+                           message="calendar_ids must be a list"), 400
+        try:
+            gcal.save_selected([str(x) for x in ids])
+        except gcal.GcalError as exc:
+            return jsonify(success=False, message=str(exc)), 500
+        return jsonify(success=True, message="Calendar selection saved")
+    try:
+        return jsonify(success=True, calendars=gcal.list_calendars())
+    except gcal.GcalError as exc:
+        return jsonify(success=False, message=str(exc)), 502
 
 
 if __name__ == "__main__":
