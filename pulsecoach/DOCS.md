@@ -145,6 +145,20 @@ data, all fictional):
       picker lets you choose which calendars feed the board (primary by
       default; events shared across calendars are de-duplicated).
 
+      **Adding a second calendar:** the picker lists every calendar visible
+      to the linked Google account — calendars you own plus any that are
+      shared with or subscribed by that account. To feed the board from
+      another calendar (a "Work" calendar, or a teammate's/team calendar):
+      1. Make it visible to the linked account — a calendar you own already
+         is; for someone else's, have them share it with your linked account
+         and accept it at [calendar.google.com](https://calendar.google.com)
+         so it appears in that account's sidebar. (A calendar on a *different*
+         Google account only works once it's shared into the linked one — no
+         second token needed.)
+      2. Open **Stress Board → Calendars**, tick the new calendar (the
+         selection saves immediately), and it feeds the board on the next
+         **▶ run**.
+
       > No UI handy? You can still drop `gcal-token.json` into
       > `/share/pulsecoach/` — the next **Stress Board run** adopts it into
       > `/data` with 0600 permissions.
