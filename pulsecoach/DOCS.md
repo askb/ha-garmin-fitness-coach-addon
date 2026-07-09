@@ -138,9 +138,16 @@ data, all fictional):
    2. On your computer run
       `python3 scripts/generate-gcal-token.py <client_secret.json>`
       (from this repo) — browser consent, read-only calendar scope.
-   3. Copy the resulting `gcal-token.json` to `/share/pulsecoach/`.
-      The next **Stress Board run** (not an addon restart) adopts it
-      into `/data` with 0600 permissions.
+   3. Open **Stress Board** and use **Connect Google Calendar**: paste the
+      contents of the resulting `gcal-token.json` and hit **Connect**. The
+      token is verified against Google and stored at `/data/gcal-token.json`
+      (0600). Use **Unlink** to remove it later. Once linked, a **Calendars**
+      picker lets you choose which calendars feed the board (primary by
+      default; events shared across calendars are de-duplicated).
+
+      > No UI handy? You can still drop `gcal-token.json` into
+      > `/share/pulsecoach/` — the next **Stress Board run** adopts it into
+      > `/data` with 0600 permissions.
 2. **Events file** — export an `.ics`, convert with
    `python3 scripts/ics_to_events.py export.ics --self you@example.org`,
    and drop `calendar_events.json` in `/share/pulsecoach/`.
