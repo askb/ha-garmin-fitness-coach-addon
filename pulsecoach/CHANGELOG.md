@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-07-10
+
+### Added
+
+- **Configurable Stress Board lookback** — a new `meeting_lookback_days`
+  addon option (default 30, 1–365) sets how far back the Stress Board pulls
+  linked-calendar events. Because Garmin heart-rate history goes back years,
+  raising this (e.g. to 90) backfills more meetings per person, trims the
+  *thin data* (n < 3) flags, and gives the ridge de-confounding more signal
+  for steadier scores. Heart rate is still fetched per event-date and cached
+  per day, so a wider window just means a longer first run.
+
 ## [0.22.0] - 2026-07-09
 
 ### Added

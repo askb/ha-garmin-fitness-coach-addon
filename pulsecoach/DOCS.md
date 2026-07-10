@@ -75,6 +75,7 @@ fetches up to 6 years of historical data.
 | `ollama_url` | url | — | No | Ollama server URL. Required for the `ollama` chat backend, **and** for coach memory/RAG embeddings even when `ai_backend` is `ha_conversation` or `none` (the nightly memory rebuild only runs when this is set) |
 | `ollama_embed_model` | string | `nomic-embed-text` | No | Embedding model for coach memory/RAG over multi-year history. Pull it on your Ollama host; falls back to the chat model if unavailable |
 | `sync_interval_minutes` | integer | `60` | No | Garmin data sync frequency in minutes (5 – 1440) |
+| `meeting_lookback_days` | integer | `30` | No | How far back the Stress Board pulls linked-calendar events (1 – 365). Raise it (e.g. `90`) to backfill more history for better per-person stats — Garmin HR is fetched per event-date and cached, so a wider window just lengthens the first run |
 
 ## Garmin Authentication Troubleshooting
 
@@ -185,6 +186,8 @@ Open **Stress Board** from the web UI menu and hit **▶ run** — or
 `POST /auth/meeting-stress` on the auth server. Results:
 `/share/pulsecoach/meeting_stress.json` plus `meeting_scores.csv` and
 `person_scores.csv`. Heart rate is cached per-day in `/data/hr-cache/`.
+Each run scores the last `meeting_lookback_days` (default 30) of linked
+calendar events; raise that option to backfill months of history at once.
 
 **Caveats:** correlation ≠ causation — treat it as a conversation piece,
 not evidence. Raw HR also rises from *talking* (1:1s where you speak a

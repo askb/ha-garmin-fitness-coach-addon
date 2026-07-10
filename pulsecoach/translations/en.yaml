@@ -39,6 +39,10 @@
     "missed_session_grace_min": {
       "name": "Missed Session Grace Period",
       "description": "Minutes to wait before missed planned sessions are considered actionable."
+    },
+    "meeting_lookback_days": {
+      "name": "Stress Board Lookback (days)",
+      "description": "How far back the Stress Board pulls linked-calendar events (1–365). Raise it (e.g. 90) to backfill more history for better per-person stress stats."
     }
   }
 }
