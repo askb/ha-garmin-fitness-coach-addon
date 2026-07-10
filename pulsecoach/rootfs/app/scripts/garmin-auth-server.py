@@ -485,8 +485,21 @@ def trigger_meeting_stress() -> tuple[Response, int] | Response:
         log_fh = open("/data/meeting-stress.log", "w", buffering=1)
         try:
             # Script resolves the source: linked calendar > dropped events file.
+            # Lookback window comes from the addon's meeting_lookback_days
+            # option (default 30); more history = better per-person stats.
+            cmd = ["python3", "/app/scripts/meeting-stress.py",
+                   "--fetch", "--no-color"]
+            raw_days = os.environ.get("MEETING_LOOKBACK_DAYS", "").strip()
+            try:
+                days = int(raw_days)
+            except ValueError:
+                days = 0
+            if days > 0:
+                # Mirror the addon schema's 1–365 bound so a mis-set env can't
+                # trigger an unexpectedly long run.
+                cmd += ["--days", str(min(days, 365))]
             subprocess.Popen(
-                ["python3", "/app/scripts/meeting-stress.py", "--fetch", "--no-color"],
+                cmd,
                 env=os.environ.copy(),
                 stdout=log_fh,
                 stderr=subprocess.STDOUT,

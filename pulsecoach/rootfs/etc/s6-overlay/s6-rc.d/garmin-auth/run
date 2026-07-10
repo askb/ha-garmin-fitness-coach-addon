@@ -6,4 +6,6 @@
 # ==============================================================================
 
 bashio::log.info "Starting Garmin auth server on 127.0.0.1:8099..."
+MEETING_LOOKBACK_DAYS=$(bashio::config 'meeting_lookback_days' || echo "30")
+export MEETING_LOOKBACK_DAYS
 exec python3 /app/scripts/garmin-auth-server.py
