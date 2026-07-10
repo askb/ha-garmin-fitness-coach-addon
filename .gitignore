@@ -9,6 +9,11 @@ node_modules/
 .local-data/
 garmincoach/ha-garmin-fitness-coach-app/
 
+# Secrets / environment
+.env
+.env.*
+!.env.example
+
 # OS files
 .DS_Store
 Thumbs.db

@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+---
+name: Bug report
+description: Something in the PulseCoach addon is broken
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: input
+    id: addon-version
+    attributes:
+      label: Addon version
+      description: Settings → Add-ons → PulseCoach → version
+      placeholder: "0.22.0"
+    validations:
+      required: true
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.6.1"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant addon logs
+      description: >-
+        Settings → Add-ons → PulseCoach → Log. Remove tokens and
+        personal data before pasting.
+      render: shell
