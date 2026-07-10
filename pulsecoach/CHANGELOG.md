@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-07-10
+
+### Changed
+
+- **Development harness hardening (no image/behavior change).** Applied the
+  deterministic harness audit remediations and AgentShield findings:
+  deny-only Claude Code permissions, fail-secure secret-guard hooks
+  (PreToolUse + Stop), durable project memory, standalone behavioral evals,
+  and PR/issue templates plus CODEOWNERS. Nothing bundled into the addon
+  image changed.
+
 ## [0.23.0] - 2026-07-10
 
 ### Added
