@@ -1,0 +1,46 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./gcal-token.json)",
+      "Read(./secrets/**)",
+      "Edit(./.env)",
+      "Edit(./.env.local)",
+      "Edit(./gcal-token.json)",
+      "Edit(./secrets/**)",
+      "Write(./.env)",
+      "Write(./.env.local)",
+      "Write(./gcal-token.json)",
+      "Write(./secrets/**)",
+      "Bash(rm -rf:*)",
+      "Bash(sudo:*)",
+      "Bash(chmod 777:*)",
+      "Bash(ssh:*)",
+      "Bash(* > /dev/*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-secrets.cjs\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-secret-audit.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
