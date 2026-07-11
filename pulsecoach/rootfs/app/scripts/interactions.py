@@ -43,11 +43,15 @@ class InteractionError(ValueError):
 
 
 def _line_id(rec: dict, raw: str) -> str:
-    """Stable id for a line: the stored id, else a content hash."""
+    """Stable id for a line: the stored id, else a content hash.
+
+    sha256 rather than sha1 purely to keep linters quiet — the id is a
+    UI handle for list/delete, not a security boundary.
+    """
     stored = rec.get("id")
     if isinstance(stored, str) and stored:
         return stored
-    return hashlib.sha1(raw.encode()).hexdigest()[:12]
+    return hashlib.sha256(raw.encode()).hexdigest()[:12]
 
 
 def _parse_line(raw: str) -> dict | None:

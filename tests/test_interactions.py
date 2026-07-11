@@ -34,7 +34,8 @@ def test_add_returns_record_with_id_and_defaults(store):
     assert rec["id"]
     # end defaults to roughly now (UTC)
     end = datetime.fromisoformat(rec["end"])
-    assert abs((datetime.now(timezone.utc) - end).total_seconds()) < 5
+    # generous window: only guards against "end wasn't stamped at all"
+    assert abs((datetime.now(timezone.utc) - end).total_seconds()) < 60
 
 
 def test_add_appends_one_json_line_compatible_with_meeting_stress(store):

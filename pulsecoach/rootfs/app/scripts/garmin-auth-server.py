@@ -634,7 +634,9 @@ def interactions_route() -> tuple[Response, int] | Response:
     require hand-writing JSONL via an HA shell_command.
     """
     if request.method == "POST":
-        data = request.get_json(silent=True) or {}
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):  # a JSON array/scalar has no .get()
+            data = {}
         try:
             rec = interactions.add_interaction(
                 data.get("person", ""),
