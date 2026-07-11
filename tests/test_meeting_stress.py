@@ -241,6 +241,60 @@ def test_score_meetings_without_skipped_is_backward_compatible():
     assert ms.score_meetings(events, series) == []
 
 
+def test_fetch_hr_refreshes_volatile_days(tmp_path, monkeypatch):
+    """fetch_hr_garmin re-fetches today/yesterday (still gaining samples) but
+    serves older, immutable days straight from the on-disk cache."""
+    import sys
+    import types
+
+    calls: list[str] = []
+
+    class _FakeGarmin:
+        def __init__(self, *a, **k):
+            pass
+
+        def login(self, *a, **k):
+            pass
+
+        def get_heart_rates(self, date_str):
+            calls.append(date_str)
+            ts = int(datetime.fromisoformat(date_str + "T12:00:00+00:00").timestamp())
+            return {"heartRateValues": [[ts * 1000, 70]]}
+
+    fake = types.ModuleType("garminconnect")
+    fake.Garmin = _FakeGarmin
+    monkeypatch.setitem(sys.modules, "garminconnect", fake)
+    monkeypatch.setenv("GARMIN_TOKEN_DIR", str(tmp_path / "tokens"))
+
+    # Pin the clock so the module's notion of "today" can't drift from the
+    # test's across a UTC-midnight boundary (which would make this flaky).
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 7, 15, 12, 0, tzinfo=tz or timezone.utc)
+
+    monkeypatch.setattr(ms, "datetime", _FixedDateTime)
+    today = _FixedDateTime.now(timezone.utc).date()
+
+    cache = tmp_path / "hr-cache"
+    cache.mkdir()
+    old_day = (today - timedelta(days=10)).strftime("%Y-%m-%d")
+    today_str = today.strftime("%Y-%m-%d")
+    # Seed BOTH days with a stale (empty-coverage) cache file.
+    for d in (old_day, today_str):
+        (cache / f"hr_{d}.json").write_text("[]")
+
+    ms.fetch_hr_garmin([old_day, today_str], str(cache))
+
+    # Old day: served from stale cache, never re-fetched.
+    assert old_day not in calls, calls
+    # Today: re-fetched despite the cache existing (it may still gain samples).
+    assert today_str in calls, calls
+    # And its cache is refreshed with the new sample, not left empty.
+    import json as _json
+    assert _json.loads((cache / f"hr_{today_str}.json").read_text()), "today cache refreshed"
+
+
 if __name__ == "__main__":
     test_ridge_deconfounds_bystander()
     test_solo_and_oversize_meetings_skipped()

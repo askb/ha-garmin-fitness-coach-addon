@@ -94,6 +94,7 @@ SYNC_PID=""
 COMPUTE_PID=""
 NOTIFY_PID=""
 MEMORY_PID=""
+RESCORE_PID=""
 NEXTJS_PID=""
 INGRESS_PID=""
 SHUTTING_DOWN=false
@@ -103,7 +104,7 @@ cleanup() {
     bashio::log.info "Shutting down PulseCoach services..."
     # Backup before shutdown
     backup_to_share
-    for pid in $SYNC_PID $COMPUTE_PID $NOTIFY_PID $MEMORY_PID $NEXTJS_PID $INGRESS_PID; do
+    for pid in $SYNC_PID $COMPUTE_PID $NOTIFY_PID $MEMORY_PID $RESCORE_PID $NEXTJS_PID $INGRESS_PID; do
         if kill -0 "$pid" 2>/dev/null; then
             kill "$pid" 2>/dev/null
         fi
@@ -441,6 +442,43 @@ else
     bashio::log.info "No Ollama URL — skipping coach memory rebuild (embeddings need Ollama)"
 fi
 
+# ─── Start Stress Board auto-rescore in background ──────────────────────────
+# The Stress Board only scores on demand (manual ▶ run / POST /auth/meeting-stress).
+# Meetings and logged interactions from the last hours usually have no Garmin
+# heart rate yet (HR uploads lag), so they sit unscored until the user re-runs
+# by hand. Periodically re-trigger the run so they appear on their own once HR
+# syncs. The endpoint self-skips (HTTP 400 without a calendar/tokens) and
+# de-dupes via its own running-guard (HTTP 409), so this is safe beside manual
+# runs. Set the meeting_rescore_interval_minutes option to 0 to disable.
+MEETING_RESCORE_INTERVAL_MINUTES="$(bashio::config 'meeting_rescore_interval_minutes' || echo "${MEETING_RESCORE_INTERVAL_MINUTES:-360}")"
+# Sanitize: a non-integer would kill the loop in the $((...)) below and the
+# monitor would restart it forever. Fall back to the default if it isn't a
+# plain non-negative integer.
+case "${MEETING_RESCORE_INTERVAL_MINUTES}" in
+    ''|*[!0-9]*) MEETING_RESCORE_INTERVAL_MINUTES=360 ;;
+esac
+meeting_rescore_loop() {
+    sleep 600  # let the auth server and first Garmin sync settle
+    while true; do
+        bashio::log.info "Auto-rescoring Stress Board..."
+        code="$(curl -s -o /dev/null -w '%{http_code}' -m 900 -X POST \
+            http://127.0.0.1:8099/auth/meeting-stress 2>/dev/null || echo "000")"
+        case "${code}" in
+            2*) : ;;  # run started
+            400|409) bashio::log.info "Stress Board auto-rescore skipped (no calendar/tokens or already running)" ;;
+            *) bashio::log.warning "Stress Board auto-rescore request failed (HTTP ${code})" ;;
+        esac
+        sleep "$((MEETING_RESCORE_INTERVAL_MINUTES * 60))"
+    done
+}
+if [ "${MEETING_RESCORE_INTERVAL_MINUTES}" -gt 0 ] 2>/dev/null; then
+    bashio::log.info "Starting Stress Board auto-rescore (every ${MEETING_RESCORE_INTERVAL_MINUTES} minutes)..."
+    meeting_rescore_loop &
+    RESCORE_PID=$!
+else
+    bashio::log.info "Stress Board auto-rescore disabled (interval <= 0)"
+fi
+
 # ─── Configure AI backend ─────────────────────────────────────────────────────
 case "${AI_BACKEND}" in
     ha_conversation)
@@ -575,6 +613,12 @@ while true; do
             done
         ) &
         MEMORY_PID=$!
+    fi
+
+    if [ -n "$RESCORE_PID" ] && ! kill -0 "$RESCORE_PID" 2>/dev/null; then
+        bashio::log.warning "Stress Board auto-rescore died, restarting..."
+        meeting_rescore_loop &
+        RESCORE_PID=$!
     fi
 
     if ! kill -0 "$NEXTJS_PID" 2>/dev/null; then

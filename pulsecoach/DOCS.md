@@ -176,9 +176,12 @@ data, all fictional):
    > **Interactions only appear after a run *and* once heart rate exists
    > for that time.** A contact you log for *right now* won't score until
    > Garmin syncs that window — the board shows a "⚠ N events had no
-   > heart-rate coverage yet (incl. logged interactions)" notice and picks
-   > them up on the next **▶ run**. Backdate the `end` to a time you've
-   > already synced to see it immediately.
+   > heart-rate coverage yet (incl. logged interactions)" notice. The
+   > addon now re-scores in the background every
+   > `meeting_rescore_interval_minutes` (add-on option, default 360; set to
+   > 0 to disable), so they appear on their own once Garmin syncs — no
+   > manual re-run needed. To see one immediately, backdate the `end` to a
+   > time you've already synced and hit **▶ run**.
 
 ### Running
 
