@@ -58,6 +58,10 @@ def _parse_line(raw: str) -> dict | None:
         return None
     if not person or minutes <= 0:
         return None
+    # meeting-stress.py parse_ts() scores naive timestamps as UTC — mirror
+    # that here so hand-written lines list consistently with how they score.
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
     return {
         "id": _line_id(rec, raw),
         "person": person,
@@ -104,15 +108,17 @@ def add_interaction(person: str, minutes: object,
         "logged_at": now.isoformat(),
     }
     os.makedirs(os.path.dirname(INTERACTIONS_PATH), exist_ok=True)
-    with open(INTERACTIONS_PATH, "a") as f:
+    with open(INTERACTIONS_PATH, "a", encoding="utf-8") as f:
         f.write(json.dumps(rec) + "\n")
     return {k: rec[k] for k in ("id", "person", "minutes", "end")}
 
 
 def list_interactions(limit: int = DEFAULT_LIST_LIMIT) -> list[dict]:
-    """Newest-first valid interactions, capped at `limit`."""
+    """Newest-first valid interactions, capped at `limit` (<=0 == none)."""
+    if int(limit) <= 0:
+        return []
     try:
-        with open(INTERACTIONS_PATH) as f:
+        with open(INTERACTIONS_PATH, encoding="utf-8") as f:
             lines = f.readlines()
     except OSError:
         return []
@@ -125,7 +131,7 @@ def list_interactions(limit: int = DEFAULT_LIST_LIMIT) -> list[dict]:
         if rec is not None:
             entries.append(rec)
     entries.reverse()  # file is append-only, so reversed == newest first
-    return entries[:max(1, int(limit))]
+    return entries[:int(limit)]
 
 
 def delete_interaction(iid: str) -> bool:
@@ -135,7 +141,7 @@ def delete_interaction(iid: str) -> bool:
     is atomic (tmp + rename) so a crash can't truncate the log.
     """
     try:
-        with open(INTERACTIONS_PATH) as f:
+        with open(INTERACTIONS_PATH, encoding="utf-8") as f:
             lines = f.readlines()
     except OSError:
         return False
@@ -155,7 +161,7 @@ def delete_interaction(iid: str) -> bool:
     if not removed:
         return False
     tmp = INTERACTIONS_PATH + ".tmp"
-    with open(tmp, "w") as f:
+    with open(tmp, "w", encoding="utf-8") as f:
         f.writelines(kept)
     os.replace(tmp, INTERACTIONS_PATH)
     return True

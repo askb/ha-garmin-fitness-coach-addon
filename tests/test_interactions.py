@@ -96,6 +96,23 @@ def test_list_missing_file_is_empty(store):
     assert ix.list_interactions() == []
 
 
+def test_list_zero_or_negative_limit_is_empty(store):
+    ix.add_interaction("Alice", 15)
+    assert ix.list_interactions(limit=0) == []
+    assert ix.list_interactions(limit=-3) == []
+
+
+def test_list_treats_naive_end_as_utc(store):
+    """Hand-written lines without an offset score as UTC in meeting-stress;
+    the listing must agree."""
+    store.write_text('{"person":"Ok","minutes":30,'
+                     '"end":"2026-07-11T02:00:00"}\n')
+    entries = ix.list_interactions()
+    end = datetime.fromisoformat(entries[0]["end"])
+    assert end.tzinfo is not None
+    assert end.utcoffset().total_seconds() == 0
+
+
 def test_delete_removes_only_matching_line(store):
     ix.add_interaction("Alice", 15, "2026-07-11T01:00:00+00:00")
     keep = ix.add_interaction("Bob", 30, "2026-07-11T02:00:00+00:00")
