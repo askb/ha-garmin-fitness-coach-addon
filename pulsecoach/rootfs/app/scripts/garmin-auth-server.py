@@ -15,6 +15,7 @@ from typing import Optional
 from flask import Flask, Response, jsonify, request
 
 import gcal
+import interactions
 
 try:
     from garminconnect import Garmin
@@ -622,6 +623,42 @@ def gcal_calendars() -> tuple[Response, int] | Response:
         return jsonify(success=True, calendars=gcal.list_calendars())
     except gcal.GcalError as exc:
         return jsonify(success=False, message=str(exc)), 502
+
+
+@app.route("/auth/interactions", methods=["GET", "POST"])
+def interactions_route() -> tuple[Response, int] | Response:
+    """List recent interactions (GET) or quick-add one (POST).
+
+    POST body: {person, minutes, end?} — end defaults to now. Backs the
+    Stress Board's in-app quick-add so out-of-calendar contacts no longer
+    require hand-writing JSONL via an HA shell_command.
+    """
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        try:
+            rec = interactions.add_interaction(
+                data.get("person", ""),
+                data.get("minutes"),
+                data.get("end") or None,
+            )
+        except interactions.InteractionError as exc:
+            return jsonify(success=False, message=str(exc)), 400
+        except OSError as exc:
+            return jsonify(success=False, message=str(exc)), 500
+        return jsonify(success=True, interaction=rec)
+    return jsonify(success=True,
+                   interactions=interactions.list_interactions())
+
+
+@app.route("/auth/interactions/<iid>", methods=["DELETE"])
+def interactions_delete(iid: str) -> tuple[Response, int] | Response:
+    """Delete one logged interaction by id."""
+    try:
+        if interactions.delete_interaction(iid):
+            return jsonify(success=True, message="Interaction removed")
+    except OSError as exc:
+        return jsonify(success=False, message=str(exc)), 500
+    return jsonify(success=False, message="Interaction not found"), 404
 
 
 if __name__ == "__main__":
