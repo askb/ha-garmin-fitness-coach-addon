@@ -102,6 +102,17 @@ def test_list_zero_or_negative_limit_is_empty(store):
     assert ix.list_interactions(limit=-3) == []
 
 
+def test_list_skips_nonfinite_minutes(store):
+    """json.loads accepts NaN/Infinity literals; they must not poison the
+    listing (int(NaN) raises)."""
+    store.write_text(
+        '{"person":"A","minutes":NaN,"end":"2026-07-11T02:00:00+00:00"}\n'
+        '{"person":"B","minutes":Infinity,"end":"2026-07-11T02:00:00+00:00"}\n'
+        '{"person":"Ok","minutes":30,"end":"2026-07-11T02:00:00+00:00"}\n')
+    entries = ix.list_interactions()
+    assert [e["person"] for e in entries] == ["Ok"]
+
+
 def test_list_treats_naive_end_as_utc(store):
     """Hand-written lines without an offset score as UTC in meeting-stress;
     the listing must agree."""

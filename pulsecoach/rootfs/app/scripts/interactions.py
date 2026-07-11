@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -29,6 +31,11 @@ INTERACTIONS_PATH = "/share/pulsecoach/interactions.jsonl"
 MAX_PERSON_LEN = 200
 MAX_MINUTES = 1440  # one day
 DEFAULT_LIST_LIMIT = 20
+
+# Serialises UI-driven writes (append vs delete-rewrite) within the auth
+# server process. HA shell_command appends from other processes are not
+# covered, but those are single O_APPEND writes — only the UI rewrites.
+_WRITE_LOCK = threading.Lock()
 
 
 class InteractionError(ValueError):
@@ -56,7 +63,9 @@ def _parse_line(raw: str) -> dict | None:
         end = datetime.fromisoformat(str(rec["end"]).replace("Z", "+00:00"))
     except (KeyError, ValueError, TypeError):
         return None
-    if not person or minutes <= 0:
+    # json.loads accepts NaN/Infinity literals; a non-finite value would
+    # blow up the int() normalisation below and poison every listing.
+    if not person or not math.isfinite(minutes) or minutes <= 0:
         return None
     # meeting-stress.py parse_ts() scores naive timestamps as UTC — mirror
     # that here so hand-written lines list consistently with how they score.
@@ -108,7 +117,7 @@ def add_interaction(person: str, minutes: object,
         "logged_at": now.isoformat(),
     }
     os.makedirs(os.path.dirname(INTERACTIONS_PATH), exist_ok=True)
-    with open(INTERACTIONS_PATH, "a", encoding="utf-8") as f:
+    with _WRITE_LOCK, open(INTERACTIONS_PATH, "a", encoding="utf-8") as f:
         f.write(json.dumps(rec) + "\n")
     return {k: rec[k] for k in ("id", "person", "minutes", "end")}
 
@@ -138,30 +147,33 @@ def delete_interaction(iid: str) -> bool:
     """Remove the first line whose id matches; True when something went.
 
     Malformed lines (hand-written notes) are preserved verbatim. The rewrite
-    is atomic (tmp + rename) so a crash can't truncate the log.
+    is atomic (tmp + rename) so a crash can't truncate the log, and holds
+    _WRITE_LOCK for the whole read→rewrite so a concurrent UI add can't be
+    lost to the rename.
     """
-    try:
-        with open(INTERACTIONS_PATH, encoding="utf-8") as f:
-            lines = f.readlines()
-    except OSError:
-        return False
-    kept: list[str] = []
-    removed = False
-    for raw in lines:
-        stripped = raw.strip()
-        if not removed and stripped:
-            try:
-                rec = json.loads(stripped)
-            except ValueError:
-                rec = None
-            if isinstance(rec, dict) and _line_id(rec, stripped) == iid:
-                removed = True
-                continue
-        kept.append(raw)
-    if not removed:
-        return False
-    tmp = INTERACTIONS_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.writelines(kept)
-    os.replace(tmp, INTERACTIONS_PATH)
-    return True
+    with _WRITE_LOCK:
+        try:
+            with open(INTERACTIONS_PATH, encoding="utf-8") as f:
+                lines = f.readlines()
+        except OSError:
+            return False
+        kept: list[str] = []
+        removed = False
+        for raw in lines:
+            stripped = raw.strip()
+            if not removed and stripped:
+                try:
+                    rec = json.loads(stripped)
+                except ValueError:
+                    rec = None
+                if isinstance(rec, dict) and _line_id(rec, stripped) == iid:
+                    removed = True
+                    continue
+            kept.append(raw)
+        if not removed:
+            return False
+        tmp = INTERACTIONS_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.writelines(kept)
+        os.replace(tmp, INTERACTIONS_PATH)
+        return True
