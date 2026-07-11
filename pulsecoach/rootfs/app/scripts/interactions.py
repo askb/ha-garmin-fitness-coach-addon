@@ -94,6 +94,8 @@ def add_interaction(person: str, minutes: object,
     if not person or len(person) > MAX_PERSON_LEN:
         raise InteractionError(
             f"person must be 1-{MAX_PERSON_LEN} characters")
+    if isinstance(minutes, bool):  # bool subclasses int: true would pass as 1
+        raise InteractionError("minutes must be a number")
     try:
         mins = float(minutes)  # type: ignore[arg-type]
     except (TypeError, ValueError):

@@ -56,7 +56,7 @@ def test_add_validates_person(store):
 
 
 def test_add_validates_minutes(store):
-    for bad in (0, -5, 1441, "abc", None):
+    for bad in (0, -5, 1441, "abc", None, True, False):
         with pytest.raises(ix.InteractionError):
             ix.add_interaction("Alice", bad)
 
