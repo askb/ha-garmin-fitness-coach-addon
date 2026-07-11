@@ -155,3 +155,14 @@ def test_identical_adds_get_distinct_ids(store):
     assert a["id"] != b["id"]
     assert ix.delete_interaction(a["id"]) is True
     assert len(ix.list_interactions()) == 1
+
+
+def test_delete_removes_newest_of_identical_manual_lines(store):
+    """Identical hand-written lines share a content-hash id; delete must
+    take the newest to match list_interactions() newest-first order."""
+    line = ('{"person":"Twin","minutes":10,'
+            '"end":"2026-07-11T02:00:00+00:00"}\n')
+    store.write_text(line + line)
+    top = ix.list_interactions()[0]
+    assert ix.delete_interaction(top["id"]) is True
+    assert store.read_text() == line  # one copy survives

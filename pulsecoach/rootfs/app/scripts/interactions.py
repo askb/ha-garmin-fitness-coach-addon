@@ -148,12 +148,14 @@ def list_interactions(limit: int = DEFAULT_LIST_LIMIT) -> list[dict]:
 
 
 def delete_interaction(iid: str) -> bool:
-    """Remove the first line whose id matches; True when something went.
+    """Remove the newest line whose id matches; True when something went.
 
-    Malformed lines (hand-written notes) are preserved verbatim. The rewrite
-    is atomic (tmp + rename) so a crash can't truncate the log, and holds
-    _WRITE_LOCK for the whole read→rewrite so a concurrent UI add can't be
-    lost to the rename.
+    Newest-match keeps delete aligned with list_interactions()'s
+    newest-first ordering when identical hand-written lines share a
+    content-hash id. Malformed lines (hand-written notes) are preserved
+    verbatim. The rewrite is atomic (tmp + rename) so a crash can't
+    truncate the log, and holds _WRITE_LOCK for the whole read→rewrite
+    so a concurrent UI add can't be lost to the rename.
     """
     with _WRITE_LOCK:
         try:
@@ -161,21 +163,20 @@ def delete_interaction(iid: str) -> bool:
                 lines = f.readlines()
         except OSError:
             return False
-        kept: list[str] = []
-        removed = False
-        for raw in lines:
+        victim = -1
+        for i, raw in enumerate(lines):
             stripped = raw.strip()
-            if not removed and stripped:
-                try:
-                    rec = json.loads(stripped)
-                except ValueError:
-                    rec = None
-                if isinstance(rec, dict) and _line_id(rec, stripped) == iid:
-                    removed = True
-                    continue
-            kept.append(raw)
-        if not removed:
+            if not stripped:
+                continue
+            try:
+                rec = json.loads(stripped)
+            except ValueError:
+                continue
+            if isinstance(rec, dict) and _line_id(rec, stripped) == iid:
+                victim = i  # keep scanning: last match == newest
+        if victim < 0:
             return False
+        kept = lines[:victim] + lines[victim + 1:]
         tmp = INTERACTIONS_PATH + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             f.writelines(kept)
