@@ -43,6 +43,10 @@
     "meeting_lookback_days": {
       "name": "Stress Board Lookback (days)",
       "description": "How far back the Stress Board pulls linked-calendar events (1–365). Raise it (e.g. 90) to backfill more history for better per-person stress stats."
+    },
+    "meeting_rescore_interval_minutes": {
+      "name": "Stress Board Auto-Rescore (minutes)",
+      "description": "How often (minutes) the Stress Board re-scores in the background so meetings and interactions show once Garmin syncs their heart rate (0-1440, default 360). 0 disables it."
     }
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "PulseCoach",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "slug": "pulsecoach",
   "image": "ghcr.io/askb/pulsecoach-addon-{arch}",
   "description": "AI-powered sport scientist — training analysis, coaching, and recovery optimization from your Garmin data",
@@ -34,7 +34,8 @@
     "ha_events_enabled": true,
     "low_readiness_threshold": 50,
     "missed_session_grace_min": 360,
-    "meeting_lookback_days": 30
+    "meeting_lookback_days": 30,
+    "meeting_rescore_interval_minutes": 360
   },
   "schema": {
     "garmin_email": "str?",
@@ -50,7 +51,8 @@
     "ha_events_enabled": "bool",
     "low_readiness_threshold": "int(0,100)",
     "missed_session_grace_min": "int(0,1440)",
-    "meeting_lookback_days": "int(1,365)?"
+    "meeting_lookback_days": "int(1,365)?",
+    "meeting_rescore_interval_minutes": "int(0,1440)?"
   },
   "environment": {
     "DATABASE_URL": "postgresql://postgres@127.0.0.1:5432/pulsecoach",

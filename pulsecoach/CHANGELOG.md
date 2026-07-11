@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-07-11
+
+### Fixed
+
+- **Stress Board now surfaces recent meetings and interactions on its own.**
+  Two gaps kept freshly-logged meetings and interactions stuck behind the
+  "no heart-rate coverage yet — run again" notice:
+  - **Stale heart-rate cache.** Per-day HR was cached on first fetch and never
+    refreshed, so a day first pulled with partial or zero coverage stayed frozen
+    — re-running the board could never rescue it. The scorer now always
+    re-fetches the current and previous UTC day (which are still gaining samples
+    as Garmin syncs) while keeping older, immutable days cached.
+  - **Manual-only scoring.** The board only scored on a manual ▶ run. A new
+    background loop re-triggers a run every `meeting_rescore_interval_minutes`
+    (new add-on option, default 360; set to 0 to disable), so meetings and
+    interactions logged before Garmin uploaded their heart rate appear
+    automatically once it syncs. The loop reuses the existing
+    `/auth/meeting-stress` running-guard, so it never double-runs alongside a
+    manual ▶ run and self-skips when no calendar or Garmin tokens are linked.
+
+
 ## [0.24.0] - 2026-07-10
 
 ### Changed

@@ -370,7 +370,15 @@ def _migrate_garth_tokens(token_dir: str) -> None:
 
 
 def fetch_hr_garmin(dates: list[str], cache_dir: str) -> HrSeries:
-    """Real path: pull ~2-min HR per date via garminconnect, cache, return series."""
+    """Real path: pull ~2-min HR per date via garminconnect, cache, return series.
+
+    Recent days (today and yesterday, UTC) are always re-fetched rather than
+    served from cache. Garmin uploads heart rate with a lag, so a day first
+    fetched with partial or zero coverage would otherwise stay frozen in the
+    cache — a meeting or interaction logged today would never gain HR even after
+    Garmin syncs, and re-running the board could never rescue it. Older days are
+    complete and immutable, so their cache is authoritative.
+    """
     from garminconnect import Garmin  # type: ignore
 
     token_dir = os.environ.get("GARMIN_TOKEN_DIR", "/data/garmin-tokens")
@@ -380,10 +388,13 @@ def fetch_hr_garmin(dates: list[str], cache_dir: str) -> HrSeries:
     client.login(tokenstore=token_dir)
 
     os.makedirs(cache_dir, exist_ok=True)
+    # UTC days that may still be gaining samples — never trust their cache.
+    today = datetime.now(timezone.utc).date()
+    volatile = {(today - timedelta(days=n)).strftime("%Y-%m-%d") for n in (0, 1)}
     series: HrSeries = []
     for date_str in dates:
         path = os.path.join(cache_dir, f"hr_{date_str}.json")
-        if os.path.exists(path):
+        if os.path.exists(path) and date_str not in volatile:
             with open(path) as f:
                 pairs = json.load(f)
         else:
