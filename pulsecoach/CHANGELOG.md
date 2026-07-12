@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.26.0] - 2026-07-11
+## [0.26.0] - 2026-07-12
 
 ### Added
 
+- **Bundled app updated to v0.24.0**, which ships the Stress Board
+  interaction quick-add UI backed by the endpoints below.
 - **In-app interaction quick-add for the Stress Board.** New
   `/auth/interactions` endpoints (GET list, POST add, DELETE by id) manage
   `/share/pulsecoach/interactions.jsonl` from the web UI, so logging an
