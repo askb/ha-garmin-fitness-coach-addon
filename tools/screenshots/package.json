@@ -10,6 +10,7 @@
     "screenshot:desktop": "playwright test tests/dashboard.spec.ts tests/stress-board.spec.ts --project=desktop",
     "screenshot:mobile": "playwright test tests/dashboard.spec.ts tests/stress-board.spec.ts --project=mobile",
     "screenshot:dark": "PULSECOACH_THEME=dark playwright test tests/dashboard.spec.ts tests/stress-board.spec.ts --project=desktop",
+    "screenshot:sync": "bash scripts/sync-to-docs.sh",
     "validate:content": "playwright test tests/content.spec.ts --project=desktop",
     "install-browsers": "playwright install chromium"
   },

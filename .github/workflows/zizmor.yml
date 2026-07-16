@@ -46,3 +46,4 @@ jobs:
           # Surface every confirmed finding in the PR and Security tab.
           min-severity: low
           min-confidence: low
+          config: .zizmor.yml

@@ -139,7 +139,26 @@ fiddlier than just enabling the port.
 
 ### CI screenshots
 
-Out of scope for this folder. The right place is a workflow in this
-repo that spins up the addon via `docker run`, waits for it to be
-healthy, then runs `npm run screenshot` against `http://localhost:3000`.
-Open an issue if you want me to add it.
+Handled by two workflows:
+
+1. **`e2e-screenshots.yml`** — runs on every PR touching `pulsecoach/` or
+   `tools/screenshots/`. Captures per-persona screenshots and validates
+   rendered content. Artifacts retained 14 days.
+
+2. **`sync-screenshots.yml`** — runs on every GitHub Release (and
+   `workflow_dispatch`). Pulls the production image, seeds athlete data,
+   captures desktop screenshots, and opens PRs to update
+   `docs/screenshots/` in **both** the addon and app repos automatically.
+
+### Sync to docs/ (manual)
+
+After a local capture run:
+
+```bash
+npm run screenshot:sync
+# or with explicit paths:
+bash scripts/sync-to-docs.sh --date 2026-07-17 --app-repo ~/git/ha-garmin-fitness-coach-app
+```
+
+This copies the latest desktop screenshots into `docs/screenshots/` in both
+repos. Commit and push from each repo separately.
