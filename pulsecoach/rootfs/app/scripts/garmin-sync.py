@@ -39,7 +39,7 @@ except ImportError:
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres@127.0.0.1:5432/pulsecoach")
 GARMIN_EMAIL = os.environ.get("GARMIN_EMAIL", "")
 GARMIN_PASSWORD = os.environ.get("GARMIN_PASSWORD", "")
-TOKEN_DIR = "/data/garmin-tokens"
+TOKEN_DIR = os.environ.get("GARMIN_TOKEN_DIR", "/data/garmin-tokens")
 # Must match the userId used by the Next.js app (DEV_BYPASS_AUTH seed user)
 USER_ID = os.environ.get("GARMIN_USER_ID", "seed-user-001")
 GARMIN_MAX_RETRY_ATTEMPTS = 5
