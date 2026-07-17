@@ -287,3 +287,21 @@ def test_sync_refuses_symlinked_users_dir(client, monkeypatch, tmp_path):
     assert r.status_code == 500
 
 
+def test_symlinked_per_user_dir_within_base_is_rejected(client):
+    gas, c = client
+    # bob connects normally.
+    c.post("/auth/import-tokens",
+           json={"oauth1_token": {"u": "bob"}, "oauth2_token": {"u": "bob"}},
+           headers={USER_HEADER: "bob"})
+    # Point alice's per-user dir at bob's — a symlink *within* TOKEN_DIR that
+    # passes containment but would break isolation.
+    alice_dir = _user_dir(gas, "alice")
+    bob_dir = _user_dir(gas, "bob")
+    os.makedirs(os.path.dirname(alice_dir), exist_ok=True)
+    os.symlink(bob_dir, alice_dir)
+    # alice must not read bob's tokens through the symlink.
+    resp = c.get("/auth/status", headers={USER_HEADER: "alice"}).get_json()
+    assert resp["connected"] is False
+
+
+
