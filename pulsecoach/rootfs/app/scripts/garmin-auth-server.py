@@ -323,6 +323,13 @@ def trigger_sync() -> tuple[Response, int] | Response:
     user_id = _req_user_id()
     token_dir = _token_dir(user_id)
 
+    # Refuse if the resolved token dir escapes the base via a symlinked
+    # component before we read status files or launch a scoped sync there.
+    try:
+        _assert_token_dir_contained(token_dir)
+    except PermissionError:
+        return jsonify(success=False, message="Invalid token directory"), 500
+
     # Check if sync is already running
     status_file = os.path.join(token_dir, ".sync_status")
     try:
@@ -364,7 +371,14 @@ def trigger_sync() -> tuple[Response, int] | Response:
                 os.rename(log_path, prev_log_path)
         except OSError as exc:
             log.warning("Could not rotate sync log: %s", exc)
-        log_fh = open(log_path, "w", buffering=1)
+        # Open O_NOFOLLOW so a pre-planted symlink at log_path cannot redirect
+        # the sync output to an arbitrary file.
+        _log_fd = os.open(
+            log_path,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW,
+            0o600,
+        )
+        log_fh = os.fdopen(_log_fd, "w", buffering=1)
         try:
             log_fh.write(
                 f"=== Manual sync triggered at "
@@ -450,6 +464,9 @@ def logout() -> tuple[Response, int] | Response:
         import shutil
         user_id = _req_user_id()
         token_dir = _token_dir(user_id)
+        # Refuse to rmtree a dir that escapes the base via a symlinked
+        # component (could delete data outside TOKEN_DIR).
+        _assert_token_dir_contained(token_dir)
         _mfa_store.clear(user_id)
         if os.path.exists(token_dir):
             shutil.rmtree(token_dir)

@@ -19,7 +19,7 @@ from typing import Any, Optional
 _SINGLE_USER_KEY = object()
 
 
-def _key(user_id: Optional[str]):
+def _key(user_id: Optional[str]) -> object:
     if user_id is None or not user_id.strip():
         return _SINGLE_USER_KEY
     return user_id.strip()

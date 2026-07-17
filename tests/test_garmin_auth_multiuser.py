@@ -272,3 +272,18 @@ def test_import_tokens_refuses_symlinked_users_dir(client, tmp_path):
     # Nothing was written into the attacker-controlled target.
     assert not any(outside.iterdir())
 
+
+def test_sync_refuses_symlinked_users_dir(client, monkeypatch, tmp_path):
+    gas, c = client
+    outside = tmp_path / "evil2"
+    outside.mkdir()
+    os.makedirs(gas.TOKEN_DIR, exist_ok=True)
+    os.symlink(str(outside), os.path.join(gas.TOKEN_DIR, "users"))
+
+    import subprocess
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: None)
+
+    r = c.post("/auth/sync", headers={USER_HEADER: "alice"})
+    assert r.status_code == 500
+
+
