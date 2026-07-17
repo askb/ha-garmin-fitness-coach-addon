@@ -127,6 +127,11 @@ def _save_tokens(client: "Garmin", user_id: Optional[str] = None) -> None:
 def _load_client(user_id: Optional[str] = None) -> Optional["Garmin"]:
     """Load a Garmin client from saved tokens. Returns None on failure."""
     token_dir = _token_dir(user_id)
+    try:
+        # Never read credentials through a symlink-escaped dir.
+        _assert_token_dir_contained(token_dir)
+    except PermissionError:
+        return None
     if not os.path.exists(token_dir):
         return None
     try:
@@ -285,8 +290,10 @@ def status() -> Response:
 @app.route("/auth/sync-status", methods=["GET"])
 def sync_status() -> Response:
     """Return current sync progress."""
-    status_file = os.path.join(_token_dir(_req_user_id()), ".sync_status")
     try:
+        token_dir = _token_dir(_req_user_id())
+        _assert_token_dir_contained(token_dir)
+        status_file = os.path.join(token_dir, ".sync_status")
         if os.path.exists(status_file):
             with open(status_file) as f:
                 data = json.load(f)
@@ -299,7 +306,13 @@ def sync_status() -> Response:
 @app.route("/auth/sync-log", methods=["GET"])
 def sync_log() -> Response:
     """Return the tail of the most recent manual-sync log for diagnosis."""
-    log_path, prev_log_path = _sync_log_paths(_req_user_id())
+    user_id = _req_user_id()
+    try:
+        # Never read another user's log via a symlink-escaped token dir.
+        _assert_token_dir_contained(_token_dir(user_id))
+    except PermissionError:
+        return jsonify(available=False, log="(no sync log yet)")
+    log_path, prev_log_path = _sync_log_paths(user_id)
     try:
         lines: list[str] = []
         if os.path.exists(prev_log_path):
