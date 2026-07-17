@@ -30,10 +30,17 @@ _spec.loader.exec_module(ru)
         ("   ", {"userId": "  "}),
         (None, {"userId": 123}),  # non-string ignored
         (None, {"userId": None}),
+        (None, ["not", "a", "map"]),  # non-mapping body ignored, not fatal
+        (None, "a string"),
+        (None, 42),
     ],
 )
 def test_absent_returns_none(header, body):
     assert ru.resolve_user_id(header, body) is None
+
+
+def test_header_used_even_with_non_mapping_body():
+    assert ru.resolve_user_id("hdr", [1, 2, 3]) == "hdr"
 
 
 def test_header_takes_precedence():

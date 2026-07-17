@@ -21,11 +21,15 @@ _BODY_KEY = "userId"
 
 def resolve_user_id(
     header_value: Optional[str],
-    body: Optional[Mapping[str, Any]],
+    body: Any,
 ) -> Optional[str]:
-    """Return the trimmed user id from the header or JSON body, else ``None``."""
+    """Return the trimmed user id from the header or JSON body, else ``None``.
+
+    ``body`` is whatever ``request.get_json()`` returned — it may be a mapping,
+    a list, a scalar, or ``None``. Only mappings are inspected for ``userId``.
+    """
     candidates = [header_value]
-    if body is not None:
+    if isinstance(body, Mapping):
         candidates.append(body.get(_BODY_KEY))
     for candidate in candidates:
         if isinstance(candidate, str) and candidate.strip():
@@ -47,6 +51,11 @@ def demo() -> None:
     # Body used when header absent/blank.
     assert resolve_user_id(None, {"userId": "body"}) == "body"
     assert resolve_user_id("  ", {"userId": "body"}) == "body"
+
+    # Non-mapping JSON bodies (Flask can return a list) are ignored, not fatal.
+    assert resolve_user_id(None, ["not", "a", "map"]) is None
+    assert resolve_user_id(None, "a string") is None
+    assert resolve_user_id("hdr", [1, 2, 3]) == "hdr"
 
     # Trimming.
     assert resolve_user_id("  u1 ", None) == "u1"

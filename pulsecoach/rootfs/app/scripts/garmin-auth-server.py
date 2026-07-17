@@ -87,6 +87,19 @@ def _req_user_id() -> Optional[str]:
     )
 
 
+def _read_text_nofollow(path: str) -> str:
+    """Read a file read-only, refusing to follow a symlink at the final path.
+
+    Status/log files live under dirs that may be writable in some deployments;
+    a pre-planted symlink there could otherwise redirect a read to an arbitrary
+    file. Raises OSError (ELOOP) if the path is a symlink — callers already
+    handle read errors gracefully.
+    """
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "r") as f:
+        return f.read()
+
+
 # Pending MFA state, isolated per user (empty key == single-user addon).
 _mfa_store = MfaStore()
 
@@ -273,8 +286,7 @@ def status() -> Response:
         last_sync_file = os.path.join(token_dir, ".last_sync")
         last_modified = None
         try:
-            with open(last_sync_file, "r") as f:
-                last_modified = f.read().strip()
+            last_modified = _read_text_nofollow(last_sync_file).strip()
         except OSError:
             last_modified = None
         if not last_modified:
@@ -316,11 +328,9 @@ def sync_log() -> Response:
     try:
         lines: list[str] = []
         if os.path.exists(prev_log_path):
-            with open(prev_log_path) as f:
-                lines.extend(f.readlines()[-200:])
+            lines.extend(_read_text_nofollow(prev_log_path).splitlines(True)[-200:])
         if os.path.exists(log_path):
-            with open(log_path) as f:
-                lines.extend(f.readlines()[-400:])
+            lines.extend(_read_text_nofollow(log_path).splitlines(True)[-400:])
         if not lines:
             return jsonify(available=False, log="(no sync log yet)")
         return jsonify(available=True, log="".join(lines[-500:]))
