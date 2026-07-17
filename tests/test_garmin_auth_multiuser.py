@@ -15,6 +15,13 @@ from pathlib import Path
 
 import pytest
 
+# The integration suite imports the Flask auth server, which needs flask +
+# garminconnect (Docker runtime deps). Where they're absent (minimal CI), skip
+# the whole module — the flask-free helper unit tests still cover the core
+# logic. Locally / in the image these run in full.
+pytest.importorskip("flask")
+pytest.importorskip("garminconnect")
+
 _SCRIPTS = (
     Path(__file__).resolve().parents[1]
     / "pulsecoach"
