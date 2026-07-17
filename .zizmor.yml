@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
+#
+# Zizmor configuration — suppress known false positives
+# https://docs.zizmor.sh/configuration/
+rules:
+  template-injection:
+    ignore:
+      - ci.yml
+      - e2e-screenshots.yml
+  superfluous-actions:
+    ignore:
+      - release.yaml
