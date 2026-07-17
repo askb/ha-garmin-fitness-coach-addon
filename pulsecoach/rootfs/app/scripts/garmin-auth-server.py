@@ -12,10 +12,12 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
-from flask import Flask, Response, jsonify, request
-
 import gcal
 import interactions
+from flask import Flask, Response, jsonify, request
+from mfa_store import MfaStore
+from request_user import USER_ID_HEADER, resolve_user_id
+from token_paths import user_token_dir
 
 try:
     from garminconnect import Garmin
@@ -29,49 +31,72 @@ log = logging.getLogger("garmin-auth")
 TOKEN_DIR = "/data/garmin-tokens"
 TOKEN_FILE = os.path.join(TOKEN_DIR, "session.json")
 
-# Hold pending MFA state (single-user addon)
-_mfa_state = {
-    "email": None,
-    "password": None,
-    "client_state": None,
-    "client": None,
-}
+# Diagnostic sync log (shared across users — it's transient stdout/stderr of
+# the most recent manual sync, not per-user data). Module-level so tests can
+# redirect it off /data.
+SYNC_LOG_PATH = "/data/garmin-sync.log"
+SYNC_LOG_PREV_PATH = "/data/garmin-sync.log.1"
 
 
-def _has_saved_garmin_tokens(token_dir: str | None = None) -> bool:
+def _token_dir(user_id: Optional[str] = None) -> str:
+    """Token directory for ``user_id`` (falls back to the shared dir).
+
+    Single-user/addon requests pass no user id and share ``TOKEN_DIR``, exactly
+    as before. Multi-tenant requests get an isolated, path-safe subdirectory.
+    """
+    return user_token_dir(TOKEN_DIR, user_id)
+
+
+def _req_user_id() -> Optional[str]:
+    """Resolve the acting user id from the current request (header or body)."""
+    return resolve_user_id(
+        request.headers.get(USER_ID_HEADER),
+        request.get_json(silent=True),
+    )
+
+
+# Pending MFA state, isolated per user (empty key == single-user addon).
+_mfa_store = MfaStore()
+
+
+def _has_saved_garmin_tokens(
+    token_dir: str | None = None, user_id: Optional[str] = None
+) -> bool:
     """Return true if either native or legacy Garmin token files exist."""
-    token_dir = token_dir or TOKEN_DIR
+    token_dir = token_dir or _token_dir(user_id)
     return os.path.exists(os.path.join(token_dir, "garmin_tokens.json")) or (
         os.path.exists(os.path.join(token_dir, "oauth1_token.json"))
         and os.path.exists(os.path.join(token_dir, "oauth2_token.json"))
     )
 
 
-def _save_tokens(client: "Garmin") -> None:
+def _save_tokens(client: "Garmin", user_id: Optional[str] = None) -> None:
     """Save garth tokens to disk in native directory format."""
-    os.makedirs(TOKEN_DIR, mode=0o700, exist_ok=True)
+    token_dir = _token_dir(user_id)
+    os.makedirs(token_dir, mode=0o700, exist_ok=True)
     # Don't chmod through a symlink — only tighten a real directory.
-    if not os.path.islink(TOKEN_DIR):
-        os.chmod(TOKEN_DIR, 0o700)
-    client.garth.dump(TOKEN_DIR)
+    if not os.path.islink(token_dir):
+        os.chmod(token_dir, 0o700)
+    client.garth.dump(token_dir)
     # Restrict token files to owner-only — they are credential material and
     # the data dir may be reachable by other add-ons. Skip symlinks so a
     # pre-planted link cannot redirect the chmod to an unrelated file.
-    for name in os.listdir(TOKEN_DIR):
-        path = os.path.join(TOKEN_DIR, name)
+    for name in os.listdir(token_dir):
+        path = os.path.join(token_dir, name)
         if os.path.isfile(path) and not os.path.islink(path):
             os.chmod(path, 0o600)
-    log.info("Tokens saved to %s", TOKEN_DIR)
+    log.info("Tokens saved to %s", token_dir)
 
 
-def _load_client() -> Optional["Garmin"]:
+def _load_client(user_id: Optional[str] = None) -> Optional["Garmin"]:
     """Load a Garmin client from saved tokens. Returns None on failure."""
-    if not os.path.exists(TOKEN_DIR):
+    token_dir = _token_dir(user_id)
+    if not os.path.exists(token_dir):
         return None
     try:
         email = os.environ.get("GARMIN_EMAIL", "")
         client = Garmin(email or "check")
-        client.login(tokenstore=TOKEN_DIR)
+        client.login(tokenstore=token_dir)
         return client
     except Exception as exc:
         log.debug("Failed to load client from tokens: %s", exc)
@@ -81,9 +106,8 @@ def _load_client() -> Optional["Garmin"]:
 @app.route("/auth/login", methods=["POST"])
 def login() -> tuple[Response, int] | Response:
     """Attempt Garmin Connect login. Returns MFA prompt if required."""
-    global _mfa_state  # noqa: PLW0603
-
     data = request.get_json(silent=True) or {}
+    user_id = _req_user_id()
     email = data.get("email", "").strip()
     password = data.get("password", "")
 
@@ -103,20 +127,19 @@ def login() -> tuple[Response, int] | Response:
             token1, token2 = result
             log.info("Login returned tuple: token1 type=%s", type(token1).__name__)
             if token1 == "needs_mfa":
-                _mfa_state = {
+                _mfa_store.set(user_id, {
                     "email": email,
                     "password": password,
                     "client_state": token2,
                     "client": client,
-                }
+                })
                 log.info("MFA required — saved client state and credentials")
                 return jsonify(success=False, needsMfa=True,
                                message="MFA code required")
 
         # Login succeeded — persist tokens
-        _save_tokens(client)
-        _mfa_state = {"email": None, "password": None,
-                      "client_state": None, "client": None}
+        _save_tokens(client, user_id)
+        _mfa_store.clear(user_id)
         return jsonify(success=True, needsMfa=False)
 
     except Exception as exc:
@@ -124,12 +147,12 @@ def login() -> tuple[Response, int] | Response:
         msg = str(exc).lower()
         if "mfa" in msg or "verification" in msg or "two-factor" in msg:
             # Save credentials for retry via MFA endpoint
-            _mfa_state = {
+            _mfa_store.set(user_id, {
                 "email": email,
                 "password": password,
                 "client_state": None,
                 "client": None,
-            }
+            })
             log.info("MFA detected via exception — saved credentials for retry")
             return jsonify(success=False, needsMfa=True,
                            message="MFA code required")
@@ -140,17 +163,17 @@ def login() -> tuple[Response, int] | Response:
 @app.route("/auth/mfa", methods=["POST"])
 def mfa() -> tuple[Response, int] | Response:
     """Complete MFA verification and save token."""
-    global _mfa_state  # noqa: PLW0603
-
     data = request.get_json(silent=True) or {}
+    user_id = _req_user_id()
     code = data.get("code", "").strip()
     if not code:
         return jsonify(success=False, message="MFA code is required"), 400
 
-    client_state = _mfa_state.get("client_state")
-    client = _mfa_state.get("client")
-    email = _mfa_state.get("email")
-    password = _mfa_state.get("password")
+    pending = _mfa_store.get(user_id) or {}
+    client_state = pending.get("client_state")
+    client = pending.get("client")
+    email = pending.get("email")
+    password = pending.get("password")
 
     log.info("MFA attempt — have client_state=%s, have client=%s, have creds=%s",
              client_state is not None, client is not None, email is not None)
@@ -163,9 +186,8 @@ def mfa() -> tuple[Response, int] | Response:
             oauth1, oauth2 = garth_sso.resume_login(client_state, code)
             client.garth.oauth1_token = oauth1
             client.garth.oauth2_token = oauth2
-            _save_tokens(client)
-            _mfa_state = {"email": None, "password": None,
-                          "client_state": None, "client": None}
+            _save_tokens(client, user_id)
+            _mfa_store.clear(user_id)
             log.info("MFA success via resume_login")
             return jsonify(success=True)
         except Exception as exc:
@@ -177,21 +199,18 @@ def mfa() -> tuple[Response, int] | Response:
             log.info("Trying fresh login with MFA code for %s...", email)
             client2 = Garmin(email, password, prompt_mfa=lambda: code)
             client2.login()
-            _save_tokens(client2)
-            _mfa_state = {"email": None, "password": None,
-                          "client_state": None, "client": None}
+            _save_tokens(client2, user_id)
+            _mfa_store.clear(user_id)
             log.info("MFA success via prompt_mfa callback")
             return jsonify(success=True)
         except Exception as exc:
             log.error("prompt_mfa login failed: %s", exc)
-            _mfa_state = {"email": None, "password": None,
-                          "client_state": None, "client": None}
+            _mfa_store.clear(user_id)
             return jsonify(success=False,
                            message=f"MFA failed: {exc}. "
                            "Please try logging in again."), 401
 
-    _mfa_state = {"email": None, "password": None,
-                  "client_state": None, "client": None}
+    _mfa_store.clear(user_id)
     return jsonify(success=False,
                    message="No pending MFA session. Please log in again."), 400
 
@@ -199,7 +218,9 @@ def mfa() -> tuple[Response, int] | Response:
 @app.route("/auth/status", methods=["GET"])
 def status() -> Response:
     """Check whether a valid Garmin session token exists."""
-    client = _load_client()
+    user_id = _req_user_id()
+    token_dir = _token_dir(user_id)
+    client = _load_client(user_id)
     if client is None:
         return jsonify(connected=False, email="", lastSync="")
 
@@ -208,7 +229,7 @@ def status() -> Response:
         # Prefer last successful data sync timestamp (written by garmin-sync.py)
         # falling back to token directory mtime when that file is missing
         # (fresh install before first sync completes).
-        last_sync_file = os.path.join(TOKEN_DIR, ".last_sync")
+        last_sync_file = os.path.join(token_dir, ".last_sync")
         last_modified = None
         try:
             with open(last_sync_file, "r") as f:
@@ -216,7 +237,7 @@ def status() -> Response:
         except OSError:
             last_modified = None
         if not last_modified:
-            stat = os.stat(TOKEN_DIR)
+            stat = os.stat(token_dir)
             last_modified = datetime.fromtimestamp(
                 stat.st_mtime, tz=timezone.utc
             ).isoformat()
@@ -228,7 +249,7 @@ def status() -> Response:
 @app.route("/auth/sync-status", methods=["GET"])
 def sync_status() -> Response:
     """Return current sync progress."""
-    status_file = os.path.join(TOKEN_DIR, ".sync_status")
+    status_file = os.path.join(_token_dir(_req_user_id()), ".sync_status")
     try:
         if os.path.exists(status_file):
             with open(status_file) as f:
@@ -242,8 +263,8 @@ def sync_status() -> Response:
 @app.route("/auth/sync-log", methods=["GET"])
 def sync_log() -> Response:
     """Return the tail of the most recent manual-sync log for diagnosis."""
-    log_path = "/data/garmin-sync.log"
-    prev_log_path = "/data/garmin-sync.log.1"
+    log_path = SYNC_LOG_PATH
+    prev_log_path = SYNC_LOG_PREV_PATH
     try:
         lines: list[str] = []
         if os.path.exists(prev_log_path):
@@ -264,8 +285,11 @@ def trigger_sync() -> tuple[Response, int] | Response:
     """Trigger an immediate Garmin sync in the background."""
     import subprocess
 
+    user_id = _req_user_id()
+    token_dir = _token_dir(user_id)
+
     # Check if sync is already running
-    status_file = os.path.join(TOKEN_DIR, ".sync_status")
+    status_file = os.path.join(token_dir, ".sync_status")
     try:
         if os.path.exists(status_file):
             with open(status_file) as f:
@@ -276,7 +300,7 @@ def trigger_sync() -> tuple[Response, int] | Response:
         pass
 
     # Check if either native garminconnect tokens or legacy garth tokens exist.
-    if not _has_saved_garmin_tokens():
+    if not _has_saved_garmin_tokens(user_id=user_id):
         return jsonify(success=False, message="Not connected to Garmin"), 400
 
     # Launch sync in background. Capture stdout/stderr to a rotated log so
@@ -288,8 +312,14 @@ def trigger_sync() -> tuple[Response, int] | Response:
             "DATABASE_URL",
             "postgresql://postgres@127.0.0.1:5432/pulsecoach"
         )
-        log_path = "/data/garmin-sync.log"
-        prev_log_path = "/data/garmin-sync.log.1"
+        # Scope the sync to this user: the sync script reads GARMIN_TOKEN_DIR
+        # for tokens and GARMIN_USER_ID for the row owner. When no user id is
+        # present (addon), both fall through to the shared defaults.
+        env["GARMIN_TOKEN_DIR"] = token_dir
+        if user_id:
+            env["GARMIN_USER_ID"] = user_id
+        log_path = SYNC_LOG_PATH
+        prev_log_path = SYNC_LOG_PREV_PATH
         try:
             if os.path.exists(log_path):
                 # Keep one rotation so the previous run's tail survives.
@@ -330,6 +360,8 @@ def trigger_sync() -> tuple[Response, int] | Response:
 def import_tokens() -> tuple[Response, int] | Response:
     """Import pre-generated garth tokens (oauth1 + oauth2 JSON)."""
     data = request.get_json(silent=True) or {}
+    user_id = _req_user_id()
+    token_dir = _token_dir(user_id)
     oauth1 = data.get("oauth1_token")
     oauth2 = data.get("oauth2_token")
 
@@ -338,31 +370,31 @@ def import_tokens() -> tuple[Response, int] | Response:
                        message="Both oauth1_token and oauth2_token required"), 400
 
     try:
-        os.makedirs(TOKEN_DIR, mode=0o700, exist_ok=True)
-        # Defense-in-depth: if TOKEN_DIR itself is a symlink, an attacker
+        os.makedirs(token_dir, mode=0o700, exist_ok=True)
+        # Defense-in-depth: if token_dir itself is a symlink, an attacker
         # could redirect credential writes into an arbitrary directory.
         # Refuse to import rather than writing through the link.
-        if os.path.islink(TOKEN_DIR):
+        if os.path.islink(token_dir):
             return jsonify(
                 success=False,
                 message="Token directory is a symlink; refusing to import",
             ), 500
-        os.chmod(TOKEN_DIR, 0o700)
+        os.chmod(token_dir, 0o700)
         # Owner-only token files, O_NOFOLLOW so a pre-planted symlink
         # cannot redirect the write to an unrelated file.
         for name, payload in (("oauth1_token.json", oauth1),
                               ("oauth2_token.json", oauth2)):
             fd = os.open(
-                os.path.join(TOKEN_DIR, name),
+                os.path.join(token_dir, name),
                 os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW,
                 0o600,
             )
             with os.fdopen(fd, "w") as f:
                 json.dump(payload, f)
-            os.chmod(os.path.join(TOKEN_DIR, name), 0o600)
+            os.chmod(os.path.join(token_dir, name), 0o600)
 
         # Verify tokens work
-        client = _load_client()
+        client = _load_client(user_id)
         if client is None:
             return jsonify(success=False,
                            message="Tokens saved but validation failed"), 500
@@ -378,8 +410,11 @@ def logout() -> tuple[Response, int] | Response:
     """Remove stored Garmin session token."""
     try:
         import shutil
-        if os.path.exists(TOKEN_DIR):
-            shutil.rmtree(TOKEN_DIR)
+        user_id = _req_user_id()
+        token_dir = _token_dir(user_id)
+        _mfa_store.clear(user_id)
+        if os.path.exists(token_dir):
+            shutil.rmtree(token_dir)
         return jsonify(success=True)
     except Exception as exc:
         return jsonify(success=False, message=str(exc)), 500

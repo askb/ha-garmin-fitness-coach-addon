@@ -1,0 +1,220 @@
+# SPDX-FileCopyrightText: 2026 Anil Belur <askb23@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+"""Integration tests for multi-tenant scoping in garmin-auth-server.py.
+
+Loads the Flask app with garminconnect mocked and TOKEN_DIR redirected to a
+tmp dir, then verifies per-user token isolation, per-user MFA state, and that
+sync is launched with per-user env — while an addon-style request (no user
+header) keeps using the shared token dir (backward compatible).
+"""
+
+import importlib.util
+import json
+import os
+from pathlib import Path
+
+import pytest
+
+_SCRIPTS = (
+    Path(__file__).resolve().parents[1]
+    / "pulsecoach"
+    / "rootfs"
+    / "app"
+    / "scripts"
+)
+USER_HEADER = "X-PulseCoach-User"
+
+
+class _FakeGarth:
+    def __init__(self, marker):
+        self._marker = marker
+
+    def dump(self, token_dir):
+        os.makedirs(token_dir, exist_ok=True)
+        # Emulate garth writing the native token file.
+        with open(os.path.join(token_dir, "garmin_tokens.json"), "w") as f:
+            json.dump({"marker": self._marker}, f)
+
+
+class _FakeGarmin:
+    """Stand-in for garminconnect.Garmin.
+
+    - Constructed with (email) for _load_client → login(tokenstore=...) is a
+      no-op success.
+    - Constructed with (email, password, ...) for the login endpoint →
+      login() returns ("a","b") success, unless the password is "MFA" in which
+      case it returns ("needs_mfa","state").
+    """
+
+    def __init__(self, email=None, password=None, **kwargs):
+        self._email = email
+        self._password = password
+        self.garth = _FakeGarth(email or "loaded")
+
+    def login(self, tokenstore=None):
+        if tokenstore is not None:
+            return None  # _load_client path: token load succeeds
+        if self._password == "MFA":
+            return ("needs_mfa", "client-state-token")
+        return ("oauth1", "oauth2")
+
+
+@pytest.fixture()
+def client(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        "gas_under_test", _SCRIPTS / "garmin-auth-server.py"
+    )
+    gas = importlib.util.module_from_spec(spec)
+    # Ensure sibling imports (gcal, interactions, helpers) resolve.
+    import sys
+    sys.path.insert(0, str(_SCRIPTS))
+    spec.loader.exec_module(gas)
+
+    # Redirect token storage to a writable tmp dir and mock Garmin.
+    monkeypatch.setattr(gas, "TOKEN_DIR", str(tmp_path / "garmin-tokens"))
+    monkeypatch.setattr(gas, "Garmin", _FakeGarmin)
+    gas.app.config.update(TESTING=True)
+    return gas, gas.app.test_client()
+
+
+def _user_dir(gas, user_id):
+    return gas.user_token_dir(gas.TOKEN_DIR, user_id)
+
+
+# ── import-tokens isolation ─────────────────────────────────────────────────
+
+def test_import_tokens_single_user_uses_base_dir(client):
+    gas, c = client
+    resp = c.post("/auth/import-tokens", json={
+        "oauth1_token": {"a": 1}, "oauth2_token": {"b": 2},
+    })
+    assert resp.status_code == 200
+    # Written directly under the base dir (addon behavior).
+    assert os.path.exists(os.path.join(gas.TOKEN_DIR, "oauth1_token.json"))
+    assert not os.path.isdir(os.path.join(gas.TOKEN_DIR, "users"))
+
+
+def test_import_tokens_per_user_is_isolated(client):
+    gas, c = client
+    for user in ("alice", "bob"):
+        r = c.post(
+            "/auth/import-tokens",
+            json={"oauth1_token": {"u": user}, "oauth2_token": {"u": user}},
+            headers={USER_HEADER: user},
+        )
+        assert r.status_code == 200
+
+    alice_dir = _user_dir(gas, "alice")
+    bob_dir = _user_dir(gas, "bob")
+    assert alice_dir != bob_dir
+    assert os.path.exists(os.path.join(alice_dir, "oauth1_token.json"))
+    assert os.path.exists(os.path.join(bob_dir, "oauth1_token.json"))
+    # Neither leaked into the shared base dir.
+    assert not os.path.exists(os.path.join(gas.TOKEN_DIR, "oauth1_token.json"))
+    # Alice's payload is not visible under bob's dir.
+    with open(os.path.join(alice_dir, "oauth1_token.json")) as f:
+        assert json.load(f) == {"u": "alice"}
+
+
+# ── status isolation ────────────────────────────────────────────────────────
+
+def test_status_reflects_only_that_users_tokens(client):
+    gas, c = client
+    # alice connects; bob does not.
+    c.post("/auth/import-tokens",
+           json={"oauth1_token": {"x": 1}, "oauth2_token": {"y": 2}},
+           headers={USER_HEADER: "alice"})
+
+    alice = c.get("/auth/status", headers={USER_HEADER: "alice"}).get_json()
+    bob = c.get("/auth/status", headers={USER_HEADER: "bob"}).get_json()
+    assert alice["connected"] is True
+    assert bob["connected"] is False
+
+
+# ── login → MFA state is per-user ───────────────────────────────────────────
+
+def test_login_success_saves_tokens_for_user(client):
+    gas, c = client
+    r = c.post("/auth/login",
+               json={"email": "a@x.com", "password": "good"},
+               headers={USER_HEADER: "alice"})
+    body = r.get_json()
+    assert body["success"] is True
+    assert os.path.exists(
+        os.path.join(_user_dir(gas, "alice"), "garmin_tokens.json"))
+
+
+def test_pending_mfa_is_isolated_per_user(client):
+    gas, c = client
+    # alice triggers MFA (password "MFA" → needs_mfa); bob does not log in.
+    r = c.post("/auth/login",
+               json={"email": "a@x.com", "password": "MFA"},
+               headers={USER_HEADER: "alice"})
+    assert r.get_json()["needsMfa"] is True
+    assert gas._mfa_store.has("alice")
+    assert not gas._mfa_store.has("bob")
+    assert not gas._mfa_store.has(None)  # single-user slot untouched
+
+
+# ── sync launches with per-user env ─────────────────────────────────────────
+
+def test_sync_passes_per_user_env(client, monkeypatch):
+    gas, c = client
+    # Give alice tokens so the "connected" check passes.
+    c.post("/auth/import-tokens",
+           json={"oauth1_token": {"x": 1}, "oauth2_token": {"y": 2}},
+           headers={USER_HEADER: "alice"})
+
+    captured = {}
+
+    class _FakePopen:
+        def __init__(self, argv, env=None, stdout=None, stderr=None):
+            captured["argv"] = argv
+            captured["env"] = env
+
+    import subprocess
+    monkeypatch.setattr(subprocess, "Popen", _FakePopen)
+    monkeypatch.setattr(gas, "SYNC_LOG_PATH", str(gas.TOKEN_DIR) + "-sync.log")
+    monkeypatch.setattr(gas, "SYNC_LOG_PREV_PATH", str(gas.TOKEN_DIR) + "-sync.log.1")
+
+    r = c.post("/auth/sync", headers={USER_HEADER: "alice"})
+    assert r.status_code == 200
+    assert captured["env"]["GARMIN_USER_ID"] == "alice"
+    assert captured["env"]["GARMIN_TOKEN_DIR"] == _user_dir(gas, "alice")
+
+
+def test_sync_single_user_uses_base_dir_and_no_user_id(client, monkeypatch):
+    gas, c = client
+    c.post("/auth/import-tokens",
+           json={"oauth1_token": {"x": 1}, "oauth2_token": {"y": 2}})
+
+    captured = {}
+
+    class _FakePopen:
+        def __init__(self, argv, env=None, stdout=None, stderr=None):
+            captured["env"] = env
+
+    import subprocess
+    monkeypatch.setattr(subprocess, "Popen", _FakePopen)
+    monkeypatch.setattr(gas, "SYNC_LOG_PATH", str(gas.TOKEN_DIR) + "-sync.log")
+    monkeypatch.setattr(gas, "SYNC_LOG_PREV_PATH", str(gas.TOKEN_DIR) + "-sync.log.1")
+
+    r = c.post("/auth/sync")
+    assert r.status_code == 200
+    # Addon mode: token dir is the base, and no per-user id is forced.
+    assert captured["env"]["GARMIN_TOKEN_DIR"] == gas.TOKEN_DIR
+    assert "GARMIN_USER_ID" not in captured["env"]
+
+
+# ── logout only removes that user's tokens ──────────────────────────────────
+
+def test_logout_removes_only_that_user(client):
+    gas, c = client
+    for user in ("alice", "bob"):
+        c.post("/auth/import-tokens",
+               json={"oauth1_token": {"u": user}, "oauth2_token": {"u": user}},
+               headers={USER_HEADER: user})
+
+    c.post("/auth/logout", headers={USER_HEADER: "alice"})
+    assert not os.path.exists(_user_dir(gas, "alice"))
+    assert os.path.exists(_user_dir(gas, "bob"))
