@@ -92,15 +92,19 @@ test("stress-board masked capture", async ({ page }, testInfo) => {
 
   await page.goto("/stress-board", { waitUntil: "networkidle" });
 
-  // Unmasked baseline: every fictional attendee AND a known meeting title
-  // must actually render first, so the post-mask "count == 0" assertions
-  // below can't pass vacuously against rows that never loaded.
+  // The board masks names by default now (privacy §3), so it loads showing the
+  // 🙈 masked state. First reveal names to prove every fictional attendee AND a
+  // known meeting title actually rendered — otherwise the post-mask
+  // "count == 0" assertions below could pass vacuously against rows that never
+  // loaded.
+  await page.getByRole("button", { name: /masked/ }).click();
+  await expect(page.getByRole("button", { name: /names/ })).toBeVisible();
   for (const name of MOCK_STATUS.results.people.map((p) => p.attendee)) {
     await expect(page.getByText(name).first()).toBeVisible();
   }
   await expect(page.getByText("1:1 sync").first()).toBeVisible();
 
-  // Toggle to masked mode for a shareable screenshot.
+  // Toggle back to masked mode for a shareable screenshot.
   await page.getByRole("button", { name: /names/ }).click();
   await expect(page.getByRole("button", { name: /masked/ })).toBeVisible();
 
