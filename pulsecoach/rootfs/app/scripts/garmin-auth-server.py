@@ -61,30 +61,34 @@ def _sync_log_paths(user_id: Optional[str] = None) -> tuple[str, str]:
 
 
 def _assert_token_dir_contained(token_dir: str) -> None:
-    """Refuse to touch a token dir that escapes TOKEN_DIR or is a symlink.
+    """Refuse a token dir that escapes TOKEN_DIR or has any symlinked component.
 
-    Per-user dirs live at ``TOKEN_DIR/users/<hash>``. Two attacks are blocked:
+    Per-user dirs live at ``TOKEN_DIR/users/<hash>``. Two properties are
+    enforced:
 
-    - A symlinked intermediate component (e.g. ``users`` → elsewhere) could
-      redirect credential reads/writes outside the base. Resolving the real
-      path and requiring it to stay within the real TOKEN_DIR blocks that.
-    - The token dir itself being a symlink — even to another dir *within*
-      TOKEN_DIR (user A → user B) — would pass the containment check but break
-      isolation, so a symlinked token dir is always rejected. (A symlinked
-      base never occurs in normal operation; the dir is created real.)
+    - **Containment**: the dir must be ``TOKEN_DIR`` itself or lexically below
+      it (the hashed user id can't introduce ``..``, so an abspath check is
+      sufficient and avoids trusting symlink resolution).
+    - **No symlinked component** from ``TOKEN_DIR`` (inclusive) down to the
+      target. A symlinked component — even one resolving *within* TOKEN_DIR
+      (e.g. ``users`` → ``users/<other>``) — would silently break per-user
+      isolation or redirect credentials, so any such symlink is rejected.
     """
-    base_real = os.path.realpath(TOKEN_DIR)
-    target_real = os.path.realpath(token_dir)
-    if target_real != base_real and os.path.commonpath(
-        [base_real, target_real]
-    ) != base_real:
-        raise PermissionError(
-            f"Refusing token dir outside base: {token_dir}"
-        )
-    if os.path.islink(token_dir):
-        raise PermissionError(
-            f"Refusing symlinked token dir: {token_dir}"
-        )
+    base = os.path.abspath(TOKEN_DIR)
+    target = os.path.abspath(token_dir)
+    if target != base and os.path.commonpath([base, target]) != base:
+        raise PermissionError(f"Refusing token dir outside base: {token_dir}")
+    if os.path.islink(base):
+        raise PermissionError(f"Refusing symlinked base token dir: {base}")
+    rel = os.path.relpath(target, base)
+    if rel != ".":
+        current = base
+        for part in rel.split(os.sep):
+            current = os.path.join(current, part)
+            if os.path.islink(current):
+                raise PermissionError(
+                    f"Refusing symlinked token-dir component: {current}"
+                )
 
 
 def _req_user_id() -> Optional[str]:

@@ -304,4 +304,22 @@ def test_symlinked_per_user_dir_within_base_is_rejected(client):
     assert resp["connected"] is False
 
 
+def test_symlinked_users_component_within_base_is_rejected(client, tmp_path):
+    gas, c = client
+    # Make the intermediate `users` dir a symlink to another dir *within* the
+    # base — it resolves inside TOKEN_DIR but still breaks isolation.
+    os.makedirs(os.path.join(gas.TOKEN_DIR, "real_users"), exist_ok=True)
+    os.symlink(
+        os.path.join(gas.TOKEN_DIR, "real_users"),
+        os.path.join(gas.TOKEN_DIR, "users"),
+    )
+    r = c.post(
+        "/auth/import-tokens",
+        json={"oauth1_token": {"x": 1}, "oauth2_token": {"y": 2}},
+        headers={USER_HEADER: "alice"},
+    )
+    assert r.status_code == 500
+
+
+
 
