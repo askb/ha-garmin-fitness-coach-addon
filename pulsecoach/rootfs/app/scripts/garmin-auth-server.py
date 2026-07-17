@@ -68,10 +68,10 @@ def _assert_token_dir_contained(token_dir: str) -> None:
     - A symlinked intermediate component (e.g. ``users`` → elsewhere) could
       redirect credential reads/writes outside the base. Resolving the real
       path and requiring it to stay within the real TOKEN_DIR blocks that.
-    - The per-user dir itself being a symlink — even to another dir *within*
+    - The token dir itself being a symlink — even to another dir *within*
       TOKEN_DIR (user A → user B) — would pass the containment check but break
-      isolation. So a per-user token dir may never be a symlink. The base
-      TOKEN_DIR is exempt (it is not a per-user dir).
+      isolation, so a symlinked token dir is always rejected. (A symlinked
+      base never occurs in normal operation; the dir is created real.)
     """
     base_real = os.path.realpath(TOKEN_DIR)
     target_real = os.path.realpath(token_dir)
@@ -81,11 +81,9 @@ def _assert_token_dir_contained(token_dir: str) -> None:
         raise PermissionError(
             f"Refusing token dir outside base: {token_dir}"
         )
-    if os.path.abspath(token_dir) != os.path.abspath(TOKEN_DIR) and os.path.islink(
-        token_dir
-    ):
+    if os.path.islink(token_dir):
         raise PermissionError(
-            f"Refusing symlinked per-user token dir: {token_dir}"
+            f"Refusing symlinked token dir: {token_dir}"
         )
 
 
