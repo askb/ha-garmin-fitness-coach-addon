@@ -14,10 +14,12 @@ MFA window). Nothing is persisted to disk.
 
 from typing import Any, Optional
 
-_SINGLE_USER_KEY = "__single_user__"
+# Unique sentinel for the single-user (addon) slot. Using an object() — not a
+# string — means no real user_id (always a str) can ever collide with it.
+_SINGLE_USER_KEY = object()
 
 
-def _key(user_id: Optional[str]) -> str:
+def _key(user_id: Optional[str]):
     if user_id is None or not user_id.strip():
         return _SINGLE_USER_KEY
     return user_id.strip()
@@ -27,7 +29,7 @@ class MfaStore:
     """In-memory per-user pending-MFA state."""
 
     def __init__(self) -> None:
-        self._by_user: dict[str, dict[str, Any]] = {}
+        self._by_user: dict[Any, dict[str, Any]] = {}
 
     def set(self, user_id: Optional[str], state: dict[str, Any]) -> None:
         self._by_user[_key(user_id)] = state
@@ -71,6 +73,14 @@ def demo() -> None:
     # Whitespace is trimmed consistently.
     s.set(" carol ", {"pw": 3})
     assert s.get("carol") == {"pw": 3}
+
+    # A user id equal to the old sentinel string must NOT collide with the
+    # single-user slot (the sentinel is now an object(), not "__single_user__").
+    s2 = MfaStore()
+    s2.set(None, {"slot": "single"})
+    s2.set("__single_user__", {"slot": "real-user"})
+    assert s2.get(None) == {"slot": "single"}
+    assert s2.get("__single_user__") == {"slot": "real-user"}
 
     print("mfa_store.py: all checks passed")
 

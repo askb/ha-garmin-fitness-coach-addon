@@ -11,6 +11,7 @@ header) keeps using the shared token dir (backward compatible).
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,11 @@ _SCRIPTS = (
     / "scripts"
 )
 USER_HEADER = "X-PulseCoach-User"
+
+# Make sibling imports (gcal, interactions, helper modules) resolvable once,
+# without mutating sys.path inside the fixture on every test.
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
 
 
 class _FakeGarth:
@@ -72,9 +78,6 @@ def client(tmp_path, monkeypatch):
         "gas_under_test", _SCRIPTS / "garmin-auth-server.py"
     )
     gas = importlib.util.module_from_spec(spec)
-    # Ensure sibling imports (gcal, interactions, helpers) resolve.
-    import sys
-    sys.path.insert(0, str(_SCRIPTS))
     spec.loader.exec_module(gas)
 
     # Redirect token storage to a writable tmp dir and mock Garmin.
@@ -225,3 +228,47 @@ def test_logout_removes_only_that_user(client):
     c.post("/auth/logout", headers={USER_HEADER: "alice"})
     assert not os.path.exists(_user_dir(gas, "alice"))
     assert os.path.exists(_user_dir(gas, "bob"))
+
+
+# ── sync log is per-user (no cross-user leakage) ────────────────────────────
+
+def test_sync_log_is_isolated_per_user(client, monkeypatch):
+    gas, c = client
+    for user in ("alice", "bob"):
+        c.post("/auth/import-tokens",
+               json={"oauth1_token": {"u": user}, "oauth2_token": {"u": user}},
+               headers={USER_HEADER: user})
+
+    import subprocess
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: None)
+
+    # alice triggers a sync → her log gets a header line written.
+    c.post("/auth/sync", headers={USER_HEADER: "alice"})
+    alice_log = c.get("/auth/sync-log", headers={USER_HEADER: "alice"}).get_json()
+    bob_log = c.get("/auth/sync-log", headers={USER_HEADER: "bob"}).get_json()
+
+    assert alice_log["available"] is True
+    # bob never synced → cannot see alice's log.
+    assert bob_log["available"] is False
+
+
+# ── credential dir hardening ────────────────────────────────────────────────
+
+def test_import_tokens_refuses_symlinked_users_dir(client, tmp_path):
+    gas, c = client
+    # Pre-plant TOKEN_DIR/users as a symlink pointing outside the base.
+    outside = tmp_path / "evil"
+    outside.mkdir()
+    users_link = os.path.join(gas.TOKEN_DIR, "users")
+    os.makedirs(gas.TOKEN_DIR, exist_ok=True)
+    os.symlink(str(outside), users_link)
+
+    r = c.post(
+        "/auth/import-tokens",
+        json={"oauth1_token": {"x": 1}, "oauth2_token": {"y": 2}},
+        headers={USER_HEADER: "alice"},
+    )
+    assert r.status_code == 500
+    # Nothing was written into the attacker-controlled target.
+    assert not any(outside.iterdir())
+

@@ -60,5 +60,15 @@ def test_clear_missing_is_noop():
     s.clear("nobody")  # must not raise
 
 
+def test_sentinel_string_userid_does_not_collide_with_single_user():
+    s = mod.MfaStore()
+    s.set(None, {"slot": "single"})
+    s.set("__single_user__", {"slot": "real"})
+    # The single-user slot uses an object() sentinel, so a real user whose id
+    # is literally "__single_user__" is isolated from it.
+    assert s.get(None) == {"slot": "single"}
+    assert s.get("__single_user__") == {"slot": "real"}
+
+
 def test_demo_self_check_passes():
     mod.demo()

@@ -29,11 +29,11 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("garmin-auth")
 
 TOKEN_DIR = "/data/garmin-tokens"
-TOKEN_FILE = os.path.join(TOKEN_DIR, "session.json")
 
-# Diagnostic sync log (shared across users — it's transient stdout/stderr of
-# the most recent manual sync, not per-user data). Module-level so tests can
-# redirect it off /data.
+# Base diagnostic sync log for single-user/addon runs (transient stdout/stderr
+# of the most recent manual sync). Per-user runs get an isolated log under the
+# user's token dir — see _sync_log_paths(). Module-level so tests can redirect
+# these off /data.
 SYNC_LOG_PATH = "/data/garmin-sync.log"
 SYNC_LOG_PREV_PATH = "/data/garmin-sync.log.1"
 
@@ -45,6 +45,38 @@ def _token_dir(user_id: Optional[str] = None) -> str:
     as before. Multi-tenant requests get an isolated, path-safe subdirectory.
     """
     return user_token_dir(TOKEN_DIR, user_id)
+
+
+def _sync_log_paths(user_id: Optional[str] = None) -> tuple[str, str]:
+    """Return (log, prev_log) paths for a sync run.
+
+    Single-user/addon → the shared /data logs (unchanged). Multi-tenant →
+    per-user logs under the user's token dir so one user cannot read another
+    user's sync output via /auth/sync-log.
+    """
+    if not user_id:
+        return SYNC_LOG_PATH, SYNC_LOG_PREV_PATH
+    base = _token_dir(user_id)
+    return os.path.join(base, "sync.log"), os.path.join(base, "sync.log.1")
+
+
+def _assert_token_dir_contained(token_dir: str) -> None:
+    """Refuse to touch a token dir that escapes TOKEN_DIR via a symlink.
+
+    Per-user dirs live at ``TOKEN_DIR/users/<hash>``; if an intermediate
+    component (e.g. ``users``) is a symlink to somewhere else, credential
+    reads/writes could be redirected. Resolving the real path and requiring it
+    to stay within the real TOKEN_DIR blocks that. The shared TOKEN_DIR itself
+    is always trivially contained.
+    """
+    base_real = os.path.realpath(TOKEN_DIR)
+    target_real = os.path.realpath(token_dir)
+    if target_real != base_real and os.path.commonpath(
+        [base_real, target_real]
+    ) != base_real:
+        raise PermissionError(
+            f"Refusing token dir outside base: {token_dir}"
+        )
 
 
 def _req_user_id() -> Optional[str]:
@@ -73,10 +105,14 @@ def _has_saved_garmin_tokens(
 def _save_tokens(client: "Garmin", user_id: Optional[str] = None) -> None:
     """Save garth tokens to disk in native directory format."""
     token_dir = _token_dir(user_id)
+    # Refuse before creating anything if the resolved dir escapes the base via
+    # a symlinked component, then never write through a symlinked dir — both
+    # could redirect credentials.
+    _assert_token_dir_contained(token_dir)
     os.makedirs(token_dir, mode=0o700, exist_ok=True)
-    # Don't chmod through a symlink — only tighten a real directory.
-    if not os.path.islink(token_dir):
-        os.chmod(token_dir, 0o700)
+    if os.path.islink(token_dir):
+        raise PermissionError(f"Token directory is a symlink: {token_dir}")
+    os.chmod(token_dir, 0o700)
     client.garth.dump(token_dir)
     # Restrict token files to owner-only — they are credential material and
     # the data dir may be reachable by other add-ons. Skip symlinks so a
@@ -263,8 +299,7 @@ def sync_status() -> Response:
 @app.route("/auth/sync-log", methods=["GET"])
 def sync_log() -> Response:
     """Return the tail of the most recent manual-sync log for diagnosis."""
-    log_path = SYNC_LOG_PATH
-    prev_log_path = SYNC_LOG_PREV_PATH
+    log_path, prev_log_path = _sync_log_paths(_req_user_id())
     try:
         lines: list[str] = []
         if os.path.exists(prev_log_path):
@@ -318,8 +353,9 @@ def trigger_sync() -> tuple[Response, int] | Response:
         env["GARMIN_TOKEN_DIR"] = token_dir
         if user_id:
             env["GARMIN_USER_ID"] = user_id
-        log_path = SYNC_LOG_PATH
-        prev_log_path = SYNC_LOG_PREV_PATH
+        # Per-user log when scoped, shared /data log for the addon.
+        log_path, prev_log_path = _sync_log_paths(user_id)
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
         try:
             if os.path.exists(log_path):
                 # Keep one rotation so the previous run's tail survives.
@@ -370,10 +406,12 @@ def import_tokens() -> tuple[Response, int] | Response:
                        message="Both oauth1_token and oauth2_token required"), 400
 
     try:
+        # Defense-in-depth: refuse *before* creating anything if the resolved
+        # dir escapes the base via a symlinked component — otherwise makedirs
+        # would create a dir at the attacker-controlled target.
+        _assert_token_dir_contained(token_dir)
         os.makedirs(token_dir, mode=0o700, exist_ok=True)
-        # Defense-in-depth: if token_dir itself is a symlink, an attacker
-        # could redirect credential writes into an arbitrary directory.
-        # Refuse to import rather than writing through the link.
+        # Also refuse if token_dir itself is a symlink.
         if os.path.islink(token_dir):
             return jsonify(
                 success=False,
