@@ -56,8 +56,17 @@ RUN apk add --no-cache \
 # Create PostgreSQL data directory
 RUN mkdir -p /data/postgresql && chown -R postgres:postgres /data/postgresql
 
-# Install garminconnect Python package for direct Garmin API sync
-RUN pip3 install --break-system-packages garminconnect garth flask psycopg2-binary requests
+# Install garminconnect Python package for direct Garmin API sync.
+# PINNED: garmin-auth-server.py uses the garth-based API (client.garth.*,
+# garth.sso.resume_login) which garminconnect >=0.3.0 removed entirely
+# (native OAuth rewrite). 0.2.40 is the last garth-based release and allows
+# garth >=0.5.17,<0.7.0. Do not unpin without migrating the auth server.
+RUN pip3 install --no-cache-dir --break-system-packages \
+    garminconnect==0.2.40 \
+    garth==0.6.3 \
+    flask \
+    psycopg2-binary \
+    requests
 
 WORKDIR /app
 
