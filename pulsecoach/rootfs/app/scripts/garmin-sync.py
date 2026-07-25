@@ -11,6 +11,7 @@ Supports two auth modes:
 """
 
 import json
+import logging
 import math
 import os
 import random
@@ -206,8 +207,8 @@ def _write_last_sync() -> None:
         _ensure_secure_dir(TOKEN_DIR)
         with open(LAST_SYNC_FILE, "w") as f:
             f.write(datetime.now(timezone.utc).isoformat())
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("last-sync write failed: %s", exc)
 
 
 def _write_sync_status(phase, detail="", progress=0):
@@ -225,8 +226,8 @@ def _write_sync_status(phase, detail="", progress=0):
     try:
         with open(SYNC_STATUS_FILE, "w") as f:
             _json.dump(status, f)
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("sync-status write failed: %s", exc)
 
 
 def _clear_sync_status():
@@ -243,8 +244,8 @@ def _clear_sync_status():
     try:
         with open(SYNC_STATUS_FILE, "w") as f:
             _json.dump(status, f)
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("sync-status clear failed: %s", exc)
 
 
 def _refresh_matview(db) -> None:
@@ -267,7 +268,6 @@ def get_client():
     """Authenticate with Garmin Connect, preferring saved tokens."""
     _ensure_secure_dir(TOKEN_DIR)
     native_token_path = os.path.join(TOKEN_DIR, "garmin_tokens.json")
-    oauth1_path = os.path.join(TOKEN_DIR, "oauth1_token.json")
     oauth2_path = os.path.join(TOKEN_DIR, "oauth2_token.json")
 
     # Migrate legacy garth tokens to garminconnect 0.3.x native format
@@ -276,6 +276,7 @@ def get_client():
             _migrate_garth_tokens(oauth2_path, native_token_path)
         except Exception as e:
             print(f"Token migration failed: {e}", file=sys.stderr)
+            logging.getLogger(__name__).debug("token migration failed: %s", e)
 
     # Mode 1: Resume from saved tokens (garminconnect 0.3.x native format)
     if os.path.exists(native_token_path):
@@ -285,12 +286,13 @@ def get_client():
             # Re-save tokens (refreshes if needed)
             try:
                 client.client.dump(TOKEN_DIR)
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.getLogger(__name__).debug("token dump failed: %s", exc)
             print("Authenticated with saved tokens")
             return client
         except Exception as e:
             print(f"Saved tokens failed: {e}", file=sys.stderr)
+            logging.getLogger(__name__).debug("saved token login failed: %s", e)
             print("Will try credential login as fallback", file=sys.stderr)
 
     # Mode 2: Email/password login
@@ -300,12 +302,13 @@ def get_client():
             client.login()
             try:
                 client.client.dump(TOKEN_DIR)
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.getLogger(__name__).debug("token dump failed: %s", exc)
             print("Authenticated with credentials, tokens saved")
             return client
         except Exception as e:
             print(f"Credential login failed: {e}", file=sys.stderr)
+            logging.getLogger(__name__).debug("credential login failed: %s", e)
 
     return None
 
@@ -329,8 +332,8 @@ def _migrate_garth_tokens(oauth2_path, native_token_path):
         payload = parts[1] + "=" * (4 - len(parts[1]) % 4)
         jwt_data = json.loads(base64.b64decode(payload))
         client_id = jwt_data.get("client_id", "")
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("token client-id parse failed: %s", exc)
 
     new_tokens = {
         "di_token": access_token,
@@ -483,6 +486,7 @@ def sync_daily_stats(client: Any, db: Any, date_str: str) -> bool:
             )
         except Exception as e:
             print(f"  SpO2 data unavailable for {date_str}: {e}")
+            logging.getLogger(__name__).debug("spo2 fetch failed: %s", e)
         try:
             respiration_data = _garmin_api_call(
                 f"get_respiration_data for {date_str}",
@@ -491,6 +495,7 @@ def sync_daily_stats(client: Any, db: Any, date_str: str) -> bool:
             )
         except Exception as e:
             print(f"  Respiration data unavailable for {date_str}: {e}")
+            logging.getLogger(__name__).debug("respiration fetch failed: %s", e)
         try:
             body_comp_data = _garmin_api_call(
                 f"get_body_composition for {date_str}",
@@ -499,6 +504,7 @@ def sync_daily_stats(client: Any, db: Any, date_str: str) -> bool:
             )
         except Exception as e:
             print(f"  Body composition data unavailable for {date_str}: {e}")
+            logging.getLogger(__name__).debug("body composition fetch failed: %s", e)
 
         # Debug: log stress field names so we can verify data extraction
         stress_val = None
@@ -731,6 +737,7 @@ def backfill_skin_temp(client: Any, db: Any) -> None:
         marker.write_text(datetime.now(timezone.utc).isoformat())
     except Exception as e:
         print(f"  Skin temp backfill marker write failed: {e}", file=sys.stderr)
+        logging.getLogger(__name__).debug("skin temp marker write failed: %s", e)
 
 
 def _normalize_started_at(act: dict) -> str | None:
@@ -1065,6 +1072,7 @@ def backfill_activity_started_at_utc(db):
                 f"  Warning: could not write backfill marker {marker}: {e}",
                 file=sys.stderr,
             )
+            logging.getLogger(__name__).debug("activity backfill marker failed: %s", e)
     except Exception as e:
         db.rollback()
         print(
@@ -1112,8 +1120,8 @@ def backfill_from_raw_json(db):
                     if isinstance(rhr_row, tuple)
                     else rhr_row.get("resting_hr")
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug("resting HR lookup failed: %s", exc)
 
         for row_id, raw_json, avg_hr, duration_min in rows:
             act = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
@@ -1245,8 +1253,8 @@ def backfill_stress_and_sleep(client, db):
                 )
                 if stress_val or sleep_start:
                     filled += 1
-            except Exception:
-                pass  # skip individual date failures
+            except Exception as exc:
+                logging.getLogger(__name__).debug("raw backfill date failed: %s", exc)
 
         db.commit()
         Path(MARKER).touch()
@@ -1883,7 +1891,6 @@ def main():
     #      diagnosable instead of silently swallowed.
     try:
         import subprocess
-        import time
 
         status_file = os.path.join(TOKEN_DIR, ".recompute_status")
         try:
@@ -1899,9 +1906,9 @@ def main():
                     raise StopIteration
         except StopIteration:
             raise
-        except Exception:
+        except Exception as exc:
             # Corrupt / unreadable status file — treat as not-running.
-            pass
+            logging.getLogger(__name__).debug("recompute status read failed: %s", exc)
 
         try:
             _ensure_secure_dir(TOKEN_DIR)
@@ -1916,6 +1923,9 @@ def main():
                 )
         except OSError as exc:
             print(f"Warning: could not mark recompute running: {exc}")
+            logging.getLogger(__name__).debug(
+                "recompute status mark failed: %s", exc
+            )
 
         # Inherit the parent environment so DATABASE_URL stays in sync
         # with whatever the sync run used (no duplicated default).
@@ -1941,13 +1951,17 @@ def main():
             try:
                 with open(status_file, "w") as f:
                     json.dump({"running": False, "error": str(exc)}, f)
-            except OSError:
-                pass
+            except OSError as status_exc:
+                logging.getLogger(__name__).debug(
+                    "recompute status clear failed: %s", status_exc
+                )
             print(f"Warning: failed to chain metrics-compute: {exc}")
-    except StopIteration:
-        pass
+            logging.getLogger(__name__).debug("metrics-compute chain failed: %s", exc)
+    except StopIteration as exc:
+        logging.getLogger(__name__).debug("metrics-compute chain skipped: %s", exc)
     except Exception as exc:
         print(f"Warning: chained metrics-compute setup failed: {exc}")
+        logging.getLogger(__name__).debug("metrics-compute setup failed: %s", exc)
 
 
 if __name__ == "__main__":

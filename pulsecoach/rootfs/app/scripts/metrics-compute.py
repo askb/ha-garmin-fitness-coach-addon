@@ -7,6 +7,7 @@ existing daily_metric and activity data. Upserts into advanced_metric table.
 Runs on startup for full backfill, then loops every COMPUTE_INTERVAL_MINUTES.
 """
 
+import logging
 import os
 import sys
 import time
@@ -886,8 +887,8 @@ def run_compute(user_id: str):
             row = cur.fetchone()
             if row and row.get("latest_date"):
                 latest_sync = str(row["latest_date"])
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug("latest sync lookup failed: %s", exc)
 
         # Drift detection: warn if compute lags behind sync
         if latest_sync and latest_compute and latest_sync > latest_compute:
@@ -933,6 +934,9 @@ def run_compute(user_id: str):
                 f"[metrics-compute] Matview refresh skipped: {refresh_err}",
                 file=sys.stderr,
             )
+            logging.getLogger(__name__).debug(
+                "matview refresh failed: %s", refresh_err
+            )
     except Exception as e:
         db.rollback()
         print(f"[metrics-compute] ERROR: {e}", file=sys.stderr)
@@ -963,6 +967,7 @@ def _clear_recompute_status():
             f"[metrics-compute] WARN: failed to update recompute status: {exc}",
             file=sys.stderr,
         )
+        logging.getLogger(__name__).debug("recompute status update failed: %s", exc)
 
 
 def main():

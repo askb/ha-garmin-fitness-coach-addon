@@ -7,10 +7,11 @@ Reads from PostgreSQL: daily_metric + advanced_metric tables.
 """
 
 import json
+import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence, Tuple, Union
 from zoneinfo import ZoneInfo
 
@@ -24,8 +25,8 @@ except ImportError:
 try:
     import urllib.request
     import urllib.error
-except ImportError:
-    pass  # stdlib, always available
+except ImportError as exc:
+    logging.getLogger(__name__).debug("urllib import failed: %s", exc)
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql://postgres@127.0.0.1:5432/pulsecoach"

@@ -17,10 +17,11 @@ The script will:
   4. Optionally copy tokens to HAOS addon via SSH
 """
 
+import logging
 import os
-import sys
 import shutil
 import subprocess
+import sys
 from getpass import getpass
 
 try:
@@ -117,7 +118,7 @@ def _offer_deploy():
     print(f"\nDeploy tokens to HAOS ({HAOS_HOST})?")
     choice = input("[Y/n]: ").strip().lower()
     if choice == "n":
-        print(f"\nTo manually deploy later, re-run this script.")
+        print("\nTo manually deploy later, re-run this script.")
         return
 
     print(f"Copying tokens to {HAOS_USER}@{HAOS_HOST}...")
@@ -207,6 +208,7 @@ def _offer_deploy():
 
     except subprocess.CalledProcessError as exc:
         print(f"\n✗ Deploy failed: {exc.stderr}")
+        logging.getLogger(__name__).debug("token deploy failed: %s", exc)
         print("  Tokens saved locally at:", LOCAL_TOKEN_DIR)
 
 

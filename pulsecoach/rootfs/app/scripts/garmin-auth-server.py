@@ -321,7 +321,8 @@ def status() -> Response:
                 stat.st_mtime, tz=timezone.utc
             ).isoformat()
         return jsonify(connected=True, email=email, lastSync=last_modified)
-    except Exception:
+    except Exception as exc:
+        logging.getLogger(__name__).debug("auth status check failed: %s", exc)
         return jsonify(connected=False, email="", lastSync="")
 
 
@@ -336,8 +337,8 @@ def sync_status() -> Response:
             with open(status_file) as f:
                 data = json.load(f)
             return jsonify(**data)
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("sync status read failed: %s", exc)
     return jsonify(syncing=False, phase="idle", detail="", progress=100)
 
 
@@ -387,8 +388,8 @@ def trigger_sync() -> tuple[Response, int] | Response:
                 data = json.load(f)
             if data.get("syncing"):
                 return jsonify(success=False, message="Sync already in progress"), 409
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("sync running status read failed: %s", exc)
 
     # Check if either native garminconnect tokens or legacy garth tokens exist.
     if not _has_saved_garmin_tokens(user_id=user_id):
@@ -541,8 +542,8 @@ def trigger_recompute() -> tuple[Response, int] | Response:
                 data = json.load(f)
             if data.get("running"):
                 return jsonify(success=False, message="Recompute already running"), 409
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("recompute status read failed: %s", exc)
 
     try:
         # Write running status
@@ -567,8 +568,10 @@ def trigger_recompute() -> tuple[Response, int] | Response:
         try:
             with open(status_file, "w") as f:
                 json.dump({"running": False, "error": str(exc)}, f)
-        except OSError:
-            pass
+        except OSError as status_exc:
+            logging.getLogger(__name__).debug(
+                "recompute status clear failed: %s", status_exc
+            )
         log.error("Failed to trigger recompute: %s", exc)
         return jsonify(success=False, message=f"Failed: {exc}"), 500
 
@@ -581,8 +584,8 @@ def recompute_status() -> Response:
         if os.path.exists(status_file):
             with open(status_file) as f:
                 return jsonify(json.load(f))
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("recompute status check failed: %s", exc)
     return jsonify({"running": False})
 
 
@@ -621,8 +624,8 @@ def trigger_meeting_stress() -> tuple[Response, int] | Response:
             with open(status_file) as f:
                 if json.load(f).get("running"):
                     return jsonify(success=False, message="Already running"), 409
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("meeting stress status read failed: %s", exc)
 
     try:
         with open(status_file, "w") as f:
@@ -660,8 +663,10 @@ def trigger_meeting_stress() -> tuple[Response, int] | Response:
         try:
             with open(status_file, "w") as f:
                 json.dump({"running": False, "error": str(exc)}, f)
-        except OSError:
-            pass
+        except OSError as status_exc:
+            logging.getLogger(__name__).debug(
+                "meeting stress status clear failed: %s", status_exc
+            )
         log.error("Failed to trigger meeting stress: %s", exc)
         return jsonify(success=False, message=f"Failed: {exc}"), 500
 
@@ -680,15 +685,15 @@ def meeting_stress_status() -> Response:
         if os.path.exists(status_file):
             with open(status_file) as f:
                 out.update(json.load(f))
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("meeting stress status load failed: %s", exc)
     try:
         results = "/share/pulsecoach/meeting_stress.json"
         if os.path.exists(results):
             with open(results) as f:
                 out["results"] = json.load(f)
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("meeting stress results load failed: %s", exc)
     return jsonify(out)
 
 
