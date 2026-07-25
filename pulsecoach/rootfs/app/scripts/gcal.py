@@ -18,6 +18,7 @@ existing single-calendar installs keep working with no migration.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import urllib.error
 import urllib.parse
@@ -69,6 +70,7 @@ def adopt_dropped_token() -> None:
         print("Adopted gcal-token.json from /share into /data")
     except OSError as exc:
         print(f"Could not adopt gcal-token.json from /share: {exc}")
+        logging.getLogger(__name__).debug("gcal token adopt failed: %s", exc)
 
 
 def linked() -> bool:
@@ -194,8 +196,8 @@ def save_token(client_id: str, client_secret: str, refresh_token: str) -> None:
     # surface it rather than silently reverting later.
     try:
         os.remove(DROP_PATH)
-    except FileNotFoundError:
-        pass
+    except FileNotFoundError as exc:
+        logging.getLogger(__name__).debug("stale gcal drop missing: %s", exc)
     except OSError as exc:
         raise GcalError(
             f"linked token, but could not remove the stale /share drop ({exc}); "
@@ -208,8 +210,8 @@ def unlink() -> None:
     for path in (TOKEN_PATH, CALENDARS_PATH, DROP_PATH):
         try:
             os.remove(path)
-        except FileNotFoundError:
-            pass
+        except FileNotFoundError as exc:
+            logging.getLogger(__name__).debug("gcal unlink path missing: %s", exc)
 
 
 # --------------------------------------------------------------------------- #

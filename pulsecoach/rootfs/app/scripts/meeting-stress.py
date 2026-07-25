@@ -22,6 +22,7 @@ import argparse
 import bisect
 import csv
 import json
+import logging
 import math
 import os
 import random
@@ -400,8 +401,8 @@ def _migrate_garth_tokens(token_dir: str) -> None:
         pad = -len(part) % 4
         jwt = json.loads(base64.urlsafe_b64decode(part + "=" * pad))
         client_id = jwt.get("client_id", "")
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("token client-id parse failed: %s", exc)
     fd = os.open(native, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump(
@@ -533,7 +534,7 @@ def make_demo(seed: int = 7) -> tuple[list[dict], HrSeries]:
         for k in range(0, 11 * 60, 2):  # 07:00..18:00, every 2 min
             ts = day_start + k * 60
             circadian = 6.0 * math.sin(k / (11 * 60) * math.pi)  # gentle daytime hump
-            lift = sum(l for s, e, l in meeting_lift if s <= ts < e)
+            lift = sum(lf for s, e, lf in meeting_lift if s <= ts < e)
             bpm = 62 + circadian + lift + rng.gauss(0, 2.0)
             series.append((ts, round(bpm, 1)))
     series.sort()
@@ -711,8 +712,8 @@ def _clear_status() -> None:
                     },
                     f,
                 )
-    except OSError:
-        pass
+    except OSError as exc:
+        logging.getLogger(__name__).debug("status write failed: %s", exc)
 
 
 if __name__ == "__main__":

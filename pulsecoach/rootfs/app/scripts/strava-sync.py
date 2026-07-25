@@ -9,6 +9,7 @@ by strava_activity_id to coexist with Garmin-sourced activities.
 """
 
 import json
+import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -341,6 +342,7 @@ def main():
 
     except Exception as e:
         print(f"[strava-sync] Sync error: {e}")
+        logging.getLogger(__name__).debug("strava sync failed: %s", e)
     finally:
         db.close()
 
