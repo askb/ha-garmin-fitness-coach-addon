@@ -13,8 +13,7 @@ from typing import Any
 import pytest
 
 SCRIPTS_DIR = (
-    Path(__file__).resolve().parents[1]
-    / "pulsecoach" / "rootfs" / "app" / "scripts"
+    Path(__file__).resolve().parents[1] / "pulsecoach" / "rootfs" / "app" / "scripts"
 )
 
 
@@ -46,8 +45,13 @@ def load_ha_notify(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
     return module
 
 
-def _dq_row(check_name: str, severity: str, message: str,
-            raw_value: float | None = None, d: str = "2025-01-04") -> dict:
+def _dq_row(
+    check_name: str,
+    severity: str,
+    message: str,
+    raw_value: float | None = None,
+    d: str = "2025-01-04",
+) -> dict:
     return {
         "check_name": check_name,
         "severity": severity,
@@ -88,9 +92,12 @@ def test_counts_missing_days_and_status(monkeypatch: pytest.MonkeyPatch) -> None
 def test_stale_data_error_severity(monkeypatch: pytest.MonkeyPatch) -> None:
     mod = load_ha_notify(monkeypatch)
     rows = [
-        _dq_row("stale_data", "error",
-                "Latest synced data is 10 day(s) old (last: 2025-01-01)",
-                raw_value=10.0),
+        _dq_row(
+            "stale_data",
+            "error",
+            "Latest synced data is 10 day(s) old (last: 2025-01-01)",
+            raw_value=10.0,
+        ),
     ]
     dq = mod.fetch_data_quality(FakeCursor(rows), "user-1")
     assert dq["status"] == "error"
@@ -101,8 +108,12 @@ def test_stale_data_error_severity(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_field_gaps_collected(monkeypatch: pytest.MonkeyPatch) -> None:
     mod = load_ha_notify(monkeypatch)
     rows = [
-        _dq_row("missing_field", "info",
-                "hrv missing on 3 of the last 14 day(s)", raw_value=3.0),
+        _dq_row(
+            "missing_field",
+            "info",
+            "hrv missing on 3 of the last 14 day(s)",
+            raw_value=3.0,
+        ),
     ]
     dq = mod.fetch_data_quality(FakeCursor(rows), "user-1")
     assert dq["field_gaps"] == ["hrv missing on 3 of the last 14 day(s)"]

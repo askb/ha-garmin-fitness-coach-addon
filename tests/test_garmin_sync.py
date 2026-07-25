@@ -75,11 +75,11 @@ def mock_client():
     }
     client.get_sleep_data.return_value = {
         "dailySleepDTO": {
-            "sleepTimeSeconds": 28800,   # 480 min
-            "deepSleepSeconds": 7200,    # 120 min
-            "remSleepSeconds": 5400,     # 90 min
+            "sleepTimeSeconds": 28800,  # 480 min
+            "deepSleepSeconds": 7200,  # 120 min
+            "remSleepSeconds": 5400,  # 90 min
             "lightSleepSeconds": 14400,  # 240 min
-            "awakeSleepSeconds": 1800,   # 30 min
+            "awakeSleepSeconds": 1800,  # 30 min
             "sleepScores": {"overall": {"value": 82}},
             "averageSkinTemperatureCelsius": 35.4,
         }
@@ -95,7 +95,7 @@ def mock_client():
             "activityType": {"typeKey": "running", "typeId": "1"},
             "startTimeLocal": "2025-01-15 07:30:00",
             "startTimeGMT": "2025-01-14 21:30:00",
-            "duration": 1800.0,   # 30 min
+            "duration": 1800.0,  # 30 min
             "distance": 5000.0,
             "averageHR": 150,
             "maxHR": 175,
@@ -103,19 +103,19 @@ def mock_client():
             "averageSpeed": 2.78,
             "aerobicTrainingEffect": 3.5,
             "anaerobicTrainingEffect": 1.2,
-            "hrTimeInZone_1": 180,   # 3 min
-            "hrTimeInZone_2": 300,   # 5 min
-            "hrTimeInZone_3": 600,   # 10 min
-            "hrTimeInZone_4": 420,   # 7 min
-            "hrTimeInZone_5": 300,   # 5 min
-            "avgGroundContactTime": 240.0,        # ms
-            "avgGroundContactBalance": 49.5,      # % L/R
-            "avgVerticalOscillation": 8.2,        # cm
-            "avgVerticalRatio": 6.1,              # %
-            "avgStrideLength": 118.0,             # cm
-            "avgRespirationRate": 38.0,           # brpm
-            "elevationGain": 120.0,               # m
-            "elevationLoss": 95.0,                # m
+            "hrTimeInZone_1": 180,  # 3 min
+            "hrTimeInZone_2": 300,  # 5 min
+            "hrTimeInZone_3": 600,  # 10 min
+            "hrTimeInZone_4": 420,  # 7 min
+            "hrTimeInZone_5": 300,  # 5 min
+            "avgGroundContactTime": 240.0,  # ms
+            "avgGroundContactBalance": 49.5,  # % L/R
+            "avgVerticalOscillation": 8.2,  # cm
+            "avgVerticalRatio": 6.1,  # %
+            "avgStrideLength": 118.0,  # cm
+            "avgRespirationRate": 38.0,  # brpm
+            "elevationGain": 120.0,  # m
+            "elevationLoss": 95.0,  # m
         },
     ]
     return client
@@ -225,8 +225,11 @@ class TestSyncDailyStats:
     def _get_insert_values(self, cursor):
         """Return the VALUES tuple from the INSERT INTO daily_metric execute call."""
         insert_call = next(
-            (c for c in cursor.execute.call_args_list
-             if "INSERT INTO daily_metric" in c[0][0]),
+            (
+                c
+                for c in cursor.execute.call_args_list
+                if "INSERT INTO daily_metric" in c[0][0]
+            ),
             None,
         )
         assert insert_call is not None, "No INSERT INTO daily_metric call found"
@@ -253,9 +256,9 @@ class TestSyncDailyStats:
         values = self._get_insert_values(cursor)
         assert 480 in values  # total: 28800 s → 480 min
         assert 120 in values  # deep:  7200 s → 120 min
-        assert 90 in values   # rem:   5400 s → 90 min
+        assert 90 in values  # rem:   5400 s → 90 min
         assert 240 in values  # light: 14400 s → 240 min
-        assert 30 in values   # awake: 1800 s → 30 min
+        assert 30 in values  # awake: 1800 s → 30 min
 
     def test_passes_date_string_to_db(self, garmin_sync, mock_db, mock_client):
         """The date string supplied to the function is stored in the INSERT values."""
@@ -271,7 +274,9 @@ class TestSyncDailyStats:
         values = self._get_insert_values(cursor)
         assert values[24] == 35.4
 
-    def test_passes_none_when_skin_temp_missing(self, garmin_sync, mock_db, mock_client):
+    def test_passes_none_when_skin_temp_missing(
+        self, garmin_sync, mock_db, mock_client
+    ):
         """Missing Garmin skin-temperature fields are inserted as NULL/None."""
         conn, cursor = mock_db
         sleep_dto = mock_client.get_sleep_data.return_value["dailySleepDTO"]
@@ -316,7 +321,6 @@ class TestSyncDailyStats:
         garmin_sync.sync_daily_stats(mock_client, conn, "2025-01-15")
         conn.commit.assert_called_once()
 
-
     def test_backfill_skin_temp_runs_once(
         self, garmin_sync, mock_db, mock_client, tmp_path
     ):
@@ -325,8 +329,12 @@ class TestSyncDailyStats:
         marker = tmp_path / ".skin_temp_backfill_done"
         cursor.fetchall.return_value = [("2025-01-15",), ("2025-01-14",)]
 
-        with patch.object(garmin_sync, "SKIN_TEMP_BACKFILL_MARKER", str(marker)), \
-             patch.object(garmin_sync, "sync_daily_stats", return_value=True) as sync_daily:
+        with (
+            patch.object(garmin_sync, "SKIN_TEMP_BACKFILL_MARKER", str(marker)),
+            patch.object(
+                garmin_sync, "sync_daily_stats", return_value=True
+            ) as sync_daily,
+        ):
             garmin_sync.backfill_skin_temp(mock_client, conn)
 
         assert "skin_temp IS NULL" in cursor.execute.call_args[0][0]
@@ -357,8 +365,10 @@ class TestSyncDailyStats:
         marker = tmp_path / ".skin_temp_backfill_done"
         cursor.fetchall.return_value = [("2025-01-15",)]
 
-        with patch.object(garmin_sync, "SKIN_TEMP_BACKFILL_MARKER", str(marker)), \
-             patch.object(garmin_sync, "sync_daily_stats", return_value=False):
+        with (
+            patch.object(garmin_sync, "SKIN_TEMP_BACKFILL_MARKER", str(marker)),
+            patch.object(garmin_sync, "sync_daily_stats", return_value=False),
+        ):
             garmin_sync.backfill_skin_temp(mock_client, conn)
 
         assert not marker.exists()
@@ -417,17 +427,11 @@ class TestNormalizeStartedAt:
         # The trailing-offset detector must not be fooled by the '-'
         # characters inside the date portion.
         act = {"startTimeGMT": "2026-05-17 04:00:00-05:00"}
-        assert (
-            garmin_sync._normalize_started_at(act)
-            == "2026-05-17 04:00:00-05:00"
-        )
+        assert garmin_sync._normalize_started_at(act) == "2026-05-17 04:00:00-05:00"
 
     def test_does_not_double_stamp_when_compact_offset_present(self, garmin_sync):
         act = {"startTimeGMT": "2026-05-17 04:00:00-0500"}
-        assert (
-            garmin_sync._normalize_started_at(act)
-            == "2026-05-17 04:00:00-0500"
-        )
+        assert garmin_sync._normalize_started_at(act) == "2026-05-17 04:00:00-0500"
 
     def test_blank_gmt_falls_back_to_local(self, garmin_sync):
         act = {
@@ -444,8 +448,11 @@ class TestSyncActivities:
     def _get_activity_insert_call(self, cursor):
         """Return the execute call for INSERT INTO activity."""
         return next(
-            (c for c in cursor.execute.call_args_list
-             if "INSERT INTO activity" in c[0][0]),
+            (
+                c
+                for c in cursor.execute.call_args_list
+                if "INSERT INTO activity" in c[0][0]
+            ),
             None,
         )
 
@@ -456,7 +463,8 @@ class TestSyncActivities:
         conn, cursor = mock_db
         garmin_sync.sync_activities(mock_client, conn, days=7)
         insert_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "INSERT INTO activity" in c[0][0]
         ]
         assert len(insert_calls) == 1
@@ -506,11 +514,11 @@ class TestSyncActivities:
         )
         assert hr_zones_json is not None
         hr_zones = json.loads(hr_zones_json)
-        assert hr_zones["zone1"] == 3.0    # 180 s / 60
-        assert hr_zones["zone2"] == 5.0    # 300 s / 60
-        assert hr_zones["zone3"] == 10.0   # 600 s / 60
-        assert hr_zones["zone4"] == 7.0    # 420 s / 60
-        assert hr_zones["zone5"] == 5.0    # 300 s / 60
+        assert hr_zones["zone1"] == 3.0  # 180 s / 60
+        assert hr_zones["zone2"] == 5.0  # 300 s / 60
+        assert hr_zones["zone3"] == 10.0  # 600 s / 60
+        assert hr_zones["zone4"] == 7.0  # 420 s / 60
+        assert hr_zones["zone5"] == 5.0  # 300 s / 60
 
     def test_extracts_running_dynamics(self, garmin_sync, mock_db, mock_client):
         """Running-dynamics fields are pulled from the activity summary.
@@ -529,9 +537,7 @@ class TestSyncActivities:
         for expected in (240.0, 49.5, 8.2, 6.1, 118.0, 38.0, 120.0, 95.0):
             assert expected in values
 
-    def test_running_dynamics_default_to_none(
-        self, garmin_sync, mock_db, mock_client
-    ):
+    def test_running_dynamics_default_to_none(self, garmin_sync, mock_db, mock_client):
         """Activities without running dynamics (e.g. cycling) store NULLs.
 
         Field extraction is defensive: missing keys resolve to None rather
@@ -540,10 +546,14 @@ class TestSyncActivities:
         conn, cursor = mock_db
         record = mock_client.get_activities.return_value[0]
         for key in (
-            "avgGroundContactTime", "avgGroundContactBalance",
-            "avgVerticalOscillation", "avgVerticalRatio",
-            "avgStrideLength", "avgRespirationRate",
-            "elevationGain", "elevationLoss",
+            "avgGroundContactTime",
+            "avgGroundContactBalance",
+            "avgVerticalOscillation",
+            "avgVerticalRatio",
+            "avgStrideLength",
+            "avgRespirationRate",
+            "elevationGain",
+            "elevationLoss",
         ):
             record.pop(key, None)
         garmin_sync.sync_activities(mock_client, conn, days=7)
@@ -564,7 +574,7 @@ class TestSyncActivities:
         # Expected: duration_min=30, hr_ratio=150/200.0=0.75
         HR_NORM = 200.0  # normalization constant used in the TRIMP formula
         hr_ratio = 150 / HR_NORM
-        expected_trimp = round(30 * hr_ratio * 0.64 * (1.92 ** hr_ratio), 1)
+        expected_trimp = round(30 * hr_ratio * 0.64 * (1.92**hr_ratio), 1)
         assert expected_trimp in values
 
     def test_handles_api_error_gracefully(
@@ -584,19 +594,18 @@ class TestSyncActivities:
         conn, cursor = mock_db
         mock_client.get_activities.side_effect = [
             mock_client.get_activities.return_value,  # first batch: 1 activity
-            [],                                        # second batch: empty → stop
+            [],  # second batch: empty → stop
         ]
         garmin_sync.sync_activities(mock_client, conn, days=7)
         # Only the first batch should produce an INSERT
         insert_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "INSERT INTO activity" in c[0][0]
         ]
         assert len(insert_calls) == 1
 
-    def test_unwraps_list_of_list_response(
-        self, garmin_sync, mock_db, mock_client
-    ):
+    def test_unwraps_list_of_list_response(self, garmin_sync, mock_db, mock_client):
         """Garmin sometimes returns activities as `[[{...}]]`; unwrap it."""
         conn, cursor = mock_db
         original = mock_client.get_activities.return_value
@@ -606,7 +615,8 @@ class TestSyncActivities:
         ]
         garmin_sync.sync_activities(mock_client, conn, days=7)
         insert_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "INSERT INTO activity" in c[0][0]
         ]
         assert len(insert_calls) == len(original)
@@ -623,7 +633,8 @@ class TestSyncActivities:
         ]
         garmin_sync.sync_activities(mock_client, conn, days=7)
         insert_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "INSERT INTO activity" in c[0][0]
         ]
         assert len(insert_calls) == 1
@@ -659,13 +670,10 @@ class TestSyncActivities:
         # Per-row failure rolls back to the savepoint (not the whole batch)
         # so earlier successful upserts are preserved on commit.
         executed_sql = [
-            c[0][0] for c in cursor.execute.call_args_list
-            if isinstance(c[0][0], str)
+            c[0][0] for c in cursor.execute.call_args_list if isinstance(c[0][0], str)
         ]
         assert any("SAVEPOINT activity_upsert" in s for s in executed_sql)
-        assert any(
-            "ROLLBACK TO SAVEPOINT activity_upsert" in s for s in executed_sql
-        )
+        assert any("ROLLBACK TO SAVEPOINT activity_upsert" in s for s in executed_sql)
         assert conn.commit.called
 
     def test_good_then_bad_then_good_persists_good_rows(
@@ -703,7 +711,8 @@ class TestSyncActivities:
         garmin_sync.sync_activities(mock_client, conn, days=7)
 
         insert_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if isinstance(c[0][0], str) and "INSERT INTO activity" in c[0][0]
         ]
         inserted_ids = {c[0][1][1] for c in insert_calls}
@@ -739,14 +748,13 @@ class TestSyncVo2max:
         ]
         garmin_sync.sync_vo2max(mock_client, conn, days=1)
         insert_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "INSERT INTO vo2max_estimate" in c[0][0]
         ]
         assert len(insert_calls) >= 1
 
-    def test_official_api_stores_correct_value(
-        self, garmin_sync, mock_db, mock_client
-    ):
+    def test_official_api_stores_correct_value(self, garmin_sync, mock_db, mock_client):
         """The VO2max value from the API is rounded to one decimal place."""
         conn, cursor = mock_db
         mock_client.get_max_metrics.return_value = [
@@ -757,8 +765,11 @@ class TestSyncVo2max:
         ]
         garmin_sync.sync_vo2max(mock_client, conn, days=1)
         insert_call = next(
-            (c for c in cursor.execute.call_args_list
-             if "INSERT INTO vo2max_estimate" in c[0][0]),
+            (
+                c
+                for c in cursor.execute.call_args_list
+                if "INSERT INTO vo2max_estimate" in c[0][0]
+            ),
             None,
         )
         assert insert_call is not None
@@ -777,8 +788,11 @@ class TestSyncVo2max:
         ]
         garmin_sync.sync_vo2max(mock_client, conn, days=1)
         insert_call = next(
-            (c for c in cursor.execute.call_args_list
-             if "INSERT INTO vo2max_estimate" in c[0][0]),
+            (
+                c
+                for c in cursor.execute.call_args_list
+                if "INSERT INTO vo2max_estimate" in c[0][0]
+            ),
             None,
         )
         assert insert_call is not None
@@ -796,14 +810,14 @@ class TestSyncVo2max:
         cursor.fetchone.return_value = (35,)
         # Provide one resting-HR row (resting_hr=58)
         cursor.fetchmany.side_effect = [
-            [('2025-01-15', 58)],  # first fetchmany batch
-            [],                    # second call → stop loop
+            [("2025-01-15", 58)],  # first fetchmany batch
+            [],  # second call → stop loop
         ]
         garmin_sync.sync_vo2max(mock_client, conn, days=1)
         uth_inserts = [
-            c for c in cursor.execute.call_args_list
-            if "INSERT INTO vo2max_estimate" in c[0][0]
-            and "uth_method" in str(c)
+            c
+            for c in cursor.execute.call_args_list
+            if "INSERT INTO vo2max_estimate" in c[0][0] and "uth_method" in str(c)
         ]
         assert len(uth_inserts) >= 1
 
@@ -816,23 +830,23 @@ class TestSyncVo2max:
         # age=35 fetched from the profile table → Tanaka HRmax = 208 - (0.7 * 35)
         cursor.fetchone.return_value = (35,)
         cursor.fetchmany.side_effect = [
-            [('2025-01-15', 58)],
+            [("2025-01-15", 58)],
             [],
         ]
         garmin_sync.sync_vo2max(mock_client, conn, days=1)
         expected_vo2 = round(15.3 * ((208 - (0.7 * 35)) / 58), 1)
         uth_insert = next(
-            (c for c in cursor.execute.call_args_list
-             if "INSERT INTO vo2max_estimate" in c[0][0]
-             and "uth_method" in str(c)),
+            (
+                c
+                for c in cursor.execute.call_args_list
+                if "INSERT INTO vo2max_estimate" in c[0][0] and "uth_method" in str(c)
+            ),
             None,
         )
         assert uth_insert is not None
         assert expected_vo2 in uth_insert[0][1]
 
-    def test_skips_unrealistic_vo2max_values(
-        self, garmin_sync, mock_db, mock_client
-    ):
+    def test_skips_unrealistic_vo2max_values(self, garmin_sync, mock_db, mock_client):
         """VO2max values outside [10, 90] are silently discarded."""
         conn, cursor = mock_db
         mock_client.get_max_metrics.return_value = [
@@ -842,7 +856,8 @@ class TestSyncVo2max:
         cursor.fetchmany.return_value = []
         garmin_sync.sync_vo2max(mock_client, conn, days=1)
         insert_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "INSERT INTO vo2max_estimate" in c[0][0]
         ]
         assert len(insert_calls) == 0
@@ -871,8 +886,7 @@ class TestBackfillFromRawJson:
         cursor.fetchall.return_value = []
         garmin_sync.backfill_from_raw_json(conn)
         update_calls = [
-            c for c in cursor.execute.call_args_list
-            if "UPDATE activity" in c[0][0]
+            c for c in cursor.execute.call_args_list if "UPDATE activity" in c[0][0]
         ]
         assert len(update_calls) == 0
 
@@ -889,8 +903,7 @@ class TestBackfillFromRawJson:
         cursor.fetchall.return_value = [(1, raw, 150, 30.0)]
         garmin_sync.backfill_from_raw_json(conn)
         update_calls = [
-            c for c in cursor.execute.call_args_list
-            if "UPDATE activity" in c[0][0]
+            c for c in cursor.execute.call_args_list if "UPDATE activity" in c[0][0]
         ]
         assert len(update_calls) == 1
         values = update_calls[0][0][1]
@@ -910,8 +923,7 @@ class TestBackfillFromRawJson:
         cursor.fetchall.return_value = [(1, raw, 150, 30.0)]
         garmin_sync.backfill_from_raw_json(conn)
         update_calls = [
-            c for c in cursor.execute.call_args_list
-            if "UPDATE activity" in c[0][0]
+            c for c in cursor.execute.call_args_list if "UPDATE activity" in c[0][0]
         ]
         assert len(update_calls) == 1
         values = update_calls[0][0][1]
@@ -928,8 +940,7 @@ class TestBackfillFromRawJson:
         cursor.fetchall.return_value = [(1, raw, 150, 30.0)]
         garmin_sync.backfill_from_raw_json(conn)
         update_calls = [
-            c for c in cursor.execute.call_args_list
-            if "UPDATE activity" in c[0][0]
+            c for c in cursor.execute.call_args_list if "UPDATE activity" in c[0][0]
         ]
         assert len(update_calls) == 1
         values = update_calls[0][0][1]
@@ -944,9 +955,7 @@ class TestBackfillFromRawJson:
         garmin_sync.backfill_from_raw_json(conn)
         conn.commit.assert_called_once()
 
-    def test_handles_db_error_gracefully(
-        self, garmin_sync, mock_db, capsys
-    ):
+    def test_handles_db_error_gracefully(self, garmin_sync, mock_db, capsys):
         """A DB error during backfill is caught, rolled back, and logged."""
         conn, cursor = mock_db
         cursor.fetchall.side_effect = Exception("DB error")
@@ -971,6 +980,7 @@ class TestTimezone:
         so we construct the test epoch ms using UTC to match.
         """
         from datetime import datetime as dt, timezone as tz
+
         # 22:30 local = 1350 minutes from midnight
         ts_ms = int(dt(2025, 1, 15, 22, 30, tzinfo=tz.utc).timestamp() * 1000)
         sleep_dto = {"sleepStartTimestampLocal": ts_ms}
@@ -980,6 +990,7 @@ class TestTimezone:
     def test_extract_sleep_time_early_morning(self, garmin_sync):
         """_extract_sleep_time handles early morning wake times (e.g., 06:15)."""
         from datetime import datetime as dt, timezone as tz
+
         ts_ms = int(dt(2025, 1, 16, 6, 15, tzinfo=tz.utc).timestamp() * 1000)
         sleep_dto = {"sleepEndTimestampLocal": ts_ms}
         result = garmin_sync._extract_sleep_time(sleep_dto, "sleepEndTimestampLocal")
@@ -988,7 +999,12 @@ class TestTimezone:
     def test_extract_sleep_time_none_returns_none(self, garmin_sync):
         """_extract_sleep_time returns None for missing timestamps."""
         assert garmin_sync._extract_sleep_time({}, "sleepStartTimestampLocal") is None
-        assert garmin_sync._extract_sleep_time({"sleepStartTimestampLocal": None}, "sleepStartTimestampLocal") is None
+        assert (
+            garmin_sync._extract_sleep_time(
+                {"sleepStartTimestampLocal": None}, "sleepStartTimestampLocal"
+            )
+            is None
+        )
 
     def test_user_today_respects_timezone(self, garmin_sync):
         """_user_today returns a date consistent with the configured timezone.
@@ -1006,7 +1022,7 @@ class TestTimezone:
         assert garmin_sync._user_today() == utc_today
 
         # Patch to a far-ahead timezone and verify date can differ from UTC
-        with patch.object(garmin_sync, 'USER_TZ', ZoneInfo("Pacific/Auckland")):
+        with patch.object(garmin_sync, "USER_TZ", ZoneInfo("Pacific/Auckland")):
             nz_today = datetime.now(ZoneInfo("Pacific/Auckland")).date()
             assert garmin_sync._user_today() == nz_today
 
@@ -1022,6 +1038,7 @@ class TestMatviewRefresh:
     def test_refresh_matview_success(self, garmin_sync):
         """_refresh_matview calls the refresh function and commits."""
         from unittest.mock import MagicMock
+
         db = MagicMock()
         cur = MagicMock()
         db.cursor.return_value = cur
@@ -1035,6 +1052,7 @@ class TestMatviewRefresh:
     def test_refresh_matview_error_rolls_back(self, garmin_sync):
         """_refresh_matview rolls back on error without raising."""
         from unittest.mock import MagicMock
+
         db = MagicMock()
         cur = MagicMock()
         db.cursor.return_value = cur
@@ -1106,9 +1124,7 @@ class TestSyncTrainingReadinessRange:
 
         assert self._readiness_updates(cursor) == []
 
-    def test_boundary_scores_are_stored(
-        self, garmin_sync, mock_db, mock_garmin_client
-    ):
+    def test_boundary_scores_are_stored(self, garmin_sync, mock_db, mock_garmin_client):
         """0 and 100 are valid boundaries and are stored."""
         conn, cursor = mock_db
         for boundary in (0, 100):

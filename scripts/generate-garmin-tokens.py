@@ -86,6 +86,7 @@ def main():
                     sys.exit(1)
 
                 from garth import sso as garth_sso
+
                 oauth1, oauth2 = garth_sso.resume_login(token2, mfa_code)
                 client.garth.oauth1_token = oauth1
                 client.garth.oauth2_token = oauth2
@@ -129,15 +130,25 @@ def _offer_deploy():
                 with open(src, "r") as f:
                     content = f.read()
                 subprocess.run(
-                    ["ssh", "-o", "StrictHostKeyChecking=no",
-                     "-p", HAOS_PORT, f"{HAOS_USER}@{HAOS_HOST}",
-                     f"cat > /tmp/{fname}"],
-                    input=content, check=True, capture_output=True, text=True
+                    [
+                        "ssh",
+                        "-o",
+                        "StrictHostKeyChecking=no",
+                        "-p",
+                        HAOS_PORT,
+                        f"{HAOS_USER}@{HAOS_HOST}",
+                        f"cat > /tmp/{fname}",
+                    ],
+                    input=content,
+                    check=True,
+                    capture_output=True,
+                    text=True,
                 )
                 print(f"  ✓ Uploaded {fname}")
 
         # Now use the addon's import-tokens API via the ingress proxy
         import json
+
         oauth1_path = os.path.join(LOCAL_TOKEN_DIR, "oauth1_token.json")
         oauth2_path = os.path.join(LOCAL_TOKEN_DIR, "oauth2_token.json")
 
@@ -149,12 +160,19 @@ def _offer_deploy():
         payload = json.dumps({"oauth1_token": oauth1, "oauth2_token": oauth2})
 
         result = subprocess.run(
-            ["ssh", "-o", "StrictHostKeyChecking=no",
-             "-p", HAOS_PORT, f"{HAOS_USER}@{HAOS_HOST}",
-             f"curl -s -X POST -H 'Content-Type: application/json' "
-             f"-d '{payload}' "
-             f"'http://ecfdb23d-pulsecoach:3000/api/garmin/auth-import'"],
-            capture_output=True, text=True
+            [
+                "ssh",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-p",
+                HAOS_PORT,
+                f"{HAOS_USER}@{HAOS_HOST}",
+                f"curl -s -X POST -H 'Content-Type: application/json' "
+                f"-d '{payload}' "
+                f"'http://ecfdb23d-pulsecoach:3000/api/garmin/auth-import'",
+            ],
+            capture_output=True,
+            text=True,
         )
 
         if result.stdout:
@@ -162,12 +180,19 @@ def _offer_deploy():
 
         # Fallback: also try direct auth server endpoint
         result2 = subprocess.run(
-            ["ssh", "-o", "StrictHostKeyChecking=no",
-             "-p", HAOS_PORT, f"{HAOS_USER}@{HAOS_HOST}",
-             f"curl -s -X POST -H 'Content-Type: application/json' "
-             f"-d '{payload}' "
-             f"'http://ecfdb23d-pulsecoach:8099/auth/import-tokens'"],
-            capture_output=True, text=True
+            [
+                "ssh",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-p",
+                HAOS_PORT,
+                f"{HAOS_USER}@{HAOS_HOST}",
+                f"curl -s -X POST -H 'Content-Type: application/json' "
+                f"-d '{payload}' "
+                f"'http://ecfdb23d-pulsecoach:8099/auth/import-tokens'",
+            ],
+            capture_output=True,
+            text=True,
         )
 
         if result2.stdout and "success" in result2.stdout:
@@ -176,7 +201,9 @@ def _offer_deploy():
         else:
             print(f"  Direct API: {result2.stdout or result2.stderr}")
             print("\n⚠ Auto-import may have failed. Tokens are on HAOS at /tmp/.")
-            print("  Restart the addon to try again, or rebuild with token import support.")
+            print(
+                "  Restart the addon to try again, or rebuild with token import support."
+            )
 
     except subprocess.CalledProcessError as exc:
         print(f"\n✗ Deploy failed: {exc.stderr}")

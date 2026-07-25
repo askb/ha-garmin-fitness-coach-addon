@@ -27,7 +27,9 @@ try:
 except ImportError:
     pass  # stdlib, always available
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres@127.0.0.1:5432/pulsecoach")
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL", "postgresql://postgres@127.0.0.1:5432/pulsecoach"
+)
 USER_ID = os.environ.get("GARMIN_USER_ID", "seed-user-001")
 HA_BASE_URL = os.environ.get("HA_BASE_URL", "http://supervisor/core")
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
@@ -38,14 +40,19 @@ _tz_name = os.environ.get("USER_TIMEZONE", "UTC")
 try:
     USER_TZ = ZoneInfo(_tz_name)
 except (KeyError, ValueError):
-    print(f"[ha-notify] WARNING: Invalid timezone '{_tz_name}', using UTC", file=sys.stderr)
+    print(
+        f"[ha-notify] WARNING: Invalid timezone '{_tz_name}', using UTC",
+        file=sys.stderr,
+    )
     USER_TZ = ZoneInfo("UTC")
 
 
 def ha_request(method: str, path: str, data: dict | None = None) -> dict | None:
     """Make a request to the HA REST API."""
     if not SUPERVISOR_TOKEN:
-        print("[ha-notify] No SUPERVISOR_TOKEN — skipping HA API calls", file=sys.stderr)
+        print(
+            "[ha-notify] No SUPERVISOR_TOKEN — skipping HA API calls", file=sys.stderr
+        )
         return None
 
     url = f"{HA_BASE_URL}/api/{path}"
@@ -72,20 +79,31 @@ def push_sensor(entity_id: str, state: str | float | int, attributes: dict) -> b
     # Include timezone and last_computed in all sensor attributes
     attributes["timezone"] = str(USER_TZ)
     attributes["last_computed"] = datetime.now(USER_TZ).isoformat()
-    result = ha_request("POST", f"states/{entity_id}", {
-        "state": str(state),
-        "attributes": attributes,
-    })
+    result = ha_request(
+        "POST",
+        f"states/{entity_id}",
+        {
+            "state": str(state),
+            "attributes": attributes,
+        },
+    )
     return result is not None
 
 
 def create_notification(title: str, message: str, notification_id: str) -> bool:
     """Create a persistent notification in HA."""
-    return ha_request("POST", "services/persistent_notification/create", {
-        "title": title,
-        "message": message,
-        "notification_id": notification_id,
-    }) is not None
+    return (
+        ha_request(
+            "POST",
+            "services/persistent_notification/create",
+            {
+                "title": title,
+                "message": message,
+                "notification_id": notification_id,
+            },
+        )
+        is not None
+    )
 
 
 def _compute_hrv_trend(
@@ -169,20 +187,26 @@ def get_latest_metrics(cur, user_id: str) -> dict:
     """
 
     try:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT * FROM daily_athlete_summary
             WHERE user_id = %s
             ORDER BY date DESC LIMIT 1
-        """, (user_id,))
+        """,
+            (user_id,),
+        )
         row = cur.fetchone()
         if row:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT COUNT(*) as count FROM daily_metric
                 WHERE user_id = %s AND date >= CURRENT_DATE - INTERVAL '3 days'
                   AND garmin_training_load > 50
-            """, (user_id,))
+            """,
+                (user_id,),
+            )
             hard_days_row = cur.fetchone()
-            hard_days = hard_days_row['count'] if hard_days_row else 0
+            hard_days = hard_days_row["count"] if hard_days_row else 0
 
             cur.execute(hrv_history_sql, (user_id,))
             hrv_rows = cur.fetchall()
@@ -208,7 +232,8 @@ def get_latest_metrics(cur, user_id: str) -> dict:
     # readiness_score / readiness_zone live in the `readiness_score` table,
     # not on `daily_metric` — LEFT JOIN to expose them alongside the daily
     # metrics row so downstream consumers see the same shape as the matview.
-    cur.execute("""
+    cur.execute(
+        """
         SELECT dm.date, dm.hrv, dm.resting_hr, dm.body_battery_end, dm.stress_score,
                dm.sleep_debt_minutes, dm.body_battery_start,
                dm.spo2, dm.respiration_rate, dm.skin_temp,
@@ -222,28 +247,36 @@ def get_latest_metrics(cur, user_id: str) -> dict:
                ON rs.user_id = dm.user_id AND rs.date = dm.date
         WHERE dm.user_id = %s
         ORDER BY dm.date DESC LIMIT 1
-    """, (user_id,))
+    """,
+        (user_id,),
+    )
     dm = cur.fetchone()
 
     cur.execute(hrv_history_sql, (user_id,))
     hrv_rows = cur.fetchall()
 
-    cur.execute("""
+    cur.execute(
+        """
         SELECT date, ctl, atl, tsb, acwr, ramp_rate, cp, mftp, effective_vo2max
         FROM advanced_metric
         WHERE user_id = %s
         ORDER BY date DESC LIMIT 1
-    """, (user_id,))
+    """,
+        (user_id,),
+    )
     am = cur.fetchone()
 
     # Check consecutive hard days (last 3 days high strain)
-    cur.execute("""
+    cur.execute(
+        """
         SELECT COUNT(*) as count FROM daily_metric
         WHERE user_id = %s AND date >= CURRENT_DATE - INTERVAL '3 days'
           AND garmin_training_load > 50
-    """, (user_id,))
+    """,
+        (user_id,),
+    )
     hard_days_row = cur.fetchone()
-    hard_days = hard_days_row['count'] if hard_days_row else 0
+    hard_days = hard_days_row["count"] if hard_days_row else 0
 
     hrv_trend, hrv_avg = _compute_hrv_trend(hrv_rows)
 
@@ -300,8 +333,7 @@ def recommend_workout(
 
     if g_status == "OVERREACHING":
         rest_reasons.append(
-            "Garmin Training Status: OVERREACHING — "
-            "active recovery or rest recommended"
+            "Garmin Training Status: OVERREACHING — active recovery or rest recommended"
         )
 
     if consecutive_hard_days >= 3:
@@ -381,7 +413,11 @@ def recommend_workout(
     high_readiness = readiness >= 70
     peaking = g_status in ("PEAKING", "PRODUCTIVE")
 
-    if (is_fresh or high_readiness or peaking) and bb >= 60 and (acwr is None or acwr <= 1.2):
+    if (
+        (is_fresh or high_readiness or peaking)
+        and bb >= 60
+        and (acwr is None or acwr <= 1.2)
+    ):
         # Fresh and ready — quality session
         status_note = f", Garmin: {g_status}" if g_status else ""
         return {
@@ -430,7 +466,9 @@ def recommend_workout(
     }
 
 
-def compute_injury_risk(acwr: float | None, tsb: float | None, ramp_rate: float | None) -> tuple[str, int]:
+def compute_injury_risk(
+    acwr: float | None, tsb: float | None, ramp_rate: float | None
+) -> tuple[str, int]:
     """Compute injury risk level. Returns (level, score_0_100)."""
     if acwr is None:
         return ("unknown", 0)
@@ -516,9 +554,7 @@ def fetch_data_quality(cur, user_id: str) -> dict:
         elif cn == "missing_field":
             summary["field_gaps"].append(r["message"])
 
-    summary["issues"] = sum(
-        1 for r in rows if r["severity"] in ("warn", "error")
-    )
+    summary["issues"] = sum(1 for r in rows if r["severity"] in ("warn", "error"))
     summary["status"] = {0: "ok", 1: "warn", 2: "error"}[worst]
     if summary["missing_days"] and summary["message"] == "All recent data present":
         summary["message"] = (
@@ -547,68 +583,112 @@ def run_notifications(user_id: str):
         # --- Push sensor states ---
 
         # sensor.pulsecoach_acwr
-        acwr = am['acwr'] if am else None
-        push_sensor("sensor.pulsecoach_acwr",
-                    round(acwr, 2) if acwr else "unknown",
-                    {
-                        "friendly_name": "PulseCoach ACWR",
-                        "unit_of_measurement": "",
-                        "icon": "mdi:run",
-                        "status": "optimal" if acwr and 0.8 <= acwr <= 1.3 else
-                                 ("caution" if acwr and acwr <= 1.5 else
-                                  ("high_risk" if acwr and acwr > 1.5 else "unknown")),
-                    })
+        acwr = am["acwr"] if am else None
+        push_sensor(
+            "sensor.pulsecoach_acwr",
+            round(acwr, 2) if acwr is not None else "unknown",
+            {
+                "friendly_name": "PulseCoach ACWR",
+                "unit_of_measurement": "",
+                "icon": "mdi:run",
+                "status": (
+                    "unknown"
+                    if acwr is None
+                    else "optimal"
+                    if 0.8 <= acwr <= 1.3
+                    else "caution"
+                    if acwr <= 1.5
+                    else "high_risk"
+                ),
+            },
+        )
 
         # sensor.pulsecoach_form (TSB)
-        tsb = am['tsb'] if am else None
-        push_sensor("sensor.pulsecoach_form",
-                    round(tsb, 1) if tsb is not None else "unknown",
-                    {
-                        "friendly_name": "PulseCoach Form (TSB)",
-                        "unit_of_measurement": "pts",
-                        "icon": "mdi:chart-line",
-                        "status": "fresh" if tsb and tsb > 5 else
-                                 ("optimal" if tsb and tsb >= -10 else
-                                  ("tired" if tsb and tsb >= -20 else "overreached")),
-                    })
+        tsb = am["tsb"] if am else None
+        push_sensor(
+            "sensor.pulsecoach_form",
+            round(tsb, 1) if tsb is not None else "unknown",
+            {
+                "friendly_name": "PulseCoach Form (TSB)",
+                "unit_of_measurement": "pts",
+                "icon": "mdi:chart-line",
+                "status": (
+                    "unknown"
+                    if tsb is None
+                    else "fresh"
+                    if tsb > 5
+                    else "optimal"
+                    if tsb >= -10
+                    else "tired"
+                    if tsb >= -20
+                    else "overreached"
+                ),
+            },
+        )
 
         # sensor.pulsecoach_injury_risk
-        ramp = am['ramp_rate'] if am else None
+        ramp = am["ramp_rate"] if am else None
         risk_level, risk_score = compute_injury_risk(acwr, tsb, ramp)
-        push_sensor("sensor.pulsecoach_injury_risk",
-                    risk_level,
-                    {
-                        "friendly_name": "PulseCoach Injury Risk",
-                        "icon": "mdi:shield-alert",
-                        "risk_score": risk_score,
-                        "acwr": acwr,
-                        "tsb": tsb,
-                        "ramp_rate": ramp,
-                    })
+        push_sensor(
+            "sensor.pulsecoach_injury_risk",
+            risk_level,
+            {
+                "friendly_name": "PulseCoach Injury Risk",
+                "icon": "mdi:shield-alert",
+                "risk_score": risk_score,
+                "acwr": acwr,
+                "tsb": tsb,
+                "ramp_rate": ramp,
+            },
+        )
 
         # sensor.pulsecoach_ctl (Fitness/CTL)
-        ctl = am['ctl'] if am else None
-        push_sensor("sensor.pulsecoach_ctl",
-                    round(ctl, 1) if ctl else "unknown",
-                    {"friendly_name": "PulseCoach Fitness (CTL)", "unit_of_measurement": "pts", "icon": "mdi:trending-up"})
+        ctl = am["ctl"] if am else None
+        push_sensor(
+            "sensor.pulsecoach_ctl",
+            round(ctl, 1) if ctl else "unknown",
+            {
+                "friendly_name": "PulseCoach Fitness (CTL)",
+                "unit_of_measurement": "pts",
+                "icon": "mdi:trending-up",
+            },
+        )
 
         # sensor.pulsecoach_atl (Fatigue/ATL)
-        atl = am['atl'] if am else None
-        push_sensor("sensor.pulsecoach_atl",
-                    round(atl, 1) if atl else "unknown",
-                    {"friendly_name": "PulseCoach Fatigue (ATL)", "unit_of_measurement": "pts", "icon": "mdi:trending-down"})
+        atl = am["atl"] if am else None
+        push_sensor(
+            "sensor.pulsecoach_atl",
+            round(atl, 1) if atl else "unknown",
+            {
+                "friendly_name": "PulseCoach Fatigue (ATL)",
+                "unit_of_measurement": "pts",
+                "icon": "mdi:trending-down",
+            },
+        )
 
         # sensor.pulsecoach_body_battery
-        bb = dm['body_battery_end'] if dm else None
-        push_sensor("sensor.pulsecoach_body_battery",
-                    bb if bb is not None else "unknown",
-                    {"friendly_name": "PulseCoach Body Battery", "unit_of_measurement": "%", "icon": "mdi:battery"})
+        bb = dm["body_battery_end"] if dm else None
+        push_sensor(
+            "sensor.pulsecoach_body_battery",
+            bb if bb is not None else "unknown",
+            {
+                "friendly_name": "PulseCoach Body Battery",
+                "unit_of_measurement": "%",
+                "icon": "mdi:battery",
+            },
+        )
 
         # sensor.pulsecoach_sleep_debt
-        sleep_debt = dm['sleep_debt_minutes'] if dm else None
-        push_sensor("sensor.pulsecoach_sleep_debt",
-                    round(sleep_debt / 60, 1) if sleep_debt else 0,
-                    {"friendly_name": "PulseCoach Sleep Debt", "unit_of_measurement": "h", "icon": "mdi:sleep"})
+        sleep_debt = dm["sleep_debt_minutes"] if dm else None
+        push_sensor(
+            "sensor.pulsecoach_sleep_debt",
+            round(sleep_debt / 60, 1) if sleep_debt else 0,
+            {
+                "friendly_name": "PulseCoach Sleep Debt",
+                "unit_of_measurement": "h",
+                "icon": "mdi:sleep",
+            },
+        )
 
         # sensor.pulsecoach_readiness
         readiness_val = None
@@ -616,125 +696,155 @@ def run_notifications(user_id: str):
         readiness_src = None
         if dm:
             # Prefer Garmin native readiness, fall back to computed
-            garmin_r = dm.get('garmin_training_readiness')
-            readiness_val = garmin_r if garmin_r is not None else dm.get('readiness_score')
-            garmin_rl = dm.get('garmin_training_readiness_level')
-            readiness_zone = garmin_rl if garmin_rl is not None else dm.get('readiness_zone')
+            garmin_r = dm.get("garmin_training_readiness")
+            readiness_val = (
+                garmin_r if garmin_r is not None else dm.get("readiness_score")
+            )
+            garmin_rl = dm.get("garmin_training_readiness_level")
+            readiness_zone = (
+                garmin_rl if garmin_rl is not None else dm.get("readiness_zone")
+            )
             readiness_src = "garmin" if garmin_r is not None else "computed"
-        push_sensor("sensor.pulsecoach_readiness",
-                    readiness_val if readiness_val is not None else "unknown",
-                    {
-                        "friendly_name": "PulseCoach Readiness",
-                        "unit_of_measurement": "/100",
-                        "icon": "mdi:heart-pulse",
-                        "zone": readiness_zone or "unknown",
-                        "source": readiness_src or "unknown",
-                    })
+        push_sensor(
+            "sensor.pulsecoach_readiness",
+            readiness_val if readiness_val is not None else "unknown",
+            {
+                "friendly_name": "PulseCoach Readiness",
+                "unit_of_measurement": "/100",
+                "icon": "mdi:heart-pulse",
+                "zone": readiness_zone or "unknown",
+                "source": readiness_src or "unknown",
+            },
+        )
 
         # sensor.pulsecoach_training_status
-        g_training_status = dm.get('garmin_training_status') if dm else None
-        g_recovery_hrs = dm.get('garmin_recovery_hours') if dm else None
-        push_sensor("sensor.pulsecoach_training_status",
-                    g_training_status if g_training_status else "unknown",
-                    {
-                        "friendly_name": "PulseCoach Training Status",
-                        "icon": "mdi:run-fast",
-                        "recovery_hours": g_recovery_hrs,
-                        "load_focus": dm.get('garmin_load_focus') if dm else None,
-                    })
+        g_training_status = dm.get("garmin_training_status") if dm else None
+        g_recovery_hrs = dm.get("garmin_recovery_hours") if dm else None
+        push_sensor(
+            "sensor.pulsecoach_training_status",
+            g_training_status if g_training_status else "unknown",
+            {
+                "friendly_name": "PulseCoach Training Status",
+                "icon": "mdi:run-fast",
+                "recovery_hours": g_recovery_hrs,
+                "load_focus": dm.get("garmin_load_focus") if dm else None,
+            },
+        )
 
         # sensor.pulsecoach_recovery_time (top-level for automations/dashboards)
-        push_sensor("sensor.pulsecoach_recovery_time",
-                    round(g_recovery_hrs, 1) if g_recovery_hrs is not None else "unknown",
-                    {
-                        "friendly_name": "PulseCoach Recovery Time",
-                        "unit_of_measurement": "h",
-                        "icon": "mdi:timer-sand",
-                        "device_class": "duration",
-                        "status": (
-                            "ready" if g_recovery_hrs is not None and g_recovery_hrs < 6 else
-                            ("partial" if g_recovery_hrs is not None and g_recovery_hrs < 24 else
-                             ("recovering" if g_recovery_hrs is not None else "unknown"))
-                        ),
-                    })
+        push_sensor(
+            "sensor.pulsecoach_recovery_time",
+            round(g_recovery_hrs, 1) if g_recovery_hrs is not None else "unknown",
+            {
+                "friendly_name": "PulseCoach Recovery Time",
+                "unit_of_measurement": "h",
+                "icon": "mdi:timer-sand",
+                "device_class": "duration",
+                "status": (
+                    "ready"
+                    if g_recovery_hrs is not None and g_recovery_hrs < 6
+                    else (
+                        "partial"
+                        if g_recovery_hrs is not None and g_recovery_hrs < 24
+                        else ("recovering" if g_recovery_hrs is not None else "unknown")
+                    )
+                ),
+            },
+        )
 
         # sensor.pulsecoach_hrv
         # NOTE: `daily_metric.hrv` is Garmin's `hrvSummary.weeklyAvg`
         # (see garmin-sync.py), so this sensor reflects the most recent
         # weekly-average HRV rather than the previous-night value.
-        latest_hrv = dm.get('hrv') if dm else None
-        hrv_trend = data.get('hrv_trend')
-        hrv_avg_7d = data.get('hrv_avg_7d')
-        push_sensor("sensor.pulsecoach_hrv",
-                    round(latest_hrv, 1) if latest_hrv is not None else "unknown",
-                    {
-                        "friendly_name": "PulseCoach HRV (weekly avg)",
-                        "unit_of_measurement": "ms",
-                        "icon": "mdi:heart-flash",
-                        "source": "garmin_weekly_avg",
-                        "trend": hrv_trend or "unknown",
-                        "avg_7d": hrv_avg_7d,
-                    })
+        latest_hrv = dm.get("hrv") if dm else None
+        hrv_trend = data.get("hrv_trend")
+        hrv_avg_7d = data.get("hrv_avg_7d")
+        push_sensor(
+            "sensor.pulsecoach_hrv",
+            round(latest_hrv, 1) if latest_hrv is not None else "unknown",
+            {
+                "friendly_name": "PulseCoach HRV (weekly avg)",
+                "unit_of_measurement": "ms",
+                "icon": "mdi:heart-flash",
+                "source": "garmin_weekly_avg",
+                "trend": hrv_trend or "unknown",
+                "avg_7d": hrv_avg_7d,
+            },
+        )
 
         # sensor.pulsecoach_load_focus (top-level for dashboards).
         # The synced `garmin_load_focus` JSON can contain either:
         #   - percentage keys (highAerobicTrainingLoadPercentage, ...) or
         #   - absolute load keys (highAerobicTrainingLoad, ...).
         # Prefer percentages when present; fall back to absolutes otherwise.
-        load_focus_raw = dm.get('garmin_load_focus') if dm else None
+        load_focus_raw = dm.get("garmin_load_focus") if dm else None
         load_focus_label = _derive_load_focus_label(load_focus_raw)
         load_focus_attrs = load_focus_raw if isinstance(load_focus_raw, dict) else {}
-        push_sensor("sensor.pulsecoach_load_focus",
-                    load_focus_label,
-                    {
-                        "friendly_name": "PulseCoach Load Focus",
-                        "icon": "mdi:chart-donut",
-                        **load_focus_attrs,
-                    })
+        push_sensor(
+            "sensor.pulsecoach_load_focus",
+            load_focus_label,
+            {
+                "friendly_name": "PulseCoach Load Focus",
+                "icon": "mdi:chart-donut",
+                **load_focus_attrs,
+            },
+        )
 
         # sensor.pulsecoach_weight
-        weight = dm.get('weight_kg') if dm else None
-        push_sensor("sensor.pulsecoach_weight",
-                    round(weight, 1) if weight else "unknown",
-                    {
-                        "friendly_name": "PulseCoach Weight",
-                        "unit_of_measurement": "kg",
-                        "icon": "mdi:scale-bathroom",
-                        "body_fat_pct": dm.get('body_fat_pct') if dm else None,
-                    })
+        weight = dm.get("weight_kg") if dm else None
+        push_sensor(
+            "sensor.pulsecoach_weight",
+            round(weight, 1) if weight else "unknown",
+            {
+                "friendly_name": "PulseCoach Weight",
+                "unit_of_measurement": "kg",
+                "icon": "mdi:scale-bathroom",
+                "body_fat_pct": dm.get("body_fat_pct") if dm else None,
+            },
+        )
 
         # sensor.pulsecoach_spo2
-        spo2 = dm.get('spo2') if dm else None
-        push_sensor("sensor.pulsecoach_spo2",
-                    round(spo2, 1) if spo2 is not None else "unknown",
-                    {
-                        "friendly_name": "PulseCoach SpO2",
-                        "unit_of_measurement": "%",
-                        "icon": "mdi:lungs",
-                        "status": "normal" if spo2 and spo2 >= 95 else
-                                 ("low" if spo2 and spo2 >= 90 else
-                                  ("critical" if spo2 else "unknown")),
-                    })
+        spo2 = dm.get("spo2") if dm else None
+        push_sensor(
+            "sensor.pulsecoach_spo2",
+            round(spo2, 1) if spo2 is not None else "unknown",
+            {
+                "friendly_name": "PulseCoach SpO2",
+                "unit_of_measurement": "%",
+                "icon": "mdi:lungs",
+                "status": "normal"
+                if spo2 and spo2 >= 95
+                else (
+                    "low"
+                    if spo2 and spo2 >= 90
+                    else ("critical" if spo2 else "unknown")
+                ),
+            },
+        )
 
         # sensor.pulsecoach_respiration_rate
-        rr = dm.get('respiration_rate') if dm else None
-        push_sensor("sensor.pulsecoach_respiration_rate",
-                    round(rr, 1) if rr is not None else "unknown",
-                    {
-                        "friendly_name": "PulseCoach Respiration Rate",
-                        "unit_of_measurement": "brpm",
-                        "icon": "mdi:weather-windy",
-                    })
+        rr = dm.get("respiration_rate") if dm else None
+        push_sensor(
+            "sensor.pulsecoach_respiration_rate",
+            round(rr, 1) if rr is not None else "unknown",
+            {
+                "friendly_name": "PulseCoach Respiration Rate",
+                "unit_of_measurement": "brpm",
+                "icon": "mdi:weather-windy",
+            },
+        )
 
         # sensor.pulsecoach_skin_temp
-        skin_temp = dm.get('skin_temp') if dm else None
-        push_sensor("sensor.pulsecoach_skin_temp",
-                    round(skin_temp, 1) if skin_temp is not None else "unknown",
-                    {
-                        "friendly_name": "PulseCoach Skin Temperature",
-                        "unit_of_measurement": "°C",
-                        "icon": "mdi:thermometer",
-                    })
+        skin_temp = dm.get("skin_temp") if dm else None
+        push_sensor(
+            "sensor.pulsecoach_skin_temp",
+            round(skin_temp, 1) if skin_temp is not None else "unknown",
+            {
+                "friendly_name": "PulseCoach Skin Temperature",
+                "unit_of_measurement": "°C",
+                "icon": "mdi:thermometer",
+            },
+        )
 
         # sensor.pulsecoach_workout_recommendation
         # AI-informed workout suggestion using readiness + all recovery signals
@@ -742,25 +852,27 @@ def run_notifications(user_id: str):
         workout = recommend_workout(
             acwr=acwr,
             tsb=tsb,
-            body_battery=dm['body_battery_end'] if dm else None,
-            stress_score=dm['stress_score'] if dm else None,
-            sleep_debt_minutes=dm['sleep_debt_minutes'] if dm else None,
+            body_battery=dm["body_battery_end"] if dm else None,
+            stress_score=dm["stress_score"] if dm else None,
+            sleep_debt_minutes=dm["sleep_debt_minutes"] if dm else None,
             consecutive_hard_days=hard_days,
             readiness_score=readiness_val,
             garmin_training_status=g_training_status,
         )
-        push_sensor("sensor.pulsecoach_workout_recommendation",
-                    workout["workout_type"],
-                    {
-                        "friendly_name": "PulseCoach Workout Recommendation",
-                        "icon": "mdi:dumbbell" if not workout["is_rest_day"] else "mdi:sleep",
-                        "is_rest_day": workout["is_rest_day"],
-                        "intensity": workout["intensity"],
-                        "duration_min": workout["duration_min"],
-                        "hr_zone_target": workout["hr_zone_target"],
-                        "rationale": workout["rationale"],
-                        "all_factors": workout.get("all_factors", []),
-                    })
+        push_sensor(
+            "sensor.pulsecoach_workout_recommendation",
+            workout["workout_type"],
+            {
+                "friendly_name": "PulseCoach Workout Recommendation",
+                "icon": "mdi:dumbbell" if not workout["is_rest_day"] else "mdi:sleep",
+                "is_rest_day": workout["is_rest_day"],
+                "intensity": workout["intensity"],
+                "duration_min": workout["duration_min"],
+                "hr_zone_target": workout["hr_zone_target"],
+                "rationale": workout["rationale"],
+                "all_factors": workout.get("all_factors", []),
+            },
+        )
 
         print(
             f"[ha-notify] Sensors pushed — ACWR: {acwr}, Form: {tsb}, "
@@ -769,61 +881,97 @@ def run_notifications(user_id: str):
 
         # sensor.pulsecoach_data_quality — transparency on sync gaps
         dq = fetch_data_quality(cur, user_id)
-        push_sensor("sensor.pulsecoach_data_quality",
-                    dq["issues"],
-                    {
-                        "friendly_name": "PulseCoach Data Quality",
-                        "unit_of_measurement": "issues",
-                        "icon": "mdi:database-check" if dq["status"] == "ok"
-                                else "mdi:database-alert",
-                        "status": dq["status"],
-                        "missing_days_14d": dq["missing_days"],
-                        "stale_days": dq["stale_days"],
-                        "field_gaps": dq["field_gaps"],
-                        "message": dq["message"],
-                    })
+        push_sensor(
+            "sensor.pulsecoach_data_quality",
+            dq["issues"],
+            {
+                "friendly_name": "PulseCoach Data Quality",
+                "unit_of_measurement": "issues",
+                "icon": "mdi:database-check"
+                if dq["status"] == "ok"
+                else "mdi:database-alert",
+                "status": dq["status"],
+                "missing_days_14d": dq["missing_days"],
+                "stale_days": dq["stale_days"],
+                "field_gaps": dq["field_gaps"],
+                "message": dq["message"],
+            },
+        )
 
         # --- Alert notifications ---
         alerts = []
 
         if dq["stale_days"] >= 3:
-            alerts.append(("📡 PulseCoach Data Sync Stale",
-                          f"{dq['message']}. Check the Garmin sync — readiness and "
-                          f"load metrics may be out of date.",
-                          "gc_data_stale"))
+            alerts.append(
+                (
+                    "📡 PulseCoach Data Sync Stale",
+                    f"{dq['message']}. Check the Garmin sync — readiness and "
+                    f"load metrics may be out of date.",
+                    "gc_data_stale",
+                )
+            )
 
         if acwr and acwr > 1.5:
-            alerts.append(("🔴 High Injury Risk — ACWR",
-                          f"Your ACWR is {acwr:.2f} (>1.5 high risk zone per Hulin 2016). "
-                          f"Consider reducing training load for 2-3 days.",
-                          "gc_acwr_high"))
+            alerts.append(
+                (
+                    "🔴 High Injury Risk — ACWR",
+                    f"Your ACWR is {acwr:.2f} (>1.5 high risk zone per Hulin 2016). "
+                    f"Consider reducing training load for 2-3 days.",
+                    "gc_acwr_high",
+                )
+            )
         elif acwr and acwr > 1.3:
-            alerts.append(("🟡 Elevated ACWR",
-                          f"ACWR is {acwr:.2f} — entering caution zone (>1.3). Monitor closely.",
-                          "gc_acwr_caution"))
+            alerts.append(
+                (
+                    "🟡 Elevated ACWR",
+                    f"ACWR is {acwr:.2f} — entering caution zone (>1.3). Monitor closely.",
+                    "gc_acwr_caution",
+                )
+            )
 
         if tsb is not None and tsb < -20:
-            alerts.append(("😴 Overreaching Detected",
-                          f"Training Stress Balance (Form) is {tsb:.1f} — below -20 indicates overreaching. "
-                          f"Schedule a rest day or active recovery.",
-                          "gc_tsb_overreach"))
+            alerts.append(
+                (
+                    "😴 Overreaching Detected",
+                    f"Training Stress Balance (Form) is {tsb:.1f} — below -20 indicates overreaching. "
+                    f"Schedule a rest day or active recovery.",
+                    "gc_tsb_overreach",
+                )
+            )
 
         if sleep_debt and sleep_debt > 120:  # 2+ hours
-            alerts.append(("💤 Sleep Debt Warning",
-                          f"Sleep debt: {sleep_debt//60}h {sleep_debt%60}m. "
-                          f"Prioritize sleep tonight for optimal recovery.",
-                          "gc_sleep_debt"))
+            alerts.append(
+                (
+                    "💤 Sleep Debt Warning",
+                    f"Sleep debt: {sleep_debt // 60}h {sleep_debt % 60}m. "
+                    f"Prioritize sleep tonight for optimal recovery.",
+                    "gc_sleep_debt",
+                )
+            )
 
-        if bb and bb < 20 and dm['body_battery_start'] and dm['body_battery_start'] > 60:  # low end BB, started high
-            alerts.append(("🔋 Low Body Battery",
-                          f"Body Battery is critically low ({bb}%). Recovery priority today.",
-                          "gc_body_battery_low"))
+        if (
+            bb
+            and bb < 20
+            and dm["body_battery_start"]
+            and dm["body_battery_start"] > 60
+        ):  # low end BB, started high
+            alerts.append(
+                (
+                    "🔋 Low Body Battery",
+                    f"Body Battery is critically low ({bb}%). Recovery priority today.",
+                    "gc_body_battery_low",
+                )
+            )
 
         if hard_days >= 3:
-            alerts.append(("🏋️ Consecutive Hard Training Days",
-                          f"{hard_days} high-load days in the last 3 days. "
-                          f"Consider a recovery or easy day to avoid overtraining.",
-                          "gc_hard_days"))
+            alerts.append(
+                (
+                    "🏋️ Consecutive Hard Training Days",
+                    f"{hard_days} high-load days in the last 3 days. "
+                    f"Consider a recovery or easy day to avoid overtraining.",
+                    "gc_hard_days",
+                )
+            )
 
         for title, msg, nid in alerts:
             create_notification(title, msg, nid)
@@ -833,6 +981,7 @@ def run_notifications(user_id: str):
     except Exception as e:
         print(f"[ha-notify] ERROR: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
     finally:
         if db:
@@ -841,7 +990,9 @@ def run_notifications(user_id: str):
 
 def main():
     once_mode = "--once" in sys.argv
-    print(f"[ha-notify] Starting. Mode: {'once' if once_mode else f'loop every {NOTIFY_INTERVAL_MINUTES}m'} (timezone: {USER_TZ})")
+    print(
+        f"[ha-notify] Starting. Mode: {'once' if once_mode else f'loop every {NOTIFY_INTERVAL_MINUTES}m'} (timezone: {USER_TZ})"
+    )
 
     run_notifications(USER_ID)
 

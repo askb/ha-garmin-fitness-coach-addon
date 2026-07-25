@@ -5,12 +5,19 @@
 
 Run: python -m pytest tests/test_meeting_stress.py   (or: python tests/test_meeting_stress.py)
 """
+
 import importlib.util
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-_SCRIPT = (Path(__file__).resolve().parents[1] / "pulsecoach" / "rootfs"
-           / "app" / "scripts" / "meeting-stress.py")
+_SCRIPT = (
+    Path(__file__).resolve().parents[1]
+    / "pulsecoach"
+    / "rootfs"
+    / "app"
+    / "scripts"
+    / "meeting-stress.py"
+)
 _spec = importlib.util.spec_from_file_location("meeting_stress", _SCRIPT)
 ms = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ms)
@@ -34,11 +41,11 @@ def _build():
         (0, 9, ["alice", "bob", "dave"]),
         (0, 14, ["alice", "dave"]),
         (1, 9, ["alice", "bob"]),
-        (1, 14, ["bob", "dave"]),       # bob without alice -> neutral
+        (1, 14, ["bob", "dave"]),  # bob without alice -> neutral
         (2, 9, ["alice", "bob", "carol"]),
-        (2, 14, ["bob", "dave"]),       # bob without alice -> neutral
+        (2, 14, ["bob", "dave"]),  # bob without alice -> neutral
         (3, 9, ["alice", "carol"]),
-        (3, 14, ["carol", "dave"]),     # carol calming, no alice
+        (3, 14, ["carol", "dave"]),  # carol calming, no alice
         (4, 9, ["alice", "bob", "dave"]),
         (4, 14, ["carol", "bob"]),
     ]
@@ -46,10 +53,17 @@ def _build():
     for d, h, att in specs:
         start = DAY.replace(hour=h) + timedelta(days=d)
         end = start + timedelta(minutes=40)
-        events.append({"start": start.isoformat(), "end": end.isoformat(),
-                       "title": "m", "attendees": att})
-        windows.append((int(start.timestamp()), int(end.timestamp()),
-                        sum(lift[a] for a in att)))
+        events.append(
+            {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "title": "m",
+                "attendees": att,
+            }
+        )
+        windows.append(
+            (int(start.timestamp()), int(end.timestamp()), sum(lift[a] for a in att))
+        )
 
     # 2-min HR backbone at 62 bpm across each meeting day, with meeting lifts applied.
     series = []
@@ -74,7 +88,7 @@ def test_ridge_deconfounds_bystander():
     assert top == "alice", top
 
     # 2. bob's NAIVE average is inflated by co-attending alice, but ridge clears him.
-    assert people["bob"]["naive"] > 2.0, people["bob"]      # confounded
+    assert people["bob"]["naive"] > 2.0, people["bob"]  # confounded
     assert abs(people["bob"]["ridge"]) < 2.5, people["bob"]  # de-confounded ~0
     assert people["bob"]["naive"] - people["bob"]["ridge"] > 1.5, people["bob"]
 
@@ -84,13 +98,22 @@ def test_ridge_deconfounds_bystander():
 
 def test_solo_and_oversize_meetings_skipped():
     events = [
-        {"start": DAY.replace(hour=9).isoformat(),
-         "end": DAY.replace(hour=9, minute=30).isoformat(), "title": "solo", "attendees": []},
-        {"start": DAY.replace(hour=10).isoformat(),
-         "end": DAY.replace(hour=10, minute=30).isoformat(), "title": "townhall",
-         "attendees": [f"p{i}" for i in range(20)]},
+        {
+            "start": DAY.replace(hour=9).isoformat(),
+            "end": DAY.replace(hour=9, minute=30).isoformat(),
+            "title": "solo",
+            "attendees": [],
+        },
+        {
+            "start": DAY.replace(hour=10).isoformat(),
+            "end": DAY.replace(hour=10, minute=30).isoformat(),
+            "title": "townhall",
+            "attendees": [f"p{i}" for i in range(20)],
+        },
     ]
-    series = [(int(DAY.replace(hour=7).timestamp()) + k * 60, 62.0) for k in range(0, 600, 2)]
+    series = [
+        (int(DAY.replace(hour=7).timestamp()) + k * 60, 62.0) for k in range(0, 600, 2)
+    ]
     assert ms.score_meetings(events, series) == []
 
 
@@ -110,8 +133,12 @@ def test_gcal_item_mapping():
     ev = gcal._item_to_event(item)
     assert ev["attendees"] == ["Alice", "carol"], ev
     # all-day events (date, no dateTime) are dropped
-    assert gcal._item_to_event({"start": {"date": "2026-07-01"},
-                                "end": {"date": "2026-07-02"}}) is None
+    assert (
+        gcal._item_to_event(
+            {"start": {"date": "2026-07-01"}, "end": {"date": "2026-07-02"}}
+        )
+        is None
+    )
 
 
 def test_gcal_fetch_multi_calendar_dedup(monkeypatch):
@@ -129,17 +156,23 @@ def test_gcal_fetch_multi_calendar_dedup(monkeypatch):
     # Same meeting (uid-shared) appears on both calendars; each also has a
     # unique meeting. Dedup must keep the shared one exactly once → 3 total.
     per_cal = {
-        "primary": [_item("uid-shared", 9, "standup", "alice"),
-                    _item("uid-a", 10, "1:1", "bob")],
-        "team@x.org": [_item("uid-shared", 9, "standup", "alice"),
-                       _item("uid-b", 11, "review", "carol")],
+        "primary": [
+            _item("uid-shared", 9, "standup", "alice"),
+            _item("uid-a", 10, "1:1", "bob"),
+        ],
+        "team@x.org": [
+            _item("uid-shared", 9, "standup", "alice"),
+            _item("uid-b", 11, "review", "carol"),
+        ],
     }
     monkeypatch.setattr(gcal, "load_token", lambda: {"ok": True})
     monkeypatch.setattr(gcal, "_refresh_access_token", lambda tok: "access")
-    monkeypatch.setattr(gcal, "selected_calendar_ids",
-                        lambda: ["primary", "team@x.org"])
-    monkeypatch.setattr(gcal, "_list_events_for_calendar",
-                        lambda access, cid, days: per_cal[cid])
+    monkeypatch.setattr(
+        gcal, "selected_calendar_ids", lambda: ["primary", "team@x.org"]
+    )
+    monkeypatch.setattr(
+        gcal, "_list_events_for_calendar", lambda access, cid, days: per_cal[cid]
+    )
 
     events = gcal.fetch_events(14)
     titles = sorted(e["title"] for e in events)
@@ -149,13 +182,16 @@ def test_gcal_fetch_multi_calendar_dedup(monkeypatch):
     # but differ by start — they must NOT be de-duplicated into one.
     rec = [
         _item("uid-rec", 9, "weekly", "alice"),
-        {**_item("uid-rec", 9, "weekly", "alice"),
-         "start": {"dateTime": "2026-07-08T09:00:00+10:00"},
-         "end": {"dateTime": "2026-07-08T09:30:00+10:00"}},
+        {
+            **_item("uid-rec", 9, "weekly", "alice"),
+            "start": {"dateTime": "2026-07-08T09:00:00+10:00"},
+            "end": {"dateTime": "2026-07-08T09:30:00+10:00"},
+        },
     ]
     monkeypatch.setattr(gcal, "selected_calendar_ids", lambda: ["primary"])
-    monkeypatch.setattr(gcal, "_list_events_for_calendar",
-                        lambda access, cid, days: rec)
+    monkeypatch.setattr(
+        gcal, "_list_events_for_calendar", lambda access, cid, days: rec
+    )
     assert len(gcal.fetch_events(14)) == 2
 
 
@@ -189,10 +225,18 @@ def test_skipped_reports_no_hr_interactions():
     inter_start = DAY.replace(hour=20)  # after the series ends -> no HR
     inter_end = inter_start + timedelta(minutes=30)
     events = [
-        {"start": meet_start.isoformat(), "end": meet_end.isoformat(),
-         "title": "standup", "attendees": ["alice", "bob"]},
-        {"start": inter_start.isoformat(), "end": inter_end.isoformat(),
-         "title": "interaction: Mum", "attendees": ["Mum"]},
+        {
+            "start": meet_start.isoformat(),
+            "end": meet_end.isoformat(),
+            "title": "standup",
+            "attendees": ["alice", "bob"],
+        },
+        {
+            "start": inter_start.isoformat(),
+            "end": inter_end.isoformat(),
+            "title": "interaction: Mum",
+            "attendees": ["Mum"],
+        },
     ]
     # 07:00 -> 11:00 HR backbone (covers the meeting, not the evening interaction).
     day7 = int(DAY.replace(hour=7).timestamp())
@@ -218,8 +262,14 @@ def test_thin_baseline_is_distinct_from_no_hr():
     # ±90-min baseline has almost no samples outside the meeting.
     m_start = DAY.replace(hour=9)
     m_end = m_start + timedelta(minutes=20)
-    events = [{"start": m_start.isoformat(), "end": m_end.isoformat(),
-               "title": "standup", "attendees": ["alice", "bob"]}]
+    events = [
+        {
+            "start": m_start.isoformat(),
+            "end": m_end.isoformat(),
+            "title": "standup",
+            "attendees": ["alice", "bob"],
+        }
+    ]
     series = [(int(m_start.timestamp()) + k * 60, 62.0) for k in range(0, 20, 2)]
 
     skipped: list[dict] = []
@@ -227,17 +277,23 @@ def test_thin_baseline_is_distinct_from_no_hr():
     assert rows == [], rows
     assert [s["reason"] for s in skipped] == ["thin_baseline"], skipped
     summary = ms.summarize_skipped(skipped)
-    assert summary["no_hr"] == 0, summary            # not the sync-pending bucket
+    assert summary["no_hr"] == 0, summary  # not the sync-pending bucket
     assert summary["by_reason"]["thin_baseline"] == 1, summary
 
 
 def test_score_meetings_without_skipped_is_backward_compatible():
     """Omitting the skipped arg still returns just the scored rows (no crash)."""
-    events = [{"start": DAY.replace(hour=9).isoformat(),
-               "end": DAY.replace(hour=9, minute=30).isoformat(),
-               "title": "solo", "attendees": []}]
-    series = [(int(DAY.replace(hour=7).timestamp()) + k * 60, 62.0)
-              for k in range(0, 600, 2)]
+    events = [
+        {
+            "start": DAY.replace(hour=9).isoformat(),
+            "end": DAY.replace(hour=9, minute=30).isoformat(),
+            "title": "solo",
+            "attendees": [],
+        }
+    ]
+    series = [
+        (int(DAY.replace(hour=7).timestamp()) + k * 60, 62.0) for k in range(0, 600, 2)
+    ]
     assert ms.score_meetings(events, series) == []
 
 
@@ -292,7 +348,10 @@ def test_fetch_hr_refreshes_volatile_days(tmp_path, monkeypatch):
     assert today_str in calls, calls
     # And its cache is refreshed with the new sample, not left empty.
     import json as _json
-    assert _json.loads((cache / f"hr_{today_str}.json").read_text()), "today cache refreshed"
+
+    assert _json.loads((cache / f"hr_{today_str}.json").read_text()), (
+        "today cache refreshed"
+    )
 
 
 if __name__ == "__main__":

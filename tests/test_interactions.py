@@ -5,6 +5,7 @@
 
 Run: python -m pytest tests/test_interactions.py
 """
+
 import importlib.util
 import json
 from datetime import datetime, timedelta, timezone
@@ -12,8 +13,14 @@ from pathlib import Path
 
 import pytest
 
-_SCRIPT = (Path(__file__).resolve().parents[1] / "pulsecoach" / "rootfs"
-           / "app" / "scripts" / "interactions.py")
+_SCRIPT = (
+    Path(__file__).resolve().parents[1]
+    / "pulsecoach"
+    / "rootfs"
+    / "app"
+    / "scripts"
+    / "interactions.py"
+)
 _spec = importlib.util.spec_from_file_location("interactions", _SCRIPT)
 ix = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ix)
@@ -80,8 +87,10 @@ def test_list_newest_first_with_ids(store):
 
 
 def test_list_skips_malformed_lines(store):
-    store.write_text('not json\n{"person":"Ok","minutes":30,'
-                     '"end":"2026-07-11T02:00:00+00:00"}\n{"minutes":5}\n')
+    store.write_text(
+        'not json\n{"person":"Ok","minutes":30,'
+        '"end":"2026-07-11T02:00:00+00:00"}\n{"minutes":5}\n'
+    )
     entries = ix.list_interactions()
     assert [e["person"] for e in entries] == ["Ok"]
 
@@ -109,7 +118,8 @@ def test_list_skips_nonfinite_minutes(store):
     store.write_text(
         '{"person":"A","minutes":NaN,"end":"2026-07-11T02:00:00+00:00"}\n'
         '{"person":"B","minutes":Infinity,"end":"2026-07-11T02:00:00+00:00"}\n'
-        '{"person":"Ok","minutes":30,"end":"2026-07-11T02:00:00+00:00"}\n')
+        '{"person":"Ok","minutes":30,"end":"2026-07-11T02:00:00+00:00"}\n'
+    )
     entries = ix.list_interactions()
     assert [e["person"] for e in entries] == ["Ok"]
 
@@ -117,8 +127,7 @@ def test_list_skips_nonfinite_minutes(store):
 def test_list_treats_naive_end_as_utc(store):
     """Hand-written lines without an offset score as UTC in meeting-stress;
     the listing must agree."""
-    store.write_text('{"person":"Ok","minutes":30,'
-                     '"end":"2026-07-11T02:00:00"}\n')
+    store.write_text('{"person":"Ok","minutes":30,"end":"2026-07-11T02:00:00"}\n')
     entries = ix.list_interactions()
     end = datetime.fromisoformat(entries[0]["end"])
     assert end.tzinfo is not None
@@ -160,8 +169,7 @@ def test_identical_adds_get_distinct_ids(store):
 def test_delete_removes_newest_of_identical_manual_lines(store):
     """Identical hand-written lines share a content-hash id; delete must
     take the newest to match list_interactions() newest-first order."""
-    line = ('{"person":"Twin","minutes":10,'
-            '"end":"2026-07-11T02:00:00+00:00"}\n')
+    line = '{"person":"Twin","minutes":10,"end":"2026-07-11T02:00:00+00:00"}\n'
     store.write_text(line + line)
     top = ix.list_interactions()[0]
     assert ix.delete_interaction(top["id"]) is True

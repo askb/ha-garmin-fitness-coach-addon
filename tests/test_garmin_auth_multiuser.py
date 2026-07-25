@@ -24,11 +24,7 @@ pytest.importorskip("flask")
 pytest.importorskip("garminconnect")
 
 _SCRIPTS = (
-    Path(__file__).resolve().parents[1]
-    / "pulsecoach"
-    / "rootfs"
-    / "app"
-    / "scripts"
+    Path(__file__).resolve().parents[1] / "pulsecoach" / "rootfs" / "app" / "scripts"
 )
 USER_HEADER = "X-PulseCoach-User"
 
@@ -93,11 +89,16 @@ def _user_dir(gas, user_id):
 
 # ── import-tokens isolation ─────────────────────────────────────────────────
 
+
 def test_import_tokens_single_user_uses_base_dir(client):
     gas, c = client
-    resp = c.post("/auth/import-tokens", json={
-        "oauth1_token": {"a": 1}, "oauth2_token": {"b": 2},
-    })
+    resp = c.post(
+        "/auth/import-tokens",
+        json={
+            "oauth1_token": {"a": 1},
+            "oauth2_token": {"b": 2},
+        },
+    )
     assert resp.status_code == 200
     # Written directly under the base dir (addon behavior).
     assert os.path.exists(os.path.join(gas.TOKEN_DIR, "oauth1_token.json"))
@@ -128,12 +129,15 @@ def test_import_tokens_per_user_is_isolated(client):
 
 # ── status isolation ────────────────────────────────────────────────────────
 
+
 def test_status_reflects_only_that_users_tokens(client):
     gas, c = client
     # alice connects; bob does not.
-    c.post("/auth/import-tokens",
-           json={"oauth1_token": {"x": 1}, "oauth2_token": {"y": 2}},
-           headers={USER_HEADER: "alice"})
+    c.post(
+        "/auth/import-tokens",
+        json={"oauth1_token": {"x": 1}, "oauth2_token": {"y": 2}},
+        headers={USER_HEADER: "alice"},
+    )
 
     alice = c.get("/auth/status", headers={USER_HEADER: "alice"}).get_json()
     bob = c.get("/auth/status", headers={USER_HEADER: "bob"}).get_json()
@@ -143,23 +147,27 @@ def test_status_reflects_only_that_users_tokens(client):
 
 # ── login → MFA state is per-user ───────────────────────────────────────────
 
+
 def test_login_success_saves_tokens_for_user(client):
     gas, c = client
-    r = c.post("/auth/login",
-               json={"email": "a@x.com", "password": "good"},
-               headers={USER_HEADER: "alice"})
+    r = c.post(
+        "/auth/login",
+        json={"email": "a@x.com", "password": "good"},
+        headers={USER_HEADER: "alice"},
+    )
     body = r.get_json()
     assert body["success"] is True
-    assert os.path.exists(
-        os.path.join(_user_dir(gas, "alice"), "garmin_tokens.json"))
+    assert os.path.exists(os.path.join(_user_dir(gas, "alice"), "garmin_tokens.json"))
 
 
 def test_pending_mfa_is_isolated_per_user(client):
     gas, c = client
     # alice triggers MFA (password "MFA" → needs_mfa); bob does not log in.
-    r = c.post("/auth/login",
-               json={"email": "a@x.com", "password": "MFA"},
-               headers={USER_HEADER: "alice"})
+    r = c.post(
+        "/auth/login",
+        json={"email": "a@x.com", "password": "MFA"},
+        headers={USER_HEADER: "alice"},
+    )
     assert r.get_json()["needsMfa"] is True
     assert gas._mfa_store.has("alice")
     assert not gas._mfa_store.has("bob")
@@ -168,12 +176,15 @@ def test_pending_mfa_is_isolated_per_user(client):
 
 # ── sync launches with per-user env ─────────────────────────────────────────
 
+
 def test_sync_passes_per_user_env(client, monkeypatch):
     gas, c = client
     # Give alice tokens so the "connected" check passes.
-    c.post("/auth/import-tokens",
-           json={"oauth1_token": {"x": 1}, "oauth2_token": {"y": 2}},
-           headers={USER_HEADER: "alice"})
+    c.post(
+        "/auth/import-tokens",
+        json={"oauth1_token": {"x": 1}, "oauth2_token": {"y": 2}},
+        headers={USER_HEADER: "alice"},
+    )
 
     captured = {}
 
@@ -183,6 +194,7 @@ def test_sync_passes_per_user_env(client, monkeypatch):
             captured["env"] = env
 
     import subprocess
+
     monkeypatch.setattr(subprocess, "Popen", _FakePopen)
     monkeypatch.setattr(gas, "SYNC_LOG_PATH", str(gas.TOKEN_DIR) + "-sync.log")
     monkeypatch.setattr(gas, "SYNC_LOG_PREV_PATH", str(gas.TOKEN_DIR) + "-sync.log.1")
@@ -195,8 +207,9 @@ def test_sync_passes_per_user_env(client, monkeypatch):
 
 def test_sync_single_user_uses_base_dir_and_no_user_id(client, monkeypatch):
     gas, c = client
-    c.post("/auth/import-tokens",
-           json={"oauth1_token": {"x": 1}, "oauth2_token": {"y": 2}})
+    c.post(
+        "/auth/import-tokens", json={"oauth1_token": {"x": 1}, "oauth2_token": {"y": 2}}
+    )
 
     captured = {}
 
@@ -205,6 +218,7 @@ def test_sync_single_user_uses_base_dir_and_no_user_id(client, monkeypatch):
             captured["env"] = env
 
     import subprocess
+
     monkeypatch.setattr(subprocess, "Popen", _FakePopen)
     monkeypatch.setattr(gas, "SYNC_LOG_PATH", str(gas.TOKEN_DIR) + "-sync.log")
     monkeypatch.setattr(gas, "SYNC_LOG_PREV_PATH", str(gas.TOKEN_DIR) + "-sync.log.1")
@@ -218,12 +232,15 @@ def test_sync_single_user_uses_base_dir_and_no_user_id(client, monkeypatch):
 
 # ── logout only removes that user's tokens ──────────────────────────────────
 
+
 def test_logout_removes_only_that_user(client):
     gas, c = client
     for user in ("alice", "bob"):
-        c.post("/auth/import-tokens",
-               json={"oauth1_token": {"u": user}, "oauth2_token": {"u": user}},
-               headers={USER_HEADER: user})
+        c.post(
+            "/auth/import-tokens",
+            json={"oauth1_token": {"u": user}, "oauth2_token": {"u": user}},
+            headers={USER_HEADER: user},
+        )
 
     c.post("/auth/logout", headers={USER_HEADER: "alice"})
     assert not os.path.exists(_user_dir(gas, "alice"))
@@ -232,14 +249,18 @@ def test_logout_removes_only_that_user(client):
 
 # ── sync log is per-user (no cross-user leakage) ────────────────────────────
 
+
 def test_sync_log_is_isolated_per_user(client, monkeypatch):
     gas, c = client
     for user in ("alice", "bob"):
-        c.post("/auth/import-tokens",
-               json={"oauth1_token": {"u": user}, "oauth2_token": {"u": user}},
-               headers={USER_HEADER: user})
+        c.post(
+            "/auth/import-tokens",
+            json={"oauth1_token": {"u": user}, "oauth2_token": {"u": user}},
+            headers={USER_HEADER: user},
+        )
 
     import subprocess
+
     monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: None)
 
     # alice triggers a sync → her log gets a header line written.
@@ -253,6 +274,7 @@ def test_sync_log_is_isolated_per_user(client, monkeypatch):
 
 
 # ── credential dir hardening ────────────────────────────────────────────────
+
 
 def test_import_tokens_refuses_symlinked_users_dir(client, tmp_path):
     gas, c = client
@@ -281,6 +303,7 @@ def test_sync_refuses_symlinked_users_dir(client, monkeypatch, tmp_path):
     os.symlink(str(outside), os.path.join(gas.TOKEN_DIR, "users"))
 
     import subprocess
+
     monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: None)
 
     r = c.post("/auth/sync", headers={USER_HEADER: "alice"})
@@ -290,9 +313,11 @@ def test_sync_refuses_symlinked_users_dir(client, monkeypatch, tmp_path):
 def test_symlinked_per_user_dir_within_base_is_rejected(client):
     gas, c = client
     # bob connects normally.
-    c.post("/auth/import-tokens",
-           json={"oauth1_token": {"u": "bob"}, "oauth2_token": {"u": "bob"}},
-           headers={USER_HEADER: "bob"})
+    c.post(
+        "/auth/import-tokens",
+        json={"oauth1_token": {"u": "bob"}, "oauth2_token": {"u": "bob"}},
+        headers={USER_HEADER: "bob"},
+    )
     # Point alice's per-user dir at bob's — a symlink *within* TOKEN_DIR that
     # passes containment but would break isolation.
     alice_dir = _user_dir(gas, "alice")
@@ -319,7 +344,3 @@ def test_symlinked_users_component_within_base_is_rejected(client, tmp_path):
         headers={USER_HEADER: "alice"},
     )
     assert r.status_code == 500
-
-
-
-

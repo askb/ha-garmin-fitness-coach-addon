@@ -193,15 +193,19 @@ def login() -> tuple[Response, int] | Response:
             token1, token2 = result
             log.info("Login returned tuple: token1 type=%s", type(token1).__name__)
             if token1 == "needs_mfa":
-                _mfa_store.set(user_id, {
-                    "email": email,
-                    "password": password,
-                    "client_state": token2,
-                    "client": client,
-                })
+                _mfa_store.set(
+                    user_id,
+                    {
+                        "email": email,
+                        "password": password,
+                        "client_state": token2,
+                        "client": client,
+                    },
+                )
                 log.info("MFA required — saved client state and credentials")
-                return jsonify(success=False, needsMfa=True,
-                               message="MFA code required")
+                return jsonify(
+                    success=False, needsMfa=True, message="MFA code required"
+                )
 
         # Login succeeded — persist tokens
         _save_tokens(client, user_id)
@@ -213,17 +217,20 @@ def login() -> tuple[Response, int] | Response:
         msg = str(exc).lower()
         if "mfa" in msg or "verification" in msg or "two-factor" in msg:
             # Save credentials for retry via MFA endpoint
-            _mfa_store.set(user_id, {
-                "email": email,
-                "password": password,
-                "client_state": None,
-                "client": None,
-            })
+            _mfa_store.set(
+                user_id,
+                {
+                    "email": email,
+                    "password": password,
+                    "client_state": None,
+                    "client": None,
+                },
+            )
             log.info("MFA detected via exception — saved credentials for retry")
-            return jsonify(success=False, needsMfa=True,
-                           message="MFA code required")
-        return jsonify(success=False, needsMfa=False,
-                       message=f"Login failed: {exc}"), 401
+            return jsonify(success=False, needsMfa=True, message="MFA code required")
+        return jsonify(
+            success=False, needsMfa=False, message=f"Login failed: {exc}"
+        ), 401
 
 
 @app.route("/auth/mfa", methods=["POST"])
@@ -241,13 +248,18 @@ def mfa() -> tuple[Response, int] | Response:
     email = pending.get("email")
     password = pending.get("password")
 
-    log.info("MFA attempt — have client_state=%s, have client=%s, have creds=%s",
-             client_state is not None, client is not None, email is not None)
+    log.info(
+        "MFA attempt — have client_state=%s, have client=%s, have creds=%s",
+        client_state is not None,
+        client is not None,
+        email is not None,
+    )
 
     # Strategy 1: Use garth.sso.resume_login with saved client_state
     if client_state and client:
         try:
             from garth import sso as garth_sso
+
             log.info("Trying garth.sso.resume_login...")
             oauth1, oauth2 = garth_sso.resume_login(client_state, code)
             client.garth.oauth1_token = oauth1
@@ -272,13 +284,15 @@ def mfa() -> tuple[Response, int] | Response:
         except Exception as exc:
             log.error("prompt_mfa login failed: %s", exc)
             _mfa_store.clear(user_id)
-            return jsonify(success=False,
-                           message=f"MFA failed: {exc}. "
-                           "Please try logging in again."), 401
+            return jsonify(
+                success=False,
+                message=f"MFA failed: {exc}. Please try logging in again.",
+            ), 401
 
     _mfa_store.clear(user_id)
-    return jsonify(success=False,
-                   message="No pending MFA session. Please log in again."), 400
+    return jsonify(
+        success=False, message="No pending MFA session. Please log in again."
+    ), 400
 
 
 @app.route("/auth/status", methods=["GET"])
@@ -386,8 +400,7 @@ def trigger_sync() -> tuple[Response, int] | Response:
     try:
         env = os.environ.copy()
         env["DATABASE_URL"] = os.environ.get(
-            "DATABASE_URL",
-            "postgresql://postgres@127.0.0.1:5432/pulsecoach"
+            "DATABASE_URL", "postgresql://postgres@127.0.0.1:5432/pulsecoach"
         )
         # Scope the sync to this user: the sync script reads GARMIN_TOKEN_DIR
         # for tokens and GARMIN_USER_ID for the row owner. When no user id is
@@ -451,8 +464,9 @@ def import_tokens() -> tuple[Response, int] | Response:
     oauth2 = data.get("oauth2_token")
 
     if not oauth1 or not oauth2:
-        return jsonify(success=False,
-                       message="Both oauth1_token and oauth2_token required"), 400
+        return jsonify(
+            success=False, message="Both oauth1_token and oauth2_token required"
+        ), 400
 
     try:
         # Defense-in-depth: refuse *before* creating anything if the resolved
@@ -469,8 +483,10 @@ def import_tokens() -> tuple[Response, int] | Response:
         os.chmod(token_dir, 0o700)
         # Owner-only token files, O_NOFOLLOW so a pre-planted symlink
         # cannot redirect the write to an unrelated file.
-        for name, payload in (("oauth1_token.json", oauth1),
-                              ("oauth2_token.json", oauth2)):
+        for name, payload in (
+            ("oauth1_token.json", oauth1),
+            ("oauth2_token.json", oauth2),
+        ):
             fd = os.open(
                 os.path.join(token_dir, name),
                 os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW,
@@ -483,8 +499,9 @@ def import_tokens() -> tuple[Response, int] | Response:
         # Verify tokens work
         client = _load_client(user_id)
         if client is None:
-            return jsonify(success=False,
-                           message="Tokens saved but validation failed"), 500
+            return jsonify(
+                success=False, message="Tokens saved but validation failed"
+            ), 500
 
         return jsonify(success=True, message="Tokens imported and verified")
 
@@ -497,6 +514,7 @@ def logout() -> tuple[Response, int] | Response:
     """Remove stored Garmin session token."""
     try:
         import shutil
+
         user_id = _req_user_id()
         token_dir = _token_dir(user_id)
         # Refuse to rmtree a dir that escapes the base via a symlinked
@@ -580,14 +598,15 @@ def trigger_meeting_stress() -> tuple[Response, int] | Response:
     import time
 
     events_file = "/share/pulsecoach/calendar_events.json"
-    gcal_linked = (os.path.exists("/data/gcal-token.json")
-                   or os.path.exists("/share/pulsecoach/gcal-token.json"))
+    gcal_linked = os.path.exists("/data/gcal-token.json") or os.path.exists(
+        "/share/pulsecoach/gcal-token.json"
+    )
     if not os.path.exists(events_file) and not gcal_linked:
         return jsonify(
             success=False,
             message="No calendar source: link Google Calendar "
-                    "(scripts/generate-gcal-token.py) or drop "
-                    f"calendar_events.json at {events_file}",
+            "(scripts/generate-gcal-token.py) or drop "
+            f"calendar_events.json at {events_file}",
         ), 400
     has_tokens = any(
         os.path.exists(os.path.join(TOKEN_DIR, name))
@@ -613,8 +632,7 @@ def trigger_meeting_stress() -> tuple[Response, int] | Response:
             # Script resolves the source: linked calendar > dropped events file.
             # Lookback window comes from the addon's meeting_lookback_days
             # option (default 30); more history = better per-person stats.
-            cmd = ["python3", "/app/scripts/meeting-stress.py",
-                   "--fetch", "--no-color"]
+            cmd = ["python3", "/app/scripts/meeting-stress.py", "--fetch", "--no-color"]
             raw_days = os.environ.get("MEETING_LOOKBACK_DAYS", "").strip()
             try:
                 days = int(raw_days)
@@ -633,8 +651,11 @@ def trigger_meeting_stress() -> tuple[Response, int] | Response:
         finally:
             log_fh.close()
         log.info("Meeting stress run triggered")
-        return jsonify(success=True, message="Meeting stress run started",
-                       results="/share/pulsecoach/meeting_stress.json")
+        return jsonify(
+            success=True,
+            message="Meeting stress run started",
+            results="/share/pulsecoach/meeting_stress.json",
+        )
     except Exception as exc:
         try:
             with open(status_file, "w") as f:
@@ -687,13 +708,12 @@ def gcal_link() -> tuple[Response, int] | Response:
         return jsonify(
             success=False,
             message="Paste the full gcal-token.json "
-                    "(client_id, client_secret, refresh_token).",
+            "(client_id, client_secret, refresh_token).",
         ), 400
     try:
         gcal.validate_token(client_id, client_secret, refresh_token)
     except gcal.GcalError as exc:
-        return jsonify(success=False,
-                       message=f"Google rejected the token: {exc}"), 400
+        return jsonify(success=False, message=f"Google rejected the token: {exc}"), 400
     try:
         gcal.save_token(client_id, client_secret, refresh_token)
     except gcal.GcalError as exc:
@@ -731,14 +751,12 @@ def gcal_calendars() -> tuple[Response, int] | Response:
     {calendar_ids: [...]} and persists which calendars feed the Stress Board.
     """
     if not gcal.linked():
-        return jsonify(success=False,
-                       message="No Google Calendar linked"), 400
+        return jsonify(success=False, message="No Google Calendar linked"), 400
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
         ids = data.get("calendar_ids")
         if not isinstance(ids, list):
-            return jsonify(success=False,
-                           message="calendar_ids must be a list"), 400
+            return jsonify(success=False, message="calendar_ids must be a list"), 400
         try:
             gcal.save_selected([str(x) for x in ids])
         except gcal.GcalError as exc:
@@ -773,8 +791,7 @@ def interactions_route() -> tuple[Response, int] | Response:
         except OSError as exc:
             return jsonify(success=False, message=str(exc)), 500
         return jsonify(success=True, interaction=rec)
-    return jsonify(success=True,
-                   interactions=interactions.list_interactions())
+    return jsonify(success=True, interactions=interactions.list_interactions())
 
 
 @app.route("/auth/interactions/<iid>", methods=["DELETE"])

@@ -83,8 +83,7 @@ def _parse_line(raw: str) -> dict | None:
     }
 
 
-def add_interaction(person: str, minutes: object,
-                    end: str | None = None) -> dict:
+def add_interaction(person: str, minutes: object, end: str | None = None) -> dict:
     """Validate and append one interaction; returns the stored record.
 
     end defaults to now (UTC). Raises InteractionError on bad input so the
@@ -92,8 +91,7 @@ def add_interaction(person: str, minutes: object,
     """
     person = str(person or "").strip()
     if not person or len(person) > MAX_PERSON_LEN:
-        raise InteractionError(
-            f"person must be 1-{MAX_PERSON_LEN} characters")
+        raise InteractionError(f"person must be 1-{MAX_PERSON_LEN} characters")
     if isinstance(minutes, bool):  # bool subclasses int: true would pass as 1
         raise InteractionError("minutes must be a number")
     try:
@@ -109,8 +107,7 @@ def add_interaction(person: str, minutes: object,
         try:
             end_dt = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
         except ValueError:
-            raise InteractionError(
-                "end must be an ISO 8601 timestamp") from None
+            raise InteractionError("end must be an ISO 8601 timestamp") from None
         if end_dt.tzinfo is None:
             end_dt = end_dt.replace(tzinfo=timezone.utc)
         if end_dt > now + timedelta(days=1):
@@ -146,7 +143,7 @@ def list_interactions(limit: int = DEFAULT_LIST_LIMIT) -> list[dict]:
         if rec is not None:
             entries.append(rec)
     entries.reverse()  # file is append-only, so reversed == newest first
-    return entries[:int(limit)]
+    return entries[: int(limit)]
 
 
 def delete_interaction(iid: str) -> bool:
@@ -178,7 +175,7 @@ def delete_interaction(iid: str) -> bool:
                 victim = i  # keep scanning: last match == newest
         if victim < 0:
             return False
-        kept = lines[:victim] + lines[victim + 1:]
+        kept = lines[:victim] + lines[victim + 1 :]
         tmp = INTERACTIONS_PATH + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             f.writelines(kept)

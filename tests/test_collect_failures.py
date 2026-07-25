@@ -6,6 +6,7 @@ Covers each log parser, the signature stability invariant, and the
 dedup/cap behaviour of the main entry point. These guard against silent
 regressions that would stop self-healing CI from opening issues.
 """
+
 from __future__ import annotations
 
 import json
@@ -113,8 +114,7 @@ def test_signature_is_stable() -> None:
 def test_main_dedupes_by_signature(tmp_path: Path) -> None:
     log = tmp_path / "pytest.log"
     log.write_text(
-        "FAILED tests/x.py::test_one - boom\n"
-        "FAILED tests/x.py::test_one - boom again\n"
+        "FAILED tests/x.py::test_one - boom\nFAILED tests/x.py::test_one - boom again\n"
     )
     result = subprocess.run(
         [sys.executable, str(SCRIPT), f"pytest={log}"],
@@ -129,9 +129,7 @@ def test_main_dedupes_by_signature(tmp_path: Path) -> None:
 def test_main_caps_at_max_failures(tmp_path: Path) -> None:
     log = tmp_path / "pytest.log"
     log.write_text(
-        "\n".join(
-            f"FAILED tests/test_{i}.py::test_case - err" for i in range(20)
-        )
+        "\n".join(f"FAILED tests/test_{i}.py::test_case - err" for i in range(20))
     )
     result = subprocess.run(
         [sys.executable, str(SCRIPT), f"pytest={log}"],
@@ -167,9 +165,7 @@ def test_main_mixed_sources(tmp_path: Path) -> None:
     pytest_log = tmp_path / "pytest.log"
     pytest_log.write_text("FAILED tests/x.py::test_a - boom\n")
     precommit_log = tmp_path / "precommit.log"
-    precommit_log.write_text(
-        "yamllint.................................Failed\n"
-    )
+    precommit_log.write_text("yamllint.................................Failed\n")
     result = subprocess.run(
         [
             sys.executable,

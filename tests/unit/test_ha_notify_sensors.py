@@ -20,17 +20,24 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "pulsecoach" / "rootfs" / "app" / "scripts"
+SCRIPTS_DIR = (
+    Path(__file__).resolve().parents[2] / "pulsecoach" / "rootfs" / "app" / "scripts"
+)
 
 
 def _load_ha_notify() -> types.ModuleType:
     mock_psycopg2 = MagicMock()
     mock_psycopg2.extras = MagicMock()
-    with patch.dict(sys.modules, {
-        "psycopg2": mock_psycopg2,
-        "psycopg2.extras": mock_psycopg2.extras,
-    }):
-        spec = importlib.util.spec_from_file_location("ha_notify", SCRIPTS_DIR / "ha-notify.py")
+    with patch.dict(
+        sys.modules,
+        {
+            "psycopg2": mock_psycopg2,
+            "psycopg2.extras": mock_psycopg2.extras,
+        },
+    ):
+        spec = importlib.util.spec_from_file_location(
+            "ha_notify", SCRIPTS_DIR / "ha-notify.py"
+        )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
     return mod

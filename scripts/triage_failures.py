@@ -16,6 +16,7 @@ Behaviour:
 - Otherwise, create issue with `ai-fix-me` and `automated` labels
 - Cap at MAX_NEW_ISSUES per invocation (defense L10)
 """
+
 from __future__ import annotations
 
 import json
@@ -72,10 +73,18 @@ def gh(*args: str, input_text: str | None = None) -> tuple[int, str]:
 
 def existing_signatures(repo: str) -> set[str]:
     code, out = gh(
-        "issue", "list", "--repo", repo,
-        "--label", "ai-fix-me", "--state", "open",
-        "--limit", "100",
-        "--json", "body",
+        "issue",
+        "list",
+        "--repo",
+        repo,
+        "--label",
+        "ai-fix-me",
+        "--state",
+        "open",
+        "--limit",
+        "100",
+        "--json",
+        "body",
     )
     if code != 0:
         return set()
@@ -92,7 +101,7 @@ def existing_signatures(repo: str) -> set[str]:
         end = body.find("-->", idx)
         if end == -1:
             continue
-        sigs.add(body[idx + len(SIG_MARKER):end].strip())
+        sigs.add(body[idx + len(SIG_MARKER) : end].strip())
     return sigs
 
 
@@ -120,11 +129,18 @@ def create_issue(repo: str, failure: dict, run_url: str) -> None:
     )
     title = f"[auto] {failure['title']}"[:240]
     gh(
-        "issue", "create", "--repo", repo,
-        "--title", title,
-        "--body", body,
-        "--label", "ai-fix-me",
-        "--label", "automated",
+        "issue",
+        "create",
+        "--repo",
+        repo,
+        "--title",
+        title,
+        "--body",
+        body,
+        "--label",
+        "ai-fix-me",
+        "--label",
+        "automated",
     )
 
 

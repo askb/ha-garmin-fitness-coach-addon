@@ -125,9 +125,7 @@ class TestExtractSleepTime:
 
     def test_extract_sleep_time_none(self, garmin_sync):
         """Missing timestamp key should return None."""
-        result = garmin_sync._extract_sleep_time(
-            {}, "sleepStartTimestampLocal"
-        )
+        result = garmin_sync._extract_sleep_time({}, "sleepStartTimestampLocal")
         assert result is None
 
 
@@ -165,16 +163,12 @@ class TestComputeSleepDebt:
 
     def test_compute_sleep_debt_no_need(self, garmin_sync):
         """Missing sleepNeedInMinutes → None (cannot compute)."""
-        result = garmin_sync._compute_sleep_debt(
-            {"sleepTimeSeconds": 28800}
-        )
+        result = garmin_sync._compute_sleep_debt({"sleepTimeSeconds": 28800})
         assert result is None
 
     def test_compute_sleep_debt_no_actual(self, garmin_sync):
         """Missing sleepTimeSeconds → None (cannot compute)."""
-        result = garmin_sync._compute_sleep_debt(
-            {"sleepNeedInMinutes": 480}
-        )
+        result = garmin_sync._compute_sleep_debt({"sleepNeedInMinutes": 480})
         assert result is None
 
 
