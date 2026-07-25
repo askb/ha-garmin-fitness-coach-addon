@@ -586,17 +586,19 @@ def run_notifications(user_id: str):
         acwr = am["acwr"] if am else None
         push_sensor(
             "sensor.pulsecoach_acwr",
-            round(acwr, 2) if acwr else "unknown",
+            round(acwr, 2) if acwr is not None else "unknown",
             {
                 "friendly_name": "PulseCoach ACWR",
                 "unit_of_measurement": "",
                 "icon": "mdi:run",
-                "status": "optimal"
-                if acwr and 0.8 <= acwr <= 1.3
-                else (
-                    "caution"
-                    if acwr and acwr <= 1.5
-                    else ("high_risk" if acwr and acwr > 1.5 else "unknown")
+                "status": (
+                    "unknown"
+                    if acwr is None
+                    else "optimal"
+                    if 0.8 <= acwr <= 1.3
+                    else "caution"
+                    if acwr <= 1.5
+                    else "high_risk"
                 ),
             },
         )
@@ -610,12 +612,16 @@ def run_notifications(user_id: str):
                 "friendly_name": "PulseCoach Form (TSB)",
                 "unit_of_measurement": "pts",
                 "icon": "mdi:chart-line",
-                "status": "fresh"
-                if tsb and tsb > 5
-                else (
-                    "optimal"
-                    if tsb and tsb >= -10
-                    else ("tired" if tsb and tsb >= -20 else "overreached")
+                "status": (
+                    "unknown"
+                    if tsb is None
+                    else "fresh"
+                    if tsb > 5
+                    else "optimal"
+                    if tsb >= -10
+                    else "tired"
+                    if tsb >= -20
+                    else "overreached"
                 ),
             },
         )
