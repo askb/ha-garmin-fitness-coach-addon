@@ -1,4 +1,5 @@
 """Tests for garmin-sync.py functions."""
+
 import sys
 import os
 import json
@@ -7,15 +8,16 @@ from unittest.mock import MagicMock, patch, call
 from datetime import datetime, timezone
 
 # Add scripts dir to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 
 def _load_sync_module():
     """Load garmin-sync.py via importlib (handles hyphen in filename)."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
         "garmin_sync",
-        os.path.join(os.path.dirname(__file__), '..', 'scripts', 'garmin-sync.py')
+        os.path.join(os.path.dirname(__file__), "..", "scripts", "garmin-sync.py"),
     )
     module = importlib.util.module_from_spec(spec)
     with patch.dict(sys.modules, {"garminconnect": MagicMock()}):
@@ -30,22 +32,38 @@ class TestSyncDailyStats:
         """Test _safe_sleep_minutes correctly converts seconds to minutes."""
         module = _load_sync_module()
 
-        assert module._safe_sleep_minutes({"sleepTimeSeconds": 25200}, "sleepTimeSeconds") == 420  # 7h
-        assert module._safe_sleep_minutes({"sleepTimeSeconds": 0}, "sleepTimeSeconds") == 0
+        assert (
+            module._safe_sleep_minutes({"sleepTimeSeconds": 25200}, "sleepTimeSeconds")
+            == 420
+        )  # 7h
+        assert (
+            module._safe_sleep_minutes({"sleepTimeSeconds": 0}, "sleepTimeSeconds") == 0
+        )
         assert module._safe_sleep_minutes({}, "sleepTimeSeconds") is None
-        assert module._safe_sleep_minutes({"sleepTimeSeconds": None}, "sleepTimeSeconds") is None
+        assert (
+            module._safe_sleep_minutes({"sleepTimeSeconds": None}, "sleepTimeSeconds")
+            is None
+        )
 
     def test_sleep_minutes_deep_sleep(self):
         """Test _safe_sleep_minutes for deep sleep conversion."""
         module = _load_sync_module()
 
-        assert module._safe_sleep_minutes({"deepSleepSeconds": 5400}, "deepSleepSeconds") == 90  # 1.5h
-        assert module._safe_sleep_minutes({"deepSleepSeconds": 3600}, "deepSleepSeconds") == 60  # 1h
+        assert (
+            module._safe_sleep_minutes({"deepSleepSeconds": 5400}, "deepSleepSeconds")
+            == 90
+        )  # 1.5h
+        assert (
+            module._safe_sleep_minutes({"deepSleepSeconds": 3600}, "deepSleepSeconds")
+            == 60
+        )  # 1h
 
     def test_daily_stats_upsert(self, db_mock, sample_stats, sample_sleep, sample_hrv):
         """Test that sync_daily_stats calls the right SQL with correct values."""
         conn, cursor = db_mock
-        cursor.fetchone.return_value = None  # simulate no existing constraint check issue
+        cursor.fetchone.return_value = (
+            None  # simulate no existing constraint check issue
+        )
 
         # Mock Garmin client
         client = MagicMock()
@@ -90,9 +108,12 @@ class TestMetricsCompute:
 
     def _load_module(self):
         import importlib.util
+
         spec = importlib.util.spec_from_file_location(
             "metrics_compute",
-            os.path.join(os.path.dirname(__file__), '..', 'scripts', 'metrics-compute.py')
+            os.path.join(
+                os.path.dirname(__file__), "..", "scripts", "metrics-compute.py"
+            ),
         )
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -114,11 +135,9 @@ class TestMetricsCompute:
 
         # Constant load of 50 for 60 days
         from datetime import date, timedelta
+
         start = date(2024, 1, 1)
-        daily_loads = {
-            (start + timedelta(days=i)).isoformat(): 50.0
-            for i in range(60)
-        }
+        daily_loads = {(start + timedelta(days=i)).isoformat(): 50.0 for i in range(60)}
 
         results = module.compute_ewma_loads(daily_loads)
 
@@ -136,8 +155,11 @@ class TestMetricsCompute:
         module = self._load_module()
 
         from datetime import date, timedelta
+
         start = date(2024, 1, 1)
-        daily_loads = {(start + timedelta(days=i)).isoformat(): float(i * 2) for i in range(30)}
+        daily_loads = {
+            (start + timedelta(days=i)).isoformat(): float(i * 2) for i in range(30)
+        }
 
         results = module.compute_ewma_loads(daily_loads)
 
@@ -166,13 +188,25 @@ class TestMetricsCompute:
 
         module = self._load_module()
 
-        load_metrics = {"2024-01-15": {"ctl": 45.2, "atl": 52.1, "tsb": -6.9, "acwr": 1.15, "ramp_rate": 3.2}}
+        load_metrics = {
+            "2024-01-15": {
+                "ctl": 45.2,
+                "atl": 52.1,
+                "tsb": -6.9,
+                "acwr": 1.15,
+                "ramp_rate": 3.2,
+            }
+        }
         vo2max = {}
         cp_data = {}
 
         # Run upsert twice
-        module.upsert_advanced_metrics(cursor, "test-user", load_metrics, vo2max, cp_data)
-        module.upsert_advanced_metrics(cursor, "test-user", load_metrics, vo2max, cp_data)
+        module.upsert_advanced_metrics(
+            cursor, "test-user", load_metrics, vo2max, cp_data
+        )
+        module.upsert_advanced_metrics(
+            cursor, "test-user", load_metrics, vo2max, cp_data
+        )
 
         # Should have called execute twice (once per upsert, same data)
         assert cursor.execute.call_count == 2
@@ -183,9 +217,10 @@ class TestHANotify:
 
     def _load_module(self):
         import importlib.util
+
         spec = importlib.util.spec_from_file_location(
             "ha_notify",
-            os.path.join(os.path.dirname(__file__), '..', 'scripts', 'ha-notify.py')
+            os.path.join(os.path.dirname(__file__), "..", "scripts", "ha-notify.py"),
         )
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -235,6 +270,7 @@ class TestHANotify:
     def test_no_supervisor_token(self):
         """Test that ha_request returns None gracefully when no token."""
         import os
+
         os.environ.pop("SUPERVISOR_TOKEN", None)
 
         module = self._load_module()

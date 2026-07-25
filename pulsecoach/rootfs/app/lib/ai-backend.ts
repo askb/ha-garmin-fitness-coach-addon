@@ -47,15 +47,6 @@ export function isAiAvailable(): boolean {
   return (process.env.AI_BACKEND ?? "none") !== "none";
 }
 
-// ─── HA Conversation API ─────────────────────────────────────────────────────
-// Uses the Home Assistant Conversation API which routes to whatever
-// conversation agent is configured (OpenAI, Google, Claude, local LLM, etc.)
-// Docs: https://developers.home-assistant.io/docs/api/rest/#post-apiconversationprocess
-//
-// NOTE: Requires a conversation agent to be configured in Home Assistant.
-// If no agent is available, the function returns a friendly error message
-// instead of throwing, so callers can degrade gracefully.
-
 async function haConversationChat(messages: ChatMessage[]): Promise<string> {
   const token = process.env.SUPERVISOR_TOKEN;
   const baseUrl = process.env.HA_BASE_URL ?? "http://supervisor/core";
@@ -149,8 +140,6 @@ async function haConversationChat(messages: ChatMessage[]): Promise<string> {
     clearTimeout(timeout);
   }
 }
-
-// ─── Ollama API ──────────────────────────────────────────────────────────────
 
 async function ollamaChat(
   messages: ChatMessage[],

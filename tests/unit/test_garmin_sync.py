@@ -90,9 +90,7 @@ class TestGetClient:
         # login() should have been called with the token directory path
         mock_client.login.assert_called_once_with(tokenstore=token_dir)
 
-    def test_falls_back_to_credentials_on_expired_token(
-        self, garmin_sync, tmp_path
-    ):
+    def test_falls_back_to_credentials_on_expired_token(self, garmin_sync, tmp_path):
         """If loading saved native tokens fails, falls back to credential login."""
         token_dir = str(tmp_path / "tokens")
         os.makedirs(token_dir)
@@ -104,9 +102,11 @@ class TestGetClient:
         mock_client.login.side_effect = [Exception("token expired"), None]
         garmin_sync._mock_garmin_module.Garmin.return_value = mock_client
 
-        with patch.object(garmin_sync, "TOKEN_DIR", token_dir), \
-             patch.object(garmin_sync, "GARMIN_EMAIL", "user@example.com"), \
-             patch.object(garmin_sync, "GARMIN_PASSWORD", "secret"):
+        with (
+            patch.object(garmin_sync, "TOKEN_DIR", token_dir),
+            patch.object(garmin_sync, "GARMIN_EMAIL", "user@example.com"),
+            patch.object(garmin_sync, "GARMIN_PASSWORD", "secret"),
+        ):
             garmin_sync.get_client()
 
         assert mock_client.login.call_count == 2
@@ -152,8 +152,10 @@ class TestGarminApiRetry:
                 raise RateLimited("Too Many Requests")
             return {"ok": True}
 
-        with patch.object(garmin_sync.time, "sleep") as sleep, \
-             patch.object(garmin_sync.random, "uniform", return_value=0.0):
+        with (
+            patch.object(garmin_sync.time, "sleep") as sleep,
+            patch.object(garmin_sync.random, "uniform", return_value=0.0),
+        ):
             result = garmin_sync._garmin_api_call("test endpoint", flaky_call)
 
         assert result == {"ok": True}
@@ -168,14 +170,10 @@ class TestGarminApiRetry:
 class TestSyncDailyStats:
     """Tests for sync_daily_stats()."""
 
-    def test_inserts_daily_stats(
-        self, garmin_sync, mock_pg_db, mock_garmin_client
-    ):
+    def test_inserts_daily_stats(self, garmin_sync, mock_pg_db, mock_garmin_client):
         """Daily stats are correctly inserted into the database (cursor.execute called)."""
         conn, cursor = mock_pg_db
-        garmin_sync.sync_daily_stats(
-            mock_garmin_client, conn, "2025-01-15"
-        )
+        garmin_sync.sync_daily_stats(mock_garmin_client, conn, "2025-01-15")
 
         assert cursor.execute.called
         assert conn.commit.called
@@ -185,14 +183,15 @@ class TestSyncDailyStats:
     ):
         """Sleep seconds from Garmin are correctly converted to minutes in the INSERT values."""
         conn, cursor = mock_pg_db
-        garmin_sync.sync_daily_stats(
-            mock_garmin_client, conn, "2025-01-15"
-        )
+        garmin_sync.sync_daily_stats(mock_garmin_client, conn, "2025-01-15")
 
         # Find the INSERT INTO daily_metric call and inspect its values tuple.
         insert_call = next(
-            (c for c in cursor.execute.call_args_list
-             if "INSERT INTO daily_metric" in c[0][0]),
+            (
+                c
+                for c in cursor.execute.call_args_list
+                if "INSERT INTO daily_metric" in c[0][0]
+            ),
             None,
         )
         assert insert_call is not None
@@ -201,9 +200,9 @@ class TestSyncDailyStats:
         # 14400 s → 240 min, 1800 s → 30 min
         assert 480 in values  # total_sleep_minutes
         assert 120 in values  # deep_sleep_minutes
-        assert 90 in values   # rem_sleep_minutes
+        assert 90 in values  # rem_sleep_minutes
         assert 240 in values  # light_sleep_minutes
-        assert 30 in values   # awake_minutes
+        assert 30 in values  # awake_minutes
 
     def test_handles_missing_sleep_data(
         self, garmin_sync, mock_pg_db, mock_garmin_client
@@ -211,9 +210,7 @@ class TestSyncDailyStats:
         """When sleep data is None the function handles it gracefully."""
         conn, cursor = mock_pg_db
         mock_garmin_client.get_sleep_data.return_value = None
-        garmin_sync.sync_daily_stats(
-            mock_garmin_client, conn, "2025-01-15"
-        )
+        garmin_sync.sync_daily_stats(mock_garmin_client, conn, "2025-01-15")
 
         # Insert should still run (with NULL sleep values) and commit should be called
         assert conn.commit.called
@@ -224,9 +221,7 @@ class TestSyncDailyStats:
         """API errors are caught and logged, not raised."""
         conn, cursor = mock_pg_db
         mock_garmin_client.get_stats.side_effect = ConnectionError("timeout")
-        garmin_sync.sync_daily_stats(
-            mock_garmin_client, conn, "2025-01-15"
-        )
+        garmin_sync.sync_daily_stats(mock_garmin_client, conn, "2025-01-15")
 
         conn.rollback.assert_called_once()
         captured = capsys.readouterr()
@@ -237,15 +232,12 @@ class TestSyncDailyStats:
     ):
         """Running sync twice for the same date calls the upsert twice (ON CONFLICT)."""
         conn, cursor = mock_pg_db
-        garmin_sync.sync_daily_stats(
-            mock_garmin_client, conn, "2025-01-15"
-        )
-        garmin_sync.sync_daily_stats(
-            mock_garmin_client, conn, "2025-01-15"
-        )
+        garmin_sync.sync_daily_stats(mock_garmin_client, conn, "2025-01-15")
+        garmin_sync.sync_daily_stats(mock_garmin_client, conn, "2025-01-15")
 
         insert_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "INSERT INTO daily_metric" in c[0][0]
         ]
         assert len(insert_calls) == 2
@@ -258,30 +250,30 @@ class TestSyncDailyStats:
 class TestSyncActivities:
     """Tests for sync_activities()."""
 
-    def test_inserts_activity(
-        self, garmin_sync, mock_pg_db, mock_garmin_client
-    ):
+    def test_inserts_activity(self, garmin_sync, mock_pg_db, mock_garmin_client):
         """Activities are correctly passed to the database cursor."""
         conn, cursor = mock_pg_db
         garmin_sync.sync_activities(mock_garmin_client, conn, days=7)
 
         insert_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "INSERT INTO activity" in c[0][0]
         ]
         assert len(insert_calls) == 1
         assert conn.commit.called
 
-    def test_stores_raw_json(
-        self, garmin_sync, mock_pg_db, mock_garmin_client
-    ):
+    def test_stores_raw_json(self, garmin_sync, mock_pg_db, mock_garmin_client):
         """Raw Garmin JSON is preserved in the INSERT values."""
         conn, cursor = mock_pg_db
         garmin_sync.sync_activities(mock_garmin_client, conn, days=7)
 
         insert_call = next(
-            (c for c in cursor.execute.call_args_list
-             if "INSERT INTO activity" in c[0][0]),
+            (
+                c
+                for c in cursor.execute.call_args_list
+                if "INSERT INTO activity" in c[0][0]
+            ),
             None,
         )
         assert insert_call is not None
@@ -311,32 +303,38 @@ class TestMain:
 
     def test_skips_when_no_credentials(self, garmin_sync, capsys):
         """main() exits early when no tokens and no credentials are set."""
-        with patch.object(garmin_sync, "GARMIN_EMAIL", ""), \
-             patch.object(garmin_sync, "GARMIN_PASSWORD", ""), \
-             patch.object(garmin_sync, "TOKEN_DIR", "/nonexistent/token/dir"):
+        with (
+            patch.object(garmin_sync, "GARMIN_EMAIL", ""),
+            patch.object(garmin_sync, "GARMIN_PASSWORD", ""),
+            patch.object(garmin_sync, "TOKEN_DIR", "/nonexistent/token/dir"),
+        ):
             garmin_sync.main()
 
         captured = capsys.readouterr()
         assert "No Garmin tokens or credentials configured" in captured.out
 
-    def test_syncs_seven_days(self, garmin_sync, mock_pg_db, mock_garmin_client, tmp_path):
+    def test_syncs_seven_days(
+        self, garmin_sync, mock_pg_db, mock_garmin_client, tmp_path
+    ):
         """main() calls sync_daily_stats for 7 days and sync_activities once."""
         conn, _ = mock_pg_db
         # Create the initial-sync marker so main() uses sync_days=7
         (tmp_path / ".initial_sync_done").touch()
 
-        with patch.object(garmin_sync, "GARMIN_EMAIL", "a@b.com"), \
-             patch.object(garmin_sync, "GARMIN_PASSWORD", "pass"), \
-             patch.object(garmin_sync, "TOKEN_DIR", str(tmp_path)), \
-             patch.object(garmin_sync, "get_client", return_value=mock_garmin_client), \
-             patch.object(garmin_sync, "get_db", return_value=conn), \
-             patch.object(garmin_sync, "_write_sync_status"), \
-             patch.object(garmin_sync, "_clear_sync_status"), \
-             patch.object(garmin_sync, "sync_daily_stats") as mock_daily, \
-             patch.object(garmin_sync, "sync_activities") as mock_act, \
-             patch.object(garmin_sync, "backfill_from_raw_json"), \
-             patch.object(garmin_sync, "backfill_stress_and_sleep"), \
-             patch.object(garmin_sync, "sync_vo2max"):
+        with (
+            patch.object(garmin_sync, "GARMIN_EMAIL", "a@b.com"),
+            patch.object(garmin_sync, "GARMIN_PASSWORD", "pass"),
+            patch.object(garmin_sync, "TOKEN_DIR", str(tmp_path)),
+            patch.object(garmin_sync, "get_client", return_value=mock_garmin_client),
+            patch.object(garmin_sync, "get_db", return_value=conn),
+            patch.object(garmin_sync, "_write_sync_status"),
+            patch.object(garmin_sync, "_clear_sync_status"),
+            patch.object(garmin_sync, "sync_daily_stats") as mock_daily,
+            patch.object(garmin_sync, "sync_activities") as mock_act,
+            patch.object(garmin_sync, "backfill_from_raw_json"),
+            patch.object(garmin_sync, "backfill_stress_and_sleep"),
+            patch.object(garmin_sync, "sync_vo2max"),
+        ):
             garmin_sync.main()
 
         assert mock_daily.call_count == 7
@@ -350,24 +348,28 @@ class TestMain:
         (tmp_path / "garmin_tokens.json").touch()
         (tmp_path / ".initial_sync_done").touch()
 
-        with patch.object(garmin_sync, "GARMIN_EMAIL", ""), \
-             patch.object(garmin_sync, "GARMIN_PASSWORD", ""), \
-             patch.object(garmin_sync, "TOKEN_DIR", str(tmp_path)), \
-             patch.object(garmin_sync, "get_client", return_value=mock_garmin_client) as get_client, \
-             patch.object(garmin_sync, "get_db", return_value=conn), \
-             patch.object(garmin_sync, "_write_sync_status"), \
-             patch.object(garmin_sync, "_clear_sync_status"), \
-             patch.object(garmin_sync, "_write_last_sync"), \
-             patch.object(garmin_sync, "sync_daily_stats"), \
-             patch.object(garmin_sync, "sync_activities"), \
-             patch.object(garmin_sync, "backfill_skin_temp"), \
-             patch.object(garmin_sync, "backfill_from_raw_json"), \
-             patch.object(garmin_sync, "backfill_activity_started_at_utc"), \
-             patch.object(garmin_sync, "backfill_stress_and_sleep"), \
-             patch.object(garmin_sync, "sync_vo2max"), \
-             patch.object(garmin_sync, "sync_training_readiness"), \
-             patch.object(garmin_sync, "sync_training_status"), \
-             patch.object(garmin_sync, "_refresh_matview"):
+        with (
+            patch.object(garmin_sync, "GARMIN_EMAIL", ""),
+            patch.object(garmin_sync, "GARMIN_PASSWORD", ""),
+            patch.object(garmin_sync, "TOKEN_DIR", str(tmp_path)),
+            patch.object(
+                garmin_sync, "get_client", return_value=mock_garmin_client
+            ) as get_client,
+            patch.object(garmin_sync, "get_db", return_value=conn),
+            patch.object(garmin_sync, "_write_sync_status"),
+            patch.object(garmin_sync, "_clear_sync_status"),
+            patch.object(garmin_sync, "_write_last_sync"),
+            patch.object(garmin_sync, "sync_daily_stats"),
+            patch.object(garmin_sync, "sync_activities"),
+            patch.object(garmin_sync, "backfill_skin_temp"),
+            patch.object(garmin_sync, "backfill_from_raw_json"),
+            patch.object(garmin_sync, "backfill_activity_started_at_utc"),
+            patch.object(garmin_sync, "backfill_stress_and_sleep"),
+            patch.object(garmin_sync, "sync_vo2max"),
+            patch.object(garmin_sync, "sync_training_readiness"),
+            patch.object(garmin_sync, "sync_training_status"),
+            patch.object(garmin_sync, "_refresh_matview"),
+        ):
             garmin_sync.main()
 
         get_client.assert_called_once()
@@ -383,9 +385,7 @@ class TestDateRange:
     def test_date_range_covers_last_seven_days(self):
         """The sync loop generates ISO dates for the last 7 days."""
         today = datetime.utcnow().date()
-        expected = [
-            (today - timedelta(days=d)).isoformat() for d in range(7)
-        ]
+        expected = [(today - timedelta(days=d)).isoformat() for d in range(7)]
         assert len(expected) == 7
         assert expected[0] == today.isoformat()
         assert expected[-1] == (today - timedelta(days=6)).isoformat()
@@ -410,18 +410,18 @@ class TestDbPath:
         """DB_PATH strips the 'file:' prefix from DATABASE_URL."""
         with patch.dict(os.environ, {"DATABASE_URL": "file:/data/test.db"}):
             # Re-evaluate at module level
-            result = os.environ.get(
-                "DATABASE_URL", "file:/data/pulsecoach.db"
-            ).replace("file:", "")
+            result = os.environ.get("DATABASE_URL", "file:/data/pulsecoach.db").replace(
+                "file:", ""
+            )
             assert result == "/data/test.db"
 
     def test_default_db_path(self, garmin_sync):
         """Without DATABASE_URL the default path is used."""
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("DATABASE_URL", None)
-            result = os.environ.get(
-                "DATABASE_URL", "file:/data/pulsecoach.db"
-            ).replace("file:", "")
+            result = os.environ.get("DATABASE_URL", "file:/data/pulsecoach.db").replace(
+                "file:", ""
+            )
             assert result == "/data/pulsecoach.db"
 
 
@@ -441,24 +441,29 @@ class TestSyncTrainingReadiness:
     def test_inserts_readiness_when_score_present(self, garmin_sync, mock_pg_db):
         """A payload with a score triggers an INSERT + UPDATE."""
         conn, cursor = mock_pg_db
-        client = self._make_client({
-            "score": 72,
-            "level": "GOOD",
-            "sleepScore": 80,
-            "recoveryTime": 12,
-            "hrvStatus": "BALANCED",
-        })
+        client = self._make_client(
+            {
+                "score": 72,
+                "level": "GOOD",
+                "sleepScore": 80,
+                "recoveryTime": 12,
+                "hrvStatus": "BALANCED",
+            }
+        )
         garmin_sync.sync_training_readiness(client, conn, days=1)
 
         assert cursor.execute.called
         assert conn.commit.called
         # Ensure the UPDATE was issued and persisted the rounded score
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_readiness" in c.args[0]
         ]
-        assert update_calls, "expected an UPDATE daily_metric SET garmin_training_readiness ..."
+        assert update_calls, (
+            "expected an UPDATE daily_metric SET garmin_training_readiness ..."
+        )
         params = update_calls[0].args[1]
         assert params[0] == 72  # rounded score
         assert params[1] == "good"  # level lower-cased
@@ -475,7 +480,8 @@ class TestSyncTrainingReadiness:
         garmin_sync.sync_training_readiness(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_readiness" in c.args[0]
         ]
@@ -488,7 +494,8 @@ class TestSyncTrainingReadiness:
         garmin_sync.sync_training_readiness(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "garmin_training_readiness" in c.args[0]
         ]
         assert not update_calls
@@ -500,7 +507,8 @@ class TestSyncTrainingReadiness:
         garmin_sync.sync_training_readiness(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_readiness" in c.args[0]
         ]
@@ -516,14 +524,17 @@ class TestSyncTrainingReadiness:
             Exception("API unavailable"),
             {"score": 60, "level": "GOOD"},
         ]
-        with patch.object(garmin_sync.time, "sleep"), \
-             patch.object(garmin_sync.random, "uniform", return_value=0.0):
+        with (
+            patch.object(garmin_sync.time, "sleep"),
+            patch.object(garmin_sync.random, "uniform", return_value=0.0),
+        ):
             garmin_sync.sync_training_readiness(client, conn, days=2)
 
         assert client.get_training_readiness.call_count == 2
         # Only one UPDATE should be issued (for the day that succeeded)
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_readiness" in c.args[0]
         ]
@@ -531,19 +542,25 @@ class TestSyncTrainingReadiness:
 
     # --- v0.16.19 regressions ----------------------------------------------
 
-    def test_writes_recovery_hours_from_readiness_payload(self, garmin_sync, mock_pg_db):
+    def test_writes_recovery_hours_from_readiness_payload(
+        self, garmin_sync, mock_pg_db
+    ):
         """recoveryTime (min) inside the readiness payload should land in
         garmin_recovery_hours, since get_training_status() is empty for
         many users until Garmin computes Firstbeat status."""
         conn, cursor = mock_pg_db
-        client = self._make_client({
-            "score": 29, "level": "LOW",
-            "recoveryTime": 240,  # 4 hours
-        })
+        client = self._make_client(
+            {
+                "score": 29,
+                "level": "LOW",
+                "recoveryTime": 240,  # 4 hours
+            }
+        )
         garmin_sync.sync_training_readiness(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_readiness" in c.args[0]
         ]
@@ -562,7 +579,8 @@ class TestSyncTrainingReadiness:
         garmin_sync.sync_training_readiness(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_readiness" in c.args[0]
         ]
@@ -577,7 +595,8 @@ class TestSyncTrainingReadiness:
         garmin_sync.sync_training_readiness(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_readiness" in c.args[0]
         ]
@@ -601,22 +620,27 @@ class TestSyncTrainingStatus:
     def test_inserts_status_and_load_focus(self, garmin_sync, mock_pg_db):
         """Status + load distribution + recovery hours are all persisted."""
         conn, cursor = mock_pg_db
-        client = self._make_client({
-            "trainingStatus": "productive",
-            "trainingLoadFocus": "low_aerobic",
-            "lowAerobicTrainingLoadPercentage": 60,
-            "highAerobicTrainingLoadPercentage": 30,
-            "anaerobicTrainingLoadPercentage": 10,
-            "recoveryTimeInMinutes": 180,  # 3 hours
-        })
+        client = self._make_client(
+            {
+                "trainingStatus": "productive",
+                "trainingLoadFocus": "low_aerobic",
+                "lowAerobicTrainingLoadPercentage": 60,
+                "highAerobicTrainingLoadPercentage": 30,
+                "anaerobicTrainingLoadPercentage": 10,
+                "recoveryTimeInMinutes": 180,  # 3 hours
+            }
+        )
         garmin_sync.sync_training_status(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_status" in c.args[0]
         ]
-        assert update_calls, "expected an UPDATE daily_metric SET garmin_training_status ..."
+        assert update_calls, (
+            "expected an UPDATE daily_metric SET garmin_training_status ..."
+        )
         params = update_calls[0].args[1]
         # Status is upper-cased
         assert params[0] == "PRODUCTIVE"
@@ -630,14 +654,17 @@ class TestSyncTrainingStatus:
     def test_converts_recovery_minutes_to_hours(self, garmin_sync, mock_pg_db):
         """recoveryTimeInMinutes is rounded to 1dp hours."""
         conn, cursor = mock_pg_db
-        client = self._make_client({
-            "trainingStatus": "maintaining",
-            "recoveryTimeInMinutes": 95,  # 1.5833... → 1.6
-        })
+        client = self._make_client(
+            {
+                "trainingStatus": "maintaining",
+                "recoveryTimeInMinutes": 95,  # 1.5833... → 1.6
+            }
+        )
         garmin_sync.sync_training_status(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_status" in c.args[0]
         ]
@@ -651,7 +678,8 @@ class TestSyncTrainingStatus:
         garmin_sync.sync_training_status(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_status" in c.args[0]
         ]
@@ -664,7 +692,8 @@ class TestSyncTrainingStatus:
         garmin_sync.sync_training_status(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_status" in c.args[0]
         ]
@@ -683,7 +712,8 @@ class TestSyncTrainingStatus:
 
         assert client.get_training_status.call_count == 2
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_status" in c.args[0]
         ]
@@ -695,25 +725,28 @@ class TestSyncTrainingStatus:
         """Current Garmin shape: status under mostRecentTrainingStatus.
         latestTrainingStatusData.<deviceId>.{trainingStatus,recoveryTime}."""
         conn, cursor = mock_pg_db
-        client = self._make_client({
-            "userId": 72997753,
-            "mostRecentVO2Max": None,
-            "mostRecentTrainingLoadBalance": None,
-            "mostRecentTrainingStatus": {
-                "latestTrainingStatusData": {
-                    "3610171495": {
-                        "trainingStatus": "productive",
-                        "trainingLoadFocus": "high_aerobic",
-                        "recoveryTime": 240,  # 4 hours
+        client = self._make_client(
+            {
+                "userId": 72997753,
+                "mostRecentVO2Max": None,
+                "mostRecentTrainingLoadBalance": None,
+                "mostRecentTrainingStatus": {
+                    "latestTrainingStatusData": {
+                        "3610171495": {
+                            "trainingStatus": "productive",
+                            "trainingLoadFocus": "high_aerobic",
+                            "recoveryTime": 240,  # 4 hours
+                        }
                     }
-                }
-            },
-            "heatAltitudeAcclimationDTO": None,
-        })
+                },
+                "heatAltitudeAcclimationDTO": None,
+            }
+        )
         garmin_sync.sync_training_status(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_status" in c.args[0]
         ]
@@ -725,17 +758,20 @@ class TestSyncTrainingStatus:
     def test_recovery_time_zero_is_preserved(self, garmin_sync, mock_pg_db):
         """recoveryTime == 0 (fully recovered) must NOT be discarded as missing."""
         conn, cursor = mock_pg_db
-        client = self._make_client({
-            "mostRecentTrainingStatus": {
-                "latestTrainingStatusData": {
-                    "dev": {"trainingStatus": "productive", "recoveryTime": 0}
+        client = self._make_client(
+            {
+                "mostRecentTrainingStatus": {
+                    "latestTrainingStatusData": {
+                        "dev": {"trainingStatus": "productive", "recoveryTime": 0}
+                    }
                 }
             }
-        })
+        )
         garmin_sync.sync_training_status(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_status" in c.args[0]
         ]
@@ -745,17 +781,20 @@ class TestSyncTrainingStatus:
     def test_null_dtos_skip_silently(self, garmin_sync, mock_pg_db):
         """The common empty-payload shape (all nested DTOs null) is skipped."""
         conn, cursor = mock_pg_db
-        client = self._make_client({
-            "userId": 72997753,
-            "mostRecentVO2Max": None,
-            "mostRecentTrainingLoadBalance": None,
-            "mostRecentTrainingStatus": None,
-            "heatAltitudeAcclimationDTO": None,
-        })
+        client = self._make_client(
+            {
+                "userId": 72997753,
+                "mostRecentVO2Max": None,
+                "mostRecentTrainingLoadBalance": None,
+                "mostRecentTrainingStatus": None,
+                "heatAltitudeAcclimationDTO": None,
+            }
+        )
         garmin_sync.sync_training_status(client, conn, days=1)
 
         update_calls = [
-            c for c in cursor.execute.call_args_list
+            c
+            for c in cursor.execute.call_args_list
             if "UPDATE daily_metric" in c.args[0]
             and "garmin_training_status" in c.args[0]
         ]

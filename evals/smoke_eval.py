@@ -21,7 +21,9 @@ from typing import Any, Callable
 from unittest.mock import MagicMock, patch
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_HA_NOTIFY_PATH = _REPO_ROOT / "pulsecoach" / "rootfs" / "app" / "scripts" / "ha-notify.py"
+_HA_NOTIFY_PATH = (
+    _REPO_ROOT / "pulsecoach" / "rootfs" / "app" / "scripts" / "ha-notify.py"
+)
 
 
 def load_engine() -> ModuleType:
@@ -95,45 +97,70 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         name="fresh athlete, balanced load",
         signals=dict(
-            acwr=1.0, tsb=5.0, body_battery=80, stress_score=25,
-            sleep_debt_minutes=15, consecutive_hard_days=0,
-            readiness_score=85, garmin_training_status="PRODUCTIVE",
+            acwr=1.0,
+            tsb=5.0,
+            body_battery=80,
+            stress_score=25,
+            sleep_debt_minutes=15,
+            consecutive_hard_days=0,
+            readiness_score=85,
+            garmin_training_status="PRODUCTIVE",
         ),
         checks=(_must_train, _rest_has_rationale),
     ),
     Scenario(
         name="overreached: high ACWR + deep negative TSB",
         signals=dict(
-            acwr=1.7, tsb=-30.0, body_battery=25, stress_score=70,
-            sleep_debt_minutes=150, consecutive_hard_days=4,
-            readiness_score=18, garmin_training_status="OVERREACHING",
+            acwr=1.7,
+            tsb=-30.0,
+            body_battery=25,
+            stress_score=70,
+            sleep_debt_minutes=150,
+            consecutive_hard_days=4,
+            readiness_score=18,
+            garmin_training_status="OVERREACHING",
         ),
         checks=(_must_rest, _rest_has_rationale),
     ),
     Scenario(
         name="critically low readiness alone",
         signals=dict(
-            acwr=1.0, tsb=0.0, body_battery=60, stress_score=40,
-            sleep_debt_minutes=30, consecutive_hard_days=1,
-            readiness_score=20, garmin_training_status=None,
+            acwr=1.0,
+            tsb=0.0,
+            body_battery=60,
+            stress_score=40,
+            sleep_debt_minutes=30,
+            consecutive_hard_days=1,
+            readiness_score=20,
+            garmin_training_status=None,
         ),
         checks=(_must_rest, _rest_has_rationale),
     ),
     Scenario(
         name="all signals missing degrades conservatively",
         signals=dict(
-            acwr=None, tsb=None, body_battery=None, stress_score=None,
-            sleep_debt_minutes=None, consecutive_hard_days=0,
-            readiness_score=None, garmin_training_status=None,
+            acwr=None,
+            tsb=None,
+            body_battery=None,
+            stress_score=None,
+            sleep_debt_minutes=None,
+            consecutive_hard_days=0,
+            readiness_score=None,
+            garmin_training_status=None,
         ),
         checks=(_no_hard_workout, _rest_has_rationale),
     ),
     Scenario(
         name="sleep-deprived but otherwise fine",
         signals=dict(
-            acwr=1.1, tsb=-5.0, body_battery=45, stress_score=55,
-            sleep_debt_minutes=180, consecutive_hard_days=1,
-            readiness_score=45, garmin_training_status="MAINTAINING",
+            acwr=1.1,
+            tsb=-5.0,
+            body_battery=45,
+            stress_score=55,
+            sleep_debt_minutes=180,
+            consecutive_hard_days=1,
+            readiness_score=45,
+            garmin_training_status="MAINTAINING",
         ),
         checks=(_no_hard_workout, _rest_has_rationale),
     ),

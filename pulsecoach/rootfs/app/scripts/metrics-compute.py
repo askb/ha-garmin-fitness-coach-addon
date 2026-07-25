@@ -32,7 +32,10 @@ _tz_name = os.environ.get("USER_TIMEZONE", "UTC")
 try:
     USER_TZ = ZoneInfo(_tz_name)
 except (KeyError, ValueError):
-    print(f"[metrics-compute] WARNING: Invalid timezone '{_tz_name}', using UTC", file=sys.stderr)
+    print(
+        f"[metrics-compute] WARNING: Invalid timezone '{_tz_name}', using UTC",
+        file=sys.stderr,
+    )
     USER_TZ = ZoneInfo("UTC")
 
 # ---------------------------------------------------------------------------
@@ -52,10 +55,10 @@ except (KeyError, ValueError):
 # time-constant 1 - e^(-1/N) convention, which drifts from the engine).
 # ---------------------------------------------------------------------------
 ALPHA_CTL = 2 / (42 + 1)  # ~0.0465 — 42-day fitness EWMA
-ALPHA_ATL = 2 / (7 + 1)   # 0.25   — 7-day fatigue EWMA
-ACWR_ACUTE_DAYS = 7       # acute rolling-mean window (Hulin et al. 2016)
-ACWR_CHRONIC_DAYS = 28    # chronic rolling-mean window (Hulin et al. 2016)
-RAMP_LOOKBACK_DAYS = 7    # ramp rate = CTL change over the trailing week
+ALPHA_ATL = 2 / (7 + 1)  # 0.25   — 7-day fatigue EWMA
+ACWR_ACUTE_DAYS = 7  # acute rolling-mean window (Hulin et al. 2016)
+ACWR_CHRONIC_DAYS = 28  # chronic rolling-mean window (Hulin et al. 2016)
+RAMP_LOOKBACK_DAYS = 7  # ramp rate = CTL change over the trailing week
 
 # Data-quality gap detection
 GAP_WINDOW_DAYS = int(os.environ.get("DATA_QUALITY_WINDOW_DAYS", "30"))
@@ -197,6 +200,7 @@ def ensure_data_quality_log_table(cur):
 def datetime_now_user_tz_date() -> date:
     """Return today's date in the user's configured timezone."""
     from datetime import datetime as _dt
+
     return _dt.now(USER_TZ).date()
 
 
@@ -282,25 +286,44 @@ def detect_and_log_gaps(cur, user_id: str, today=None) -> dict:
     today_iso = today.isoformat()
     for md in missing_dates:
         recent = date.fromisoformat(md) >= (latest - timedelta(days=6))
-        inserts.append((
-            user_id, md, "missing_day", "warn" if recent else "info",
-            f"No synced data for {md}", None, None,
-        ))
+        inserts.append(
+            (
+                user_id,
+                md,
+                "missing_day",
+                "warn" if recent else "info",
+                f"No synced data for {md}",
+                None,
+                None,
+            )
+        )
     if summary["stale_days"] >= STALE_WARN_DAYS:
         sev = "error" if summary["stale_days"] >= STALE_ERROR_DAYS else "warn"
-        inserts.append((
-            user_id, today_iso, "stale_data", sev,
-            f"Latest synced data is {summary['stale_days']} day(s) old "
-            f"(last: {latest.isoformat()})",
-            float(summary["stale_days"]), None,
-        ))
+        inserts.append(
+            (
+                user_id,
+                today_iso,
+                "stale_data",
+                sev,
+                f"Latest synced data is {summary['stale_days']} day(s) old "
+                f"(last: {latest.isoformat()})",
+                float(summary["stale_days"]),
+                None,
+            )
+        )
     for f, count in summary["field_gaps"].items():
         if count > 0:
-            inserts.append((
-                user_id, latest.isoformat(), "missing_field", "info",
-                f"{f} missing on {count} of the last 14 day(s)",
-                float(count), None,
-            ))
+            inserts.append(
+                (
+                    user_id,
+                    latest.isoformat(),
+                    "missing_field",
+                    "info",
+                    f"{f} missing on {count} of the last 14 day(s)",
+                    float(count),
+                    None,
+                )
+            )
 
     if inserts:
         psycopg2.extras.execute_values(
@@ -324,25 +347,31 @@ def fetch_daily_loads(cur, user_id):
     sum of TRIMP from activities.
     Returns dict: {date_str: load_value}
     """
-    cur.execute("""
+    cur.execute(
+        """
         SELECT date::text, COALESCE(garmin_training_load, 0) as load
         FROM daily_metric
         WHERE user_id = %s AND date IS NOT NULL
         ORDER BY date ASC
-    """, (user_id,))
-    daily_rows = {row['date']: float(row['load']) for row in cur.fetchall()}
+    """,
+        (user_id,),
+    )
+    daily_rows = {row["date"]: float(row["load"]) for row in cur.fetchall()}
 
     # Fill in from activity TRIMP where daily_metric has no garmin_training_load
-    cur.execute("""
+    cur.execute(
+        """
         SELECT DATE(started_at)::text as activity_date,
                SUM(COALESCE(trimp_score, 0)) as total_trimp
         FROM activity
         WHERE user_id = %s
         GROUP BY activity_date
         ORDER BY activity_date ASC
-    """, (user_id,))
+    """,
+        (user_id,),
+    )
     for row in cur.fetchall():
-        d, trimp = row['activity_date'], float(row['total_trimp'])
+        d, trimp = row["activity_date"], float(row["total_trimp"])
         if d in daily_rows and daily_rows[d] == 0 and trimp > 0:
             daily_rows[d] = trimp
 
@@ -399,8 +428,8 @@ def compute_ewma_loads(daily_loads: dict) -> dict:
         tsb = ctl - atl
 
         # ACWR: rolling means over the trailing 7d / 28d windows.
-        acute_window = loads[max(0, i - (ACWR_ACUTE_DAYS - 1)):i + 1]
-        chronic_window = loads[max(0, i - (ACWR_CHRONIC_DAYS - 1)):i + 1]
+        acute_window = loads[max(0, i - (ACWR_ACUTE_DAYS - 1)) : i + 1]
+        chronic_window = loads[max(0, i - (ACWR_CHRONIC_DAYS - 1)) : i + 1]
         acute = sum(acute_window) / max(1, len(acute_window))
         chronic = sum(chronic_window) / max(1, len(chronic_window))
         if chronic == 0:
@@ -433,14 +462,17 @@ def compute_effective_vo2max(cur, user_id) -> dict:
 
     Returns dict: {date_str: effective_vo2max}
     """
-    cur.execute("""
+    cur.execute(
+        """
         SELECT DATE(started_at)::text as d, MAX(vo2max_estimate) as vo2max
         FROM activity
         WHERE user_id = %s AND vo2max_estimate IS NOT NULL
         GROUP BY d
         ORDER BY d ASC
-    """, (user_id,))
-    return {row['d']: float(row['vo2max']) for row in cur.fetchall()}
+    """,
+        (user_id,),
+    )
+    return {row["d"]: float(row["vo2max"]) for row in cur.fetchall()}
 
 
 def compute_critical_power(cur, user_id) -> dict:
@@ -451,7 +483,8 @@ def compute_critical_power(cur, user_id) -> dict:
     window. Returns empty dict if insufficient power data exists.
     Returns dict: {date_str: {cp, w_prime, frc, mftp, tte}}
     """
-    cur.execute("""
+    cur.execute(
+        """
         SELECT
             DATE(started_at)::text as d,
             duration_minutes,
@@ -463,7 +496,9 @@ def compute_critical_power(cur, user_id) -> dict:
           AND avg_power > 50
           AND duration_minutes >= 10
         ORDER BY started_at ASC
-    """, (user_id,))
+    """,
+        (user_id,),
+    )
     rows = cur.fetchall()
     if len(rows) < 5:
         return {}
@@ -471,7 +506,10 @@ def compute_critical_power(cur, user_id) -> dict:
     observations = []
     for row in rows:
         d_str, dur_min, avg_pwr, norm_pwr = (
-            row['d'], row['duration_minutes'], row['avg_power'], row['normalized_power']
+            row["d"],
+            row["duration_minutes"],
+            row["avg_power"],
+            row["normalized_power"],
         )
         pwr = norm_pwr if norm_pwr else avg_pwr
         bucket = min(int(dur_min / 10) * 10, 120)
@@ -482,8 +520,9 @@ def compute_critical_power(cur, user_id) -> dict:
     result = {}
     for target_date in unique_dates:
         window_start = target_date - timedelta(days=90)
-        window_obs = [(b, p) for d, b, p in observations
-                      if window_start <= d <= target_date]
+        window_obs = [
+            (b, p) for d, b, p in observations if window_start <= d <= target_date
+        ]
 
         # Best power per duration bucket within the window
         buckets: dict = defaultdict(float)
@@ -534,7 +573,8 @@ def compute_readiness_score(cur, user_id: str) -> dict:
             hrv_component, sleep_quantity_component, sleep_quality_component,
             training_load_component, stress_component, resting_hr_component}}.
     """
-    cur.execute("""
+    cur.execute(
+        """
         SELECT date, hrv, sleep_score, stress_score, resting_hr,
                body_battery_end, garmin_training_readiness,
                garmin_training_readiness_level,
@@ -542,7 +582,9 @@ def compute_readiness_score(cur, user_id: str) -> dict:
         FROM daily_metric
         WHERE user_id = %s
         ORDER BY date
-    """, (user_id,))
+    """,
+        (user_id,),
+    )
     rows = cur.fetchall()
     if not rows:
         return {}
@@ -695,7 +737,8 @@ def _readiness_zone(score: int) -> str:
 def upsert_readiness_scores(cur, user_id: str, readiness_data: dict):
     """Upsert readiness scores with component breakdowns into readiness_score table."""
     for d_str, data in sorted(readiness_data.items()):
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO readiness_score (
                 user_id, date, score, zone,
                 explanation, computed_at,
@@ -714,30 +757,38 @@ def upsert_readiness_scores(cur, user_id: str, readiness_data: dict):
                 resting_hr_component = EXCLUDED.resting_hr_component,
                 training_load_component = EXCLUDED.training_load_component,
                 stress_component = EXCLUDED.stress_component
-        """, (
-            user_id, d_str, data["score"], data["zone"],
-            data["explanation"],
-            data.get("sleep_quantity_component"),
-            data.get("sleep_quality_component"),
-            data.get("hrv_component"),
-            data.get("resting_hr_component"),
-            data.get("training_load_component"),
-            data.get("stress_component"),
-        ))
+        """,
+            (
+                user_id,
+                d_str,
+                data["score"],
+                data["zone"],
+                data["explanation"],
+                data.get("sleep_quantity_component"),
+                data.get("sleep_quality_component"),
+                data.get("hrv_component"),
+                data.get("resting_hr_component"),
+                data.get("training_load_component"),
+                data.get("stress_component"),
+            ),
+        )
 
 
 def upsert_advanced_metrics(
     cur, user_id: str, load_metrics: dict, vo2max_by_date: dict, cp_data: dict
 ):
     """Upsert computed metrics into advanced_metric table."""
-    all_dates = set(load_metrics.keys()) | set(vo2max_by_date.keys()) | set(cp_data.keys())
+    all_dates = (
+        set(load_metrics.keys()) | set(vo2max_by_date.keys()) | set(cp_data.keys())
+    )
 
     for d_str in sorted(all_dates):
         load = load_metrics.get(d_str, {})
         evo2 = vo2max_by_date.get(d_str)
         cp = cp_data.get(d_str, {})
 
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO advanced_metric (
                 user_id, date, ctl, atl, tsb, acwr, ramp_rate,
                 cp, w_prime, frc, mftp, tte, effective_vo2max, computed_at
@@ -760,13 +811,23 @@ def upsert_advanced_metrics(
                     EXCLUDED.effective_vo2max, advanced_metric.effective_vo2max
                 ),
                 computed_at = NOW()
-        """, (
-            user_id, d_str,
-            load.get("ctl"), load.get("atl"), load.get("tsb"),
-            load.get("acwr"), load.get("ramp_rate"),
-            cp.get("cp"), cp.get("w_prime"), cp.get("frc"),
-            cp.get("mftp"), cp.get("tte"), evo2,
-        ))
+        """,
+            (
+                user_id,
+                d_str,
+                load.get("ctl"),
+                load.get("atl"),
+                load.get("tsb"),
+                load.get("acwr"),
+                load.get("ramp_rate"),
+                cp.get("cp"),
+                cp.get("w_prime"),
+                cp.get("frc"),
+                cp.get("mftp"),
+                cp.get("tte"),
+                evo2,
+            ),
+        )
 
 
 def run_compute(user_id: str):
@@ -804,7 +865,9 @@ def run_compute(user_id: str):
             cur.execute("RELEASE SAVEPOINT gap_detect")
         except Exception as gap_err:
             cur.execute("ROLLBACK TO SAVEPOINT gap_detect")
-            print(f"[metrics-compute] Gap detection skipped: {gap_err}", file=sys.stderr)
+            print(
+                f"[metrics-compute] Gap detection skipped: {gap_err}", file=sys.stderr
+            )
 
         db.commit()
 
@@ -814,9 +877,12 @@ def run_compute(user_id: str):
         if load_metrics:
             latest_compute = max(load_metrics.keys())
         try:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT MAX(date) as latest_date FROM daily_metric WHERE user_id = %s
-            """, (user_id,))
+            """,
+                (user_id,),
+            )
             row = cur.fetchone()
             if row and row.get("latest_date"):
                 latest_sync = str(row["latest_date"])
@@ -826,7 +892,12 @@ def run_compute(user_id: str):
         # Drift detection: warn if compute lags behind sync
         if latest_sync and latest_compute and latest_sync > latest_compute:
             from datetime import datetime
-            sync_d = datetime.fromisoformat(latest_sync).date() if "T" not in latest_sync else date.fromisoformat(latest_sync[:10])
+
+            sync_d = (
+                datetime.fromisoformat(latest_sync).date()
+                if "T" not in latest_sync
+                else date.fromisoformat(latest_sync[:10])
+            )
             comp_d = date.fromisoformat(latest_compute)
             drift_days = (sync_d - comp_d).days
             if drift_days > 1:
@@ -858,11 +929,15 @@ def run_compute(user_id: str):
             print("[metrics-compute] Refreshed daily_athlete_summary view")
         except Exception as refresh_err:
             db.rollback()
-            print(f"[metrics-compute] Matview refresh skipped: {refresh_err}", file=sys.stderr)
+            print(
+                f"[metrics-compute] Matview refresh skipped: {refresh_err}",
+                file=sys.stderr,
+            )
     except Exception as e:
         db.rollback()
         print(f"[metrics-compute] ERROR: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
     finally:
         cur.close()
@@ -880,10 +955,14 @@ def _clear_recompute_status():
     try:
         if os.path.exists(status_file):
             import json as _json
+
             with open(status_file, "w") as f:
                 _json.dump({"running": False, "completed": time.time()}, f)
     except Exception as exc:
-        print(f"[metrics-compute] WARN: failed to update recompute status: {exc}", file=sys.stderr)
+        print(
+            f"[metrics-compute] WARN: failed to update recompute status: {exc}",
+            file=sys.stderr,
+        )
 
 
 def main():

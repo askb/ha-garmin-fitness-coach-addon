@@ -46,22 +46,24 @@ def generate_daily_loads() -> list[dict]:
 
         trimp = round(trimp, 1)
 
-        records.append({
-            "date": d.isoformat(),
-            "trimp": trimp,
-            "garmin_training_load": round(trimp * 0.8, 1),  # approximate conversion
-            "resting_hr": random.randint(48, 58),
-            "max_hr": random.randint(155, 185),
-            "hrv": random.randint(35, 85),
-            "stress_score": random.randint(20, 60),
-            "sleep_score": random.randint(60, 95),
-            "total_sleep_minutes": random.randint(350, 520),
-            "deep_sleep_minutes": random.randint(40, 120),
-            "rem_sleep_minutes": random.randint(60, 140),
-            "body_battery_start": random.randint(30, 80),
-            "body_battery_end": random.randint(5, 50),
-            "spo2": random.randint(94, 99),
-        })
+        records.append(
+            {
+                "date": d.isoformat(),
+                "trimp": trimp,
+                "garmin_training_load": round(trimp * 0.8, 1),  # approximate conversion
+                "resting_hr": random.randint(48, 58),
+                "max_hr": random.randint(155, 185),
+                "hrv": random.randint(35, 85),
+                "stress_score": random.randint(20, 60),
+                "sleep_score": random.randint(60, 95),
+                "total_sleep_minutes": random.randint(350, 520),
+                "deep_sleep_minutes": random.randint(40, 120),
+                "rem_sleep_minutes": random.randint(60, 140),
+                "body_battery_start": random.randint(30, 80),
+                "body_battery_end": random.randint(5, 50),
+                "spo2": random.randint(94, 99),
+            }
+        )
 
     # Compute expected EWMA outputs over the full series, mirroring
     # metrics-compute.py compute_ewma_loads exactly (CTL/ATL seeded with the
@@ -77,8 +79,8 @@ def generate_daily_loads() -> list[dict]:
             atl = ALPHA_ATL * load + (1 - ALPHA_ATL) * atl
         tsb = ctl - atl
 
-        acute_window = loads[max(0, i - (ACWR_ACUTE_DAYS - 1)):i + 1]
-        chronic_window = loads[max(0, i - (ACWR_CHRONIC_DAYS - 1)):i + 1]
+        acute_window = loads[max(0, i - (ACWR_ACUTE_DAYS - 1)) : i + 1]
+        chronic_window = loads[max(0, i - (ACWR_CHRONIC_DAYS - 1)) : i + 1]
         acute = sum(acute_window) / max(1, len(acute_window))
         chronic = sum(chronic_window) / max(1, len(chronic_window))
         if chronic == 0:

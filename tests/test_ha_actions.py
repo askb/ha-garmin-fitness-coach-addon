@@ -14,7 +14,9 @@ from uuid import uuid4
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "pulsecoach" / "rootfs" / "app" / "scripts"
+SCRIPTS_DIR = (
+    Path(__file__).resolve().parents[1] / "pulsecoach" / "rootfs" / "app" / "scripts"
+)
 CURSOR_DIR = Path(__file__).resolve().parent / ".ha-actions-cursors"
 SUPERVISOR_URL = "http://supervisor/core/api/events"
 
@@ -49,14 +51,20 @@ class FakeConnection:
         return None
 
 
-def load_ha_actions(monkeypatch: pytest.MonkeyPatch, rows: list[dict[str, Any]]) -> types.ModuleType:
+def load_ha_actions(
+    monkeypatch: pytest.MonkeyPatch, rows: list[dict[str, Any]]
+) -> types.ModuleType:
     """Import ha-actions.py and patch its DB connector to use fake rows."""
-    spec = importlib.util.spec_from_file_location("ha_actions", SCRIPTS_DIR / "ha-actions.py")
+    spec = importlib.util.spec_from_file_location(
+        "ha_actions", SCRIPTS_DIR / "ha-actions.py"
+    )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules["ha_actions"] = module
     spec.loader.exec_module(module)
-    monkeypatch.setattr(module.psycopg2, "connect", lambda *args, **kwargs: FakeConnection(rows))
+    monkeypatch.setattr(
+        module.psycopg2, "connect", lambda *args, **kwargs: FakeConnection(rows)
+    )
     monkeypatch.setattr(module, "HA_BASE_URL", "http://supervisor/core")
     return module
 
@@ -85,7 +93,9 @@ def ha_env(monkeypatch: pytest.MonkeyPatch, cursor_file: Path) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://test:test@127.0.0.1:5432/test")
 
 
-def row(kind: str, created_at: datetime, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+def row(
+    kind: str, created_at: datetime, payload: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Build a RecommendationAudit row fixture."""
     return {
         "id": str(uuid4()),
@@ -99,7 +109,9 @@ def row(kind: str, created_at: datetime, payload: dict[str, Any] | None = None) 
 
 def register_event(requests_mock: Any, event_type: str, status_code: int = 200) -> None:
     """Register a Supervisor event endpoint."""
-    requests_mock.post(f"{SUPERVISOR_URL}/{event_type}", status_code=status_code, json={"ok": True})
+    requests_mock.post(
+        f"{SUPERVISOR_URL}/{event_type}", status_code=status_code, json={"ok": True}
+    )
 
 
 def test_audit_query_uses_drizzle_snake_case(monkeypatch):
@@ -112,26 +124,53 @@ def test_audit_query_uses_drizzle_snake_case(monkeypatch):
     assert '"createdAt"' not in module.AUDIT_QUERY
 
 
-def test_cursor_advances_after_processing_three_rows(monkeypatch, requests_mock, cursor_file):
+def test_cursor_advances_after_processing_three_rows(
+    monkeypatch, requests_mock, cursor_file
+):
     base = datetime.now(timezone.utc) - timedelta(minutes=30)
     rows = [
-        row("recommendation", base + timedelta(minutes=1), {"recommendation": {"action": "rest", "reason": "Recover"}}),
-        row("workout_complete", base + timedelta(minutes=2), {"workout_id": "w1", "deviation": {"minutes": 0}}),
-        row("workout_missed", base + timedelta(minutes=3), {"planned_workout_id": "w2"}),
+        row(
+            "recommendation",
+            base + timedelta(minutes=1),
+            {"recommendation": {"action": "rest", "reason": "Recover"}},
+        ),
+        row(
+            "workout_complete",
+            base + timedelta(minutes=2),
+            {"workout_id": "w1", "deviation": {"minutes": 0}},
+        ),
+        row(
+            "workout_missed", base + timedelta(minutes=3), {"planned_workout_id": "w2"}
+        ),
     ]
-    for event_type in ("pulsecoach_recommendation", "pulsecoach_session_completed", "pulsecoach_session_missed"):
+    for event_type in (
+        "pulsecoach_recommendation",
+        "pulsecoach_session_completed",
+        "pulsecoach_session_missed",
+    ):
         register_event(requests_mock, event_type)
     module = load_ha_actions(monkeypatch, rows)
 
     stats = module.process_once(str(cursor_file))
 
     assert stats == module.ProcessStats(processed=3, fired=3, errors=0)
-    assert cursor_file.read_text(encoding="utf-8").strip() == rows[2]["created_at"].isoformat()
+    assert (
+        cursor_file.read_text(encoding="utf-8").strip()
+        == rows[2]["created_at"].isoformat()
+    )
 
 
-def test_cursor_idempotency_skips_rows_at_saved_cursor(monkeypatch, requests_mock, cursor_file):
+def test_cursor_idempotency_skips_rows_at_saved_cursor(
+    monkeypatch, requests_mock, cursor_file
+):
     created_at = datetime.now(timezone.utc) - timedelta(minutes=10)
-    rows = [row("recommendation", created_at, {"recommendation": {"action": "workout", "reason": "Go"}})]
+    rows = [
+        row(
+            "recommendation",
+            created_at,
+            {"recommendation": {"action": "workout", "reason": "Go"}},
+        )
+    ]
     cursor_file.write_text(f"{created_at.isoformat()}\n", encoding="utf-8")
     register_event(requests_mock, "pulsecoach_recommendation")
     module = load_ha_actions(monkeypatch, rows)
@@ -142,10 +181,23 @@ def test_cursor_idempotency_skips_rows_at_saved_cursor(monkeypatch, requests_moc
     assert requests_mock.call_count == 0
 
 
-def test_recommendation_fires_recommendation_event(monkeypatch, requests_mock, cursor_file):
-    rows = [row("recommendation", datetime.now(timezone.utc), {
-        "recommendation": {"action": "workout", "intensity": "easy", "reason": "Fresh legs", "readiness": 72}
-    })]
+def test_recommendation_fires_recommendation_event(
+    monkeypatch, requests_mock, cursor_file
+):
+    rows = [
+        row(
+            "recommendation",
+            datetime.now(timezone.utc),
+            {
+                "recommendation": {
+                    "action": "workout",
+                    "intensity": "easy",
+                    "reason": "Fresh legs",
+                    "readiness": 72,
+                }
+            },
+        )
+    ]
     register_event(requests_mock, "pulsecoach_recommendation")
     module = load_ha_actions(monkeypatch, rows)
 
@@ -161,10 +213,23 @@ def test_recommendation_fires_recommendation_event(monkeypatch, requests_mock, c
     }
 
 
-def test_low_readiness_recommendation_fires_two_events(monkeypatch, requests_mock, cursor_file):
-    rows = [row("recommendation", datetime.now(timezone.utc), {
-        "recommendation": {"action": "rest", "intensity": "easy", "reason": "Readiness is low", "readiness": 35}
-    })]
+def test_low_readiness_recommendation_fires_two_events(
+    monkeypatch, requests_mock, cursor_file
+):
+    rows = [
+        row(
+            "recommendation",
+            datetime.now(timezone.utc),
+            {
+                "recommendation": {
+                    "action": "rest",
+                    "intensity": "easy",
+                    "reason": "Readiness is low",
+                    "readiness": 35,
+                }
+            },
+        )
+    ]
     register_event(requests_mock, "pulsecoach_recommendation")
     register_event(requests_mock, "pulsecoach_low_readiness")
     module = load_ha_actions(monkeypatch, rows)
@@ -184,8 +249,16 @@ def test_low_readiness_recommendation_fires_two_events(monkeypatch, requests_moc
     }
 
 
-def test_workout_complete_fires_session_completed(monkeypatch, requests_mock, cursor_file):
-    rows = [row("workout_complete", datetime.now(timezone.utc), {"workout_id": "daily-1", "deviation": {"duration_min": -5}})]
+def test_workout_complete_fires_session_completed(
+    monkeypatch, requests_mock, cursor_file
+):
+    rows = [
+        row(
+            "workout_complete",
+            datetime.now(timezone.utc),
+            {"workout_id": "daily-1", "deviation": {"duration_min": -5}},
+        )
+    ]
     register_event(requests_mock, "pulsecoach_session_completed")
     module = load_ha_actions(monkeypatch, rows)
 
@@ -201,7 +274,13 @@ def test_workout_complete_fires_session_completed(monkeypatch, requests_mock, cu
 
 
 def test_workout_missed_fires_session_missed(monkeypatch, requests_mock, cursor_file):
-    rows = [row("workout_missed", datetime.now(timezone.utc), {"planned_workout_id": "planned-1"})]
+    rows = [
+        row(
+            "workout_missed",
+            datetime.now(timezone.utc),
+            {"planned_workout_id": "planned-1"},
+        )
+    ]
     register_event(requests_mock, "pulsecoach_session_missed")
     module = load_ha_actions(monkeypatch, rows)
 
@@ -215,25 +294,50 @@ def test_workout_missed_fires_session_missed(monkeypatch, requests_mock, cursor_
     }
 
 
-def test_supervisor_error_is_swallowed_and_next_iteration_runs(monkeypatch, requests_mock, cursor_file):
+def test_supervisor_error_is_swallowed_and_next_iteration_runs(
+    monkeypatch, requests_mock, cursor_file
+):
     base = datetime.now(timezone.utc) - timedelta(minutes=20)
-    rows = [row("recommendation", base, {"recommendation": {"action": "rest", "reason": "Recover"}})]
+    rows = [
+        row(
+            "recommendation",
+            base,
+            {"recommendation": {"action": "rest", "reason": "Recover"}},
+        )
+    ]
     register_event(requests_mock, "pulsecoach_recommendation", status_code=500)
     register_event(requests_mock, "pulsecoach_session_completed")
     module = load_ha_actions(monkeypatch, rows)
 
     first = module.process_once(str(cursor_file))
-    rows.append(row("workout_complete", base + timedelta(minutes=1), {"workout_id": "w3", "deviation": {}}))
+    rows.append(
+        row(
+            "workout_complete",
+            base + timedelta(minutes=1),
+            {"workout_id": "w3", "deviation": {}},
+        )
+    )
     second = module.process_once(str(cursor_file))
 
     assert first == module.ProcessStats(processed=1, fired=0, errors=1)
     assert second == module.ProcessStats(processed=1, fired=1, errors=0)
-    assert cursor_file.read_text(encoding="utf-8").strip() == rows[1]["created_at"].isoformat()
+    assert (
+        cursor_file.read_text(encoding="utf-8").strip()
+        == rows[1]["created_at"].isoformat()
+    )
 
 
-def test_events_disabled_advances_cursor_without_requests(monkeypatch, requests_mock, cursor_file):
+def test_events_disabled_advances_cursor_without_requests(
+    monkeypatch, requests_mock, cursor_file
+):
     monkeypatch.setenv("HA_EVENTS_ENABLED", "false")
-    rows = [row("recommendation", datetime.now(timezone.utc), {"recommendation": {"action": "workout", "reason": "Go"}})]
+    rows = [
+        row(
+            "recommendation",
+            datetime.now(timezone.utc),
+            {"recommendation": {"action": "workout", "reason": "Go"}},
+        )
+    ]
     register_event(requests_mock, "pulsecoach_recommendation")
     module = load_ha_actions(monkeypatch, rows)
 
@@ -241,4 +345,7 @@ def test_events_disabled_advances_cursor_without_requests(monkeypatch, requests_
 
     assert stats == module.ProcessStats(processed=1, fired=0, errors=0)
     assert requests_mock.call_count == 0
-    assert cursor_file.read_text(encoding="utf-8").strip() == rows[0]["created_at"].isoformat()
+    assert (
+        cursor_file.read_text(encoding="utf-8").strip()
+        == rows[0]["created_at"].isoformat()
+    )

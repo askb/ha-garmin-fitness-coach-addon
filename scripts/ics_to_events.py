@@ -70,12 +70,14 @@ def convert(ics_path: str, self_email: str, start: date, end: date) -> list[dict
         if not attendees:
             continue
 
-        events.append({
-            "start": s.isoformat(),
-            "end": e.isoformat(),
-            "title": str(ev.get("SUMMARY", "(untitled)")),
-            "attendees": sorted(set(attendees)),
-        })
+        events.append(
+            {
+                "start": s.isoformat(),
+                "end": e.isoformat(),
+                "title": str(ev.get("SUMMARY", "(untitled)")),
+                "attendees": sorted(set(attendees)),
+            }
+        )
 
     events.sort(key=lambda ev: ev["start"])
     return events
@@ -84,8 +86,12 @@ def convert(ics_path: str, self_email: str, start: date, end: date) -> list[dict
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("ics", help="path to exported .ics file")
-    ap.add_argument("--self", required=True, dest="self_email",
-                    help="your email (excluded from attendee lists)")
+    ap.add_argument(
+        "--self",
+        required=True,
+        dest="self_email",
+        help="your email (excluded from attendee lists)",
+    )
     ap.add_argument("--days", type=int, default=30, help="how far back from today")
     ap.add_argument("--out", default="calendar_events.json")
     args = ap.parse_args()
@@ -97,7 +103,9 @@ def main() -> int:
     with open(args.out, "w") as f:
         json.dump(events, f, indent=1)
     people = sorted({p for ev in events for p in ev["attendees"]})
-    print(f"{len(events)} meetings ({start}..{end}), {len(people)} distinct attendees -> {args.out}")
+    print(
+        f"{len(events)} meetings ({start}..{end}), {len(people)} distinct attendees -> {args.out}"
+    )
     return 0
 
 

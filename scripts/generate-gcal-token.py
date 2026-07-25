@@ -44,8 +44,10 @@ def _load_creds() -> tuple[str, str]:
         cid, csec = blob.get("client_id", ""), blob.get("client_secret", "")
         if cid and csec:
             if "web" in data:
-                print("NOTE: this is a 'web' OAuth client — make sure "
-                      f"http://127.0.0.1:{PORT} is in its Authorized redirect URIs.")
+                print(
+                    "NOTE: this is a 'web' OAuth client — make sure "
+                    f"http://127.0.0.1:{PORT} is in its Authorized redirect URIs."
+                )
             return cid, csec
         print(f"Could not find client_id/secret in {sys.argv[1]}")
     return input("OAuth client ID: ").strip(), input("OAuth client secret: ").strip()
@@ -78,15 +80,17 @@ def main() -> int:
     server = http.server.HTTPServer(("127.0.0.1", PORT), Handler)
     threading.Thread(target=server.handle_request, daemon=True).start()
 
-    params = urllib.parse.urlencode({
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": SCOPE,
-        "access_type": "offline",   # ask for a refresh token
-        "prompt": "consent",        # force refresh token even if previously granted
-        "state": state,
-    })
+    params = urllib.parse.urlencode(
+        {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": SCOPE,
+            "access_type": "offline",  # ask for a refresh token
+            "prompt": "consent",  # force refresh token even if previously granted
+            "state": state,
+        }
+    )
     url = f"{AUTH_URL}?{params}"
     print(f"\nOpening browser for consent...\n{url}\n")
     webbrowser.open(url)
@@ -95,31 +99,44 @@ def main() -> int:
 
     code = code_holder.get("code")
     if not code:
-        print("No authorization code received. If your Workspace admin blocks "
-              "unapproved apps you'll have seen an error page — fall back to "
-              "the ICS export flow (scripts/ics_to_events.py).")
+        print(
+            "No authorization code received. If your Workspace admin blocks "
+            "unapproved apps you'll have seen an error page — fall back to "
+            "the ICS export flow (scripts/ics_to_events.py)."
+        )
         return 1
 
-    body = urllib.parse.urlencode({
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "code": code,
-        "grant_type": "authorization_code",
-        "redirect_uri": redirect_uri,
-    }).encode()
+    body = urllib.parse.urlencode(
+        {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": redirect_uri,
+        }
+    ).encode()
     req = urllib.request.Request(TOKEN_URL, data=body)
     with urllib.request.urlopen(req, timeout=60) as resp:
         tok = json.load(resp)
 
     refresh = tok.get("refresh_token")
     if not refresh:
-        print("Token response had no refresh_token — re-run (prompt=consent should force it).")
+        print(
+            "Token response had no refresh_token — re-run (prompt=consent should force it)."
+        )
         return 1
 
     fd = os.open(OUT_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
-        json.dump({"client_id": client_id, "client_secret": client_secret,
-                   "refresh_token": refresh}, f, indent=1)
+        json.dump(
+            {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh,
+            },
+            f,
+            indent=1,
+        )
     print(f"\n✓ Wrote {OUT_FILE}")
     print("Copy it to HAOS:  scp gcal-token.json <haos>:/share/pulsecoach/")
     print("The addon moves it into /data (private) on the next meeting-stress run.")

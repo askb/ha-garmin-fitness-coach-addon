@@ -54,9 +54,11 @@ def adopt_dropped_token() -> None:
     """
     if not (os.path.exists(DROP_PATH) and os.path.isdir("/data")):
         return
-    if (os.path.islink(DROP_PATH)
-            or os.path.islink(os.path.dirname(DROP_PATH))
-            or not os.path.isfile(DROP_PATH)):
+    if (
+        os.path.islink(DROP_PATH)
+        or os.path.islink(os.path.dirname(DROP_PATH))
+        or not os.path.isfile(DROP_PATH)
+    ):
         print("Refusing to adopt gcal-token.json: /share drop is not a regular file")
         return
     import shutil
@@ -127,12 +129,14 @@ def _refresh_access_token(tok: dict) -> str:
     for key in ("client_id", "client_secret", "refresh_token"):
         if not tok.get(key):
             raise GcalError(f"token is missing {key}")
-    body = urllib.parse.urlencode({
-        "client_id": tok["client_id"],
-        "client_secret": tok["client_secret"],
-        "refresh_token": tok["refresh_token"],
-        "grant_type": "refresh_token",
-    }).encode()
+    body = urllib.parse.urlencode(
+        {
+            "client_id": tok["client_id"],
+            "client_secret": tok["client_secret"],
+            "refresh_token": tok["refresh_token"],
+            "grant_type": "refresh_token",
+        }
+    ).encode()
     req = urllib.request.Request(TOKEN_URL, data=body)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -161,11 +165,13 @@ def _refresh_access_token(tok: dict) -> str:
 
 def validate_token(client_id: str, client_secret: str, refresh_token: str) -> None:
     """Raise GcalError unless these credentials can obtain an access token."""
-    _refresh_access_token({
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "refresh_token": refresh_token,
-    })
+    _refresh_access_token(
+        {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+        }
+    )
 
 
 def save_token(client_id: str, client_secret: str, refresh_token: str) -> None:
@@ -174,11 +180,14 @@ def save_token(client_id: str, client_secret: str, refresh_token: str) -> None:
     Callers are responsible for validating the token first (see
     ``validate_token``); this helper only writes the file.
     """
-    _secure_write_json(TOKEN_PATH, {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "refresh_token": refresh_token,
-    })
+    _secure_write_json(
+        TOKEN_PATH,
+        {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+        },
+    )
     # Drop any stale /share token so a later adopt_dropped_token() can't move
     # it over the credentials we just linked via the UI. A missing drop is the
     # normal case; any other failure means the stale token could still win, so
@@ -298,12 +307,14 @@ def list_calendars() -> list[dict]:
             if has_selection
             else primary
         )
-        out.append({
-            "id": cid,
-            "summary": it.get("summaryOverride") or it.get("summary") or cid,
-            "primary": primary,
-            "selected": selected,
-        })
+        out.append(
+            {
+                "id": cid,
+                "summary": it.get("summaryOverride") or it.get("summary") or cid,
+                "primary": primary,
+                "selected": selected,
+            }
+        )
     return out
 
 
@@ -315,8 +326,11 @@ def _item_to_event(item: dict) -> dict | None:
         return None  # all-day event
     attendees = []
     for att in item.get("attendees", []):
-        if (att.get("responseStatus") == "declined"
-                or att.get("resource") or att.get("self")):
+        if (
+            att.get("responseStatus") == "declined"
+            or att.get("resource")
+            or att.get("self")
+        ):
             continue
         name = att.get("displayName") or att.get("email", "").split("@")[0]
         if name:
@@ -337,7 +351,7 @@ def _list_events_for_calendar(access: str, calendar_id: str, days: int) -> list[
     base_params = {
         "timeMin": (now - timedelta(days=days)).isoformat(),
         "timeMax": now.isoformat(),
-        "singleEvents": "true",   # expand recurrences
+        "singleEvents": "true",  # expand recurrences
         "orderBy": "startTime",
         "maxResults": "250",
     }
@@ -388,8 +402,10 @@ def fetch_events(days: int) -> list[dict]:
                 continue
             seen.add(key)
             events.append(ev)
-    print(f"Fetched {len(events)} meetings from {len(calendar_ids)} "
-          f"calendar(s) (last {days}d)")
+    print(
+        f"Fetched {len(events)} meetings from {len(calendar_ids)} "
+        f"calendar(s) (last {days}d)"
+    )
     return events
 
 
@@ -398,23 +414,32 @@ def fetch_events(days: int) -> list[dict]:
 # --------------------------------------------------------------------------- #
 def _selfcheck() -> None:
     # _item_to_event drops all-day / declined-only / self-only events.
-    assert _item_to_event({"start": {"date": "2026-01-01"},
-                           "end": {"date": "2026-01-02"}}) is None
-    assert _item_to_event({
-        "start": {"dateTime": "2026-01-01T10:00:00Z"},
-        "end": {"dateTime": "2026-01-01T11:00:00Z"},
-        "attendees": [{"self": True}],
-    }) is None
-    ev = _item_to_event({
-        "start": {"dateTime": "2026-01-01T10:00:00Z"},
-        "end": {"dateTime": "2026-01-01T11:00:00Z"},
-        "summary": "1:1",
-        "attendees": [
-            {"displayName": "Bob"},
-            {"email": "declined@x.com", "responseStatus": "declined"},
-            {"displayName": "Room 5", "resource": True},
-        ],
-    })
+    assert (
+        _item_to_event({"start": {"date": "2026-01-01"}, "end": {"date": "2026-01-02"}})
+        is None
+    )
+    assert (
+        _item_to_event(
+            {
+                "start": {"dateTime": "2026-01-01T10:00:00Z"},
+                "end": {"dateTime": "2026-01-01T11:00:00Z"},
+                "attendees": [{"self": True}],
+            }
+        )
+        is None
+    )
+    ev = _item_to_event(
+        {
+            "start": {"dateTime": "2026-01-01T10:00:00Z"},
+            "end": {"dateTime": "2026-01-01T11:00:00Z"},
+            "summary": "1:1",
+            "attendees": [
+                {"displayName": "Bob"},
+                {"email": "declined@x.com", "responseStatus": "declined"},
+                {"displayName": "Room 5", "resource": True},
+            ],
+        }
+    )
     assert ev == {
         "start": "2026-01-01T10:00:00Z",
         "end": "2026-01-01T11:00:00Z",

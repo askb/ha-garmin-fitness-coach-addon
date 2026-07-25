@@ -105,12 +105,8 @@ def mock_garmin_client():
             "sleepScores": {"overall": {"value": 82}},
         }
     }
-    client.get_hrv_data.return_value = {
-        "hrvSummary": {"weeklyAvg": 42}
-    }
-    client.get_stress_data.return_value = {
-        "averageStressLevel": 35
-    }
+    client.get_hrv_data.return_value = {"hrvSummary": {"weeklyAvg": 42}}
+    client.get_stress_data.return_value = {"averageStressLevel": 35}
     client.get_spo2_data.return_value = {}
     client.get_respiration_data.return_value = {}
     client.get_body_composition.return_value = {}

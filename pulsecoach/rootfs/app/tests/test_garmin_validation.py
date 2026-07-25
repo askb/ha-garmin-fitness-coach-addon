@@ -6,13 +6,14 @@ Tests two categories:
 
 Uses golden fixtures representing real Garmin Connect API responses.
 """
+
 import sys
 import os
 import json
 import pytest
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 
 # ---------------------------------------------------------------------------
@@ -37,11 +38,11 @@ GOLDEN_DAILY_STATS = {
 
 GOLDEN_SLEEP = {
     "dailySleepDTO": {
-        "sleepTimeSeconds": 25200,    # 7h exactly
-        "deepSleepSeconds": 5400,     # 1.5h
-        "lightSleepSeconds": 12600,   # 3.5h
-        "remSleepSeconds": 5400,      # 1.5h
-        "awakeSleepSeconds": 1800,    # 30min
+        "sleepTimeSeconds": 25200,  # 7h exactly
+        "deepSleepSeconds": 5400,  # 1.5h
+        "lightSleepSeconds": 12600,  # 3.5h
+        "remSleepSeconds": 5400,  # 1.5h
+        "awakeSleepSeconds": 1800,  # 30min
         "sleepScores": {"overall": {"value": 72}},
         "averageSpO2Value": 96.8,
         "averageRespirationValue": 13.8,
@@ -57,7 +58,7 @@ GOLDEN_HRV = {
         {"hrvValue": 47},
         {"hrvValue": 49},
         {"hrvValue": 51},
-    ]
+    ],
 }
 
 GOLDEN_ACTIVITY = {
@@ -69,7 +70,7 @@ GOLDEN_ACTIVITY = {
     "averageHR": 158,
     "maxHR": 178,
     "calories": 680,
-    "averageSpeed": 2.78,       # m/s → 5:59/km
+    "averageSpeed": 2.78,  # m/s → 5:59/km
     "activityTrainingLoad": 85.0,
     "aerobicTrainingEffect": 3.5,
     "anaerobicTrainingEffect": 1.2,
@@ -77,13 +78,14 @@ GOLDEN_ACTIVITY = {
     "averageRunningCadenceInStepsPerMinute": 172,
     "totalAscent": 45,
     "totalDescent": 42,
-    "avgPower": None,           # running: no power
+    "avgPower": None,  # running: no power
 }
 
 
 # ---------------------------------------------------------------------------
 # Schema integrity tests
 # ---------------------------------------------------------------------------
+
 
 class TestSchemaIntegrity:
     """Verify Garmin API payloads map to correct DB fields."""
@@ -103,10 +105,10 @@ class TestSchemaIntegrity:
         """Deep + light + REM + awake should equal total sleep."""
         dto = GOLDEN_SLEEP["dailySleepDTO"]
         stages_sum = (
-            dto["deepSleepSeconds"] +
-            dto["lightSleepSeconds"] +
-            dto["remSleepSeconds"] +
-            dto["awakeSleepSeconds"]
+            dto["deepSleepSeconds"]
+            + dto["lightSleepSeconds"]
+            + dto["remSleepSeconds"]
+            + dto["awakeSleepSeconds"]
         )
         assert stages_sum == dto["sleepTimeSeconds"], (
             f"Stages sum {stages_sum}s ≠ total {dto['sleepTimeSeconds']}s"
@@ -161,22 +163,23 @@ class TestSchemaIntegrity:
 # Physiological plausibility tests
 # ---------------------------------------------------------------------------
 
+
 class TestPhysiologicalPlausibility:
     """Flag values outside medically plausible ranges."""
 
     # Reference ranges (ACSM Guidelines + medical literature)
-    HR_MIN = 30      # Elite endurance athletes at rest
-    HR_MAX = 220     # Max possible (theoretical)
-    HRV_MIN = 1      # ms — below this is clinically concerning
-    HRV_MAX = 300    # ms — above this is instrument error
-    SPO2_MIN = 85    # % — below this requires medical attention
+    HR_MIN = 30  # Elite endurance athletes at rest
+    HR_MAX = 220  # Max possible (theoretical)
+    HRV_MIN = 1  # ms — below this is clinically concerning
+    HRV_MAX = 300  # ms — above this is instrument error
+    SPO2_MIN = 85  # % — below this requires medical attention
     SPO2_MAX = 100
-    SLEEP_MIN = 0    # minutes
+    SLEEP_MIN = 0  # minutes
     SLEEP_MAX = 720  # 12h — more is implausible for single night
     STEPS_MIN = 0
     STEPS_MAX = 100_000  # ultra-marathoners upper bound
-    VO2MAX_MIN = 20   # sedentary adult minimum (ml/kg/min)
-    VO2MAX_MAX = 90   # world-class endurance athlete maximum
+    VO2MAX_MIN = 20  # sedentary adult minimum (ml/kg/min)
+    VO2MAX_MAX = 90  # world-class endurance athlete maximum
 
     def _is_plausible(self, value, min_val, max_val, allow_none=True):
         if value is None:
@@ -185,11 +188,15 @@ class TestPhysiologicalPlausibility:
 
     def test_resting_hr_plausible(self):
         rhr = GOLDEN_DAILY_STATS["restingHeartRate"]
-        assert self._is_plausible(rhr, self.HR_MIN, self.HR_MAX), f"RHR {rhr} implausible"
+        assert self._is_plausible(rhr, self.HR_MIN, self.HR_MAX), (
+            f"RHR {rhr} implausible"
+        )
 
     def test_max_hr_plausible(self):
         max_hr = GOLDEN_DAILY_STATS["maxHeartRate"]
-        assert self._is_plausible(max_hr, self.HR_MIN, self.HR_MAX), f"MaxHR {max_hr} implausible"
+        assert self._is_plausible(max_hr, self.HR_MIN, self.HR_MAX), (
+            f"MaxHR {max_hr} implausible"
+        )
 
     def test_max_hr_exceeds_resting(self):
         rhr = GOLDEN_DAILY_STATS["restingHeartRate"]
@@ -198,24 +205,33 @@ class TestPhysiologicalPlausibility:
 
     def test_hrv_in_plausible_range(self):
         hrv = GOLDEN_HRV["hrvSummary"]["lastNight"]
-        assert self._is_plausible(hrv, self.HRV_MIN, self.HRV_MAX), f"HRV {hrv} implausible"
+        assert self._is_plausible(hrv, self.HRV_MIN, self.HRV_MAX), (
+            f"HRV {hrv} implausible"
+        )
 
     def test_spo2_in_plausible_range(self):
         spo2 = GOLDEN_SLEEP["dailySleepDTO"].get("averageSpO2Value")
-        assert self._is_plausible(spo2, self.SPO2_MIN, self.SPO2_MAX), f"SpO2 {spo2} implausible"
+        assert self._is_plausible(spo2, self.SPO2_MIN, self.SPO2_MAX), (
+            f"SpO2 {spo2} implausible"
+        )
 
     def test_sleep_duration_plausible(self):
         sleep_min = GOLDEN_SLEEP["dailySleepDTO"]["sleepTimeSeconds"] // 60
-        assert self._is_plausible(sleep_min, self.SLEEP_MIN, self.SLEEP_MAX), \
+        assert self._is_plausible(sleep_min, self.SLEEP_MIN, self.SLEEP_MAX), (
             f"Sleep {sleep_min}min implausible"
+        )
 
     def test_steps_plausible(self):
         steps = GOLDEN_DAILY_STATS["totalSteps"]
-        assert self._is_plausible(steps, self.STEPS_MIN, self.STEPS_MAX), f"Steps {steps} implausible"
+        assert self._is_plausible(steps, self.STEPS_MIN, self.STEPS_MAX), (
+            f"Steps {steps} implausible"
+        )
 
     def test_vo2max_plausible(self):
         vo2 = GOLDEN_ACTIVITY["vo2MaxValue"]
-        assert self._is_plausible(vo2, self.VO2MAX_MIN, self.VO2MAX_MAX), f"VO2max {vo2} implausible"
+        assert self._is_plausible(vo2, self.VO2MAX_MIN, self.VO2MAX_MAX), (
+            f"VO2max {vo2} implausible"
+        )
 
     def test_aerobic_te_range(self):
         """Aerobic Training Effect must be 0.0-5.0 (Garmin scale)."""
@@ -234,12 +250,15 @@ class TestPhysiologicalPlausibility:
         dur_s = GOLDEN_ACTIVITY["duration"]
         speed_kmh = (dist_m / 1000) / (dur_s / 3600)
         # Running: 4-35 km/h plausible range
-        assert 4 <= speed_kmh <= 35, f"Speed {speed_kmh:.1f} km/h implausible for running"
+        assert 4 <= speed_kmh <= 35, (
+            f"Speed {speed_kmh:.1f} km/h implausible for running"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Idempotency tests
 # ---------------------------------------------------------------------------
+
 
 class TestIdempotency:
     """Verify that upserting the same data twice produces no duplicate rows."""
@@ -249,13 +268,17 @@ class TestIdempotency:
         conn, cursor = db_mock
 
         # Simulate first insert
-        cursor.execute("INSERT INTO daily_metric (user_id, date, steps) VALUES (%s, %s, %s) ON CONFLICT (user_id, date) DO UPDATE SET steps = EXCLUDED.steps",
-                      ("test-user", "2024-01-15", 8432))
+        cursor.execute(
+            "INSERT INTO daily_metric (user_id, date, steps) VALUES (%s, %s, %s) ON CONFLICT (user_id, date) DO UPDATE SET steps = EXCLUDED.steps",
+            ("test-user", "2024-01-15", 8432),
+        )
         call_count_1 = cursor.execute.call_count
 
         # Simulate second insert (same data)
-        cursor.execute("INSERT INTO daily_metric (user_id, date, steps) VALUES (%s, %s, %s) ON CONFLICT (user_id, date) DO UPDATE SET steps = EXCLUDED.steps",
-                      ("test-user", "2024-01-15", 8432))
+        cursor.execute(
+            "INSERT INTO daily_metric (user_id, date, steps) VALUES (%s, %s, %s) ON CONFLICT (user_id, date) DO UPDATE SET steps = EXCLUDED.steps",
+            ("test-user", "2024-01-15", 8432),
+        )
         call_count_2 = cursor.execute.call_count
 
         # Both should execute without error — upsert handles duplicates
@@ -266,12 +289,14 @@ class TestIdempotency:
         garmin_hrv = 48.5
         reference_hrv = 47.3  # from a reference device
         tolerance_ms = 2.0
-        assert abs(garmin_hrv - reference_hrv) <= tolerance_ms, \
+        assert abs(garmin_hrv - reference_hrv) <= tolerance_ms, (
             f"HRV deviation {abs(garmin_hrv - reference_hrv):.1f}ms exceeds {tolerance_ms}ms tolerance"
+        )
 
     def test_ci_tolerance_sleep_minutes(self):
         """Sleep duration should match exactly (discrete minutes)."""
         garmin_sleep = GOLDEN_SLEEP["dailySleepDTO"]["sleepTimeSeconds"] // 60
         reference_sleep = 420  # manual reference
-        assert garmin_sleep == reference_sleep, \
+        assert garmin_sleep == reference_sleep, (
             f"Sleep {garmin_sleep}min ≠ reference {reference_sleep}min"
+        )

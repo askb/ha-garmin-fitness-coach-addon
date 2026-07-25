@@ -42,8 +42,10 @@ def test_default_user_id_matches_garmin_sync(strava_sync):
 @pytest.mark.unit
 def test_user_id_env_override_matches_garmin_sync():
     """GARMIN_USER_ID override is honored by Strava sync too."""
-    with patch.dict(os.environ, {"GARMIN_USER_ID": "custom-user"}), \
-         patch.dict(sys.modules, {"psycopg2": MagicMock(), "requests": MagicMock()}):
+    with (
+        patch.dict(os.environ, {"GARMIN_USER_ID": "custom-user"}),
+        patch.dict(sys.modules, {"psycopg2": MagicMock(), "requests": MagicMock()}),
+    ):
         spec = importlib.util.spec_from_file_location("strava_sync_env", SCRIPT_PATH)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)

@@ -1,4 +1,5 @@
 """Shared pytest fixtures for PulseCoach tests."""
+
 import json
 import os
 import pytest
@@ -48,9 +49,9 @@ def sample_sleep():
             "sleepStartTimestampLocal": 1704067200,
             "sleepEndTimestampLocal": 1704094800,
             "sleepTimeSeconds": 25200,  # 7h
-            "deepSleepSeconds": 5400,   # 1.5h
+            "deepSleepSeconds": 5400,  # 1.5h
             "lightSleepSeconds": 12600,  # 3.5h
-            "remSleepSeconds": 5400,    # 1.5h
+            "remSleepSeconds": 5400,  # 1.5h
             "awakeSleepSeconds": 1800,  # 30min
             "averageSpO2Value": 96.8,
             "averageRespirationValue": 13.8,
@@ -72,7 +73,7 @@ def sample_hrv():
             {"hrvValue": 47, "readingTime": "2024-01-01T01:00:00.000"},
             {"hrvValue": 49, "readingTime": "2024-01-01T02:00:00.000"},
             {"hrvValue": 51, "readingTime": "2024-01-01T03:00:00.000"},
-        ]
+        ],
     }
 
 

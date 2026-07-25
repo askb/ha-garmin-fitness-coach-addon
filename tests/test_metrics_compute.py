@@ -19,7 +19,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Add scripts to path for import
-SCRIPTS_DIR = str(Path(__file__).resolve().parent.parent / "pulsecoach" / "rootfs" / "app" / "scripts")
+SCRIPTS_DIR = str(
+    Path(__file__).resolve().parent.parent / "pulsecoach" / "rootfs" / "app" / "scripts"
+)
 FIXTURES_DIR = str(Path(__file__).resolve().parent / "fixtures")
 
 
@@ -28,14 +30,18 @@ def metrics_compute():
     """Import metrics-compute.py as a module."""
     if SCRIPTS_DIR not in sys.path:
         sys.path.insert(0, SCRIPTS_DIR)
-    with patch.dict("os.environ", {
-        "DATABASE_URL": "postgresql://test:test@localhost:5432/test",
-        "USER_TIMEZONE": "UTC",
-    }):
+    with patch.dict(
+        "os.environ",
+        {
+            "DATABASE_URL": "postgresql://test:test@localhost:5432/test",
+            "USER_TIMEZONE": "UTC",
+        },
+    ):
         # Reimport to pick up env changes
         if "metrics-compute" in sys.modules:
             del sys.modules["metrics-compute"]
         import importlib
+
         loader = importlib.machinery.SourceFileLoader(
             "metrics_compute",
             str(Path(SCRIPTS_DIR) / "metrics-compute.py"),
@@ -96,7 +102,9 @@ class TestEWMAComputation:
 
         # CTL (42-day) should have lower day-to-day changes than ATL (7-day)
         def avg_daily_change(values):
-            return sum(abs(values[i] - values[i-1]) for i in range(1, len(values))) / (len(values) - 1)
+            return sum(
+                abs(values[i] - values[i - 1]) for i in range(1, len(values))
+            ) / (len(values) - 1)
 
         ctl_change = avg_daily_change(ctl_values[30:])
         atl_change = avg_daily_change(atl_values[30:])
@@ -149,7 +157,9 @@ class TestEWMAComputation:
         results = metrics_compute.compute_ewma_loads(loads)
         last_day = (base + timedelta(days=66)).isoformat()
         acwr = results[last_day]["acwr"]
-        assert acwr is not None and acwr > 1.3, f"ACWR should spike above 1.3 after load spike, got {acwr}"
+        assert acwr is not None and acwr > 1.3, (
+            f"ACWR should spike above 1.3 after load spike, got {acwr}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -181,8 +191,8 @@ def _engine_pmc_reference(daily_loads: dict) -> dict:
             ctl = alpha_ctl * load + (1 - alpha_ctl) * ctl
             atl = alpha_atl * load + (1 - alpha_atl) * atl
         tsb = ctl - atl
-        aw = loads[max(0, i - 6):i + 1]
-        cw = loads[max(0, i - 27):i + 1]
+        aw = loads[max(0, i - 6) : i + 1]
+        cw = loads[max(0, i - 27) : i + 1]
         acute = sum(aw) / max(1, len(aw))
         chronic = sum(cw) / max(1, len(cw))
         if chronic == 0:
@@ -281,12 +291,16 @@ class TestInjuryRisk:
         """Import ha-notify.py as a module."""
         if SCRIPTS_DIR not in sys.path:
             sys.path.insert(0, SCRIPTS_DIR)
-        with patch.dict("os.environ", {
-            "SUPERVISOR_TOKEN": "test",
-            "DATABASE_URL": "postgresql://test:test@localhost:5432/test",
-            "USER_TIMEZONE": "UTC",
-        }):
+        with patch.dict(
+            "os.environ",
+            {
+                "SUPERVISOR_TOKEN": "test",
+                "DATABASE_URL": "postgresql://test:test@localhost:5432/test",
+                "USER_TIMEZONE": "UTC",
+            },
+        ):
             import importlib
+
             loader = importlib.machinery.SourceFileLoader(
                 "ha_notify",
                 str(Path(SCRIPTS_DIR) / "ha-notify.py"),
@@ -358,21 +372,23 @@ class TestComputeReadinessScore:
 
     def test_garmin_native_passthrough(self, metrics_compute):
         """When Garmin readiness exists, score is used verbatim with that zone."""
-        cur = _make_mock_cur([
-            {
-                "date": "2025-01-01",
-                "hrv": 60,
-                "sleep_score": 80,
-                "stress_score": 25,
-                "resting_hr": 55,
-                "body_battery_end": 70,
-                "garmin_training_readiness": 85,
-                "garmin_training_readiness_level": "PRIME",
-                "spo2": 97,
-                "respiration_rate": 14,
-                "skin_temp": 36.5,
-            },
-        ])
+        cur = _make_mock_cur(
+            [
+                {
+                    "date": "2025-01-01",
+                    "hrv": 60,
+                    "sleep_score": 80,
+                    "stress_score": 25,
+                    "resting_hr": 55,
+                    "body_battery_end": 70,
+                    "garmin_training_readiness": 85,
+                    "garmin_training_readiness_level": "PRIME",
+                    "spo2": 97,
+                    "respiration_rate": 14,
+                    "skin_temp": 36.5,
+                },
+            ]
+        )
         result = metrics_compute.compute_readiness_score(cur, "user-1")
         assert "2025-01-01" in result
         r = result["2025-01-01"]
@@ -388,19 +404,21 @@ class TestComputeReadinessScore:
         """Native readiness keeps computed component values when raw signals exist."""
         rows = []
         for i in range(7):
-            rows.append({
-                "date": f"2025-01-{i + 1:02d}",
-                "hrv": 60,
-                "sleep_score": 80,
-                "stress_score": 25,
-                "resting_hr": 55,
-                "body_battery_end": 70,
-                "garmin_training_readiness": 21 if i == 6 else None,
-                "garmin_training_readiness_level": "LOW" if i == 6 else None,
-                "spo2": None,
-                "respiration_rate": None,
-                "skin_temp": None,
-            })
+            rows.append(
+                {
+                    "date": f"2025-01-{i + 1:02d}",
+                    "hrv": 60,
+                    "sleep_score": 80,
+                    "stress_score": 25,
+                    "resting_hr": 55,
+                    "body_battery_end": 70,
+                    "garmin_training_readiness": 21 if i == 6 else None,
+                    "garmin_training_readiness_level": "LOW" if i == 6 else None,
+                    "spo2": None,
+                    "respiration_rate": None,
+                    "skin_temp": None,
+                }
+            )
 
         cur = _make_mock_cur(rows)
         result = metrics_compute.compute_readiness_score(cur, "user-1")
@@ -420,19 +438,21 @@ class TestComputeReadinessScore:
         rows = []
         for i in range(10):
             day = f"2025-01-{i + 1:02d}"
-            rows.append({
-                "date": day,
-                "hrv": 55,
-                "sleep_score": 75,
-                "stress_score": 30,
-                "resting_hr": 55,
-                "body_battery_end": 65,
-                "garmin_training_readiness": None,
-                "garmin_training_readiness_level": None,
-                "spo2": None,
-                "respiration_rate": None,
-                "skin_temp": None,
-            })
+            rows.append(
+                {
+                    "date": day,
+                    "hrv": 55,
+                    "sleep_score": 75,
+                    "stress_score": 30,
+                    "resting_hr": 55,
+                    "body_battery_end": 65,
+                    "garmin_training_readiness": None,
+                    "garmin_training_readiness_level": None,
+                    "spo2": None,
+                    "respiration_rate": None,
+                    "skin_temp": None,
+                }
+            )
         cur = _make_mock_cur(rows)
         result = metrics_compute.compute_readiness_score(cur, "user-1")
         # Need enough history before HRV/RHR components kick in (>=7 rows)
@@ -447,19 +467,21 @@ class TestComputeReadinessScore:
         """First few days without HRV history must not produce an HRV component."""
         rows = []
         for i in range(3):
-            rows.append({
-                "date": f"2025-01-{i + 1:02d}",
-                "hrv": 55,
-                "sleep_score": 75,
-                "stress_score": 30,
-                "resting_hr": 55,
-                "body_battery_end": 65,
-                "garmin_training_readiness": None,
-                "garmin_training_readiness_level": None,
-                "spo2": None,
-                "respiration_rate": None,
-                "skin_temp": None,
-            })
+            rows.append(
+                {
+                    "date": f"2025-01-{i + 1:02d}",
+                    "hrv": 55,
+                    "sleep_score": 75,
+                    "stress_score": 30,
+                    "resting_hr": 55,
+                    "body_battery_end": 65,
+                    "garmin_training_readiness": None,
+                    "garmin_training_readiness_level": None,
+                    "spo2": None,
+                    "respiration_rate": None,
+                    "skin_temp": None,
+                }
+            )
         cur = _make_mock_cur(rows)
         result = metrics_compute.compute_readiness_score(cur, "user-1")
         # Day 1: only 1 HRV sample, history < 7 → no HRV component
@@ -469,21 +491,23 @@ class TestComputeReadinessScore:
 
     def test_no_signals_skips_day(self, metrics_compute):
         """A day with no usable inputs is omitted from results."""
-        cur = _make_mock_cur([
-            {
-                "date": "2025-01-01",
-                "hrv": None,
-                "sleep_score": None,
-                "stress_score": None,
-                "resting_hr": None,
-                "body_battery_end": None,
-                "garmin_training_readiness": None,
-                "garmin_training_readiness_level": None,
-                "spo2": None,
-                "respiration_rate": None,
-                "skin_temp": None,
-            },
-        ])
+        cur = _make_mock_cur(
+            [
+                {
+                    "date": "2025-01-01",
+                    "hrv": None,
+                    "sleep_score": None,
+                    "stress_score": None,
+                    "resting_hr": None,
+                    "body_battery_end": None,
+                    "garmin_training_readiness": None,
+                    "garmin_training_readiness_level": None,
+                    "spo2": None,
+                    "respiration_rate": None,
+                    "skin_temp": None,
+                },
+            ]
+        )
         result = metrics_compute.compute_readiness_score(cur, "user-1")
         assert "2025-01-01" not in result
 
@@ -523,8 +547,12 @@ class TestDetectAndLogGaps:
 
     @staticmethod
     def _row(d, hrv=50.0, resting_hr=48.0, sleep_score=80.0):
-        return {"d": d, "hrv": hrv, "resting_hr": resting_hr,
-                "sleep_score": sleep_score}
+        return {
+            "d": d,
+            "hrv": hrv,
+            "resting_hr": resting_hr,
+            "sleep_score": sleep_score,
+        }
 
     def _run(self, metrics_compute, rows, today, capture):
         cur = MagicMock()
@@ -555,14 +583,11 @@ class TestDetectAndLogGaps:
             self._row("2025-01-04"),
         ]
         inserts = []
-        summary = self._run(
-            metrics_compute, rows, date(2025, 1, 4), inserts
-        )
+        summary = self._run(metrics_compute, rows, date(2025, 1, 4), inserts)
         assert summary["missing_days_window"] == 1
         assert "2025-01-03" in summary["missing_dates"]
         # A missing_day row must be queued for insert.
-        assert any(r[2] == "missing_day" and r[1] == "2025-01-03"
-                   for r in inserts)
+        assert any(r[2] == "missing_day" and r[1] == "2025-01-03" for r in inserts)
 
     def test_recent_missing_day_is_warn(self, metrics_compute):
         rows = [self._row("2025-01-01"), self._row("2025-01-04")]

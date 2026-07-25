@@ -49,7 +49,9 @@ class ProcessStats(NamedTuple):
 
 def configure_logging() -> None:
     """Configure process logging."""
-    logging.basicConfig(level=logging.INFO, format="[ha-actions] %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="[ha-actions] %(levelname)s %(message)s"
+    )
 
 
 def env_bool(name: str, default: bool) -> bool:
@@ -97,7 +99,12 @@ def read_cursor(cursor_file: str) -> datetime:
         return parse_timestamp(path.read_text(encoding="utf-8"))
     except Exception as exc:
         fallback = datetime.now(timezone.utc) - timedelta(hours=1)
-        LOGGER.error("Failed to read cursor %s: %s; using %s", cursor_file, exc, fallback.isoformat())
+        LOGGER.error(
+            "Failed to read cursor %s: %s; using %s",
+            cursor_file,
+            exc,
+            fallback.isoformat(),
+        )
         return fallback
 
 
@@ -110,7 +117,10 @@ def write_cursor(cursor_file: str, created_at: Any) -> None:
 
 def get_db_connection() -> Any:
     """Connect to PostgreSQL using DB_* env vars, with DATABASE_URL fallback."""
-    if any(os.environ.get(name) for name in ("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME")):
+    if any(
+        os.environ.get(name)
+        for name in ("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME")
+    ):
         return psycopg2.connect(
             host=os.environ.get("DB_HOST", "127.0.0.1"),
             port=env_int("DB_PORT", 5432),
@@ -211,60 +221,71 @@ def event_payload_for_row(
         recommendation = get_nested(payload, "recommendation") or {}
         if not isinstance(recommendation, Mapping):
             recommendation = {}
-        events = [(
-            "pulsecoach_recommendation",
-            {
-                "user_id": user_id,
-                "date": date,
-                "action": recommendation.get("action"),
-                "intensity": recommendation.get("intensity"),
-                "reason": recommendation.get("reason"),
-            },
-        )]
+        events = [
+            (
+                "pulsecoach_recommendation",
+                {
+                    "user_id": user_id,
+                    "date": date,
+                    "action": recommendation.get("action"),
+                    "intensity": recommendation.get("intensity"),
+                    "reason": recommendation.get("reason"),
+                },
+            )
+        ]
         readiness = recommendation.get("readiness")
         try:
             readiness_value = int(readiness) if readiness is not None else None
         except (TypeError, ValueError):
             readiness_value = None
         if readiness_value is not None and readiness_value < low_readiness_threshold:
-            events.append((
-                "pulsecoach_low_readiness",
-                {
-                    "user_id": user_id,
-                    "date": date,
-                    "readiness": readiness_value,
-                    "reason": recommendation.get("reason"),
-                },
-            ))
+            events.append(
+                (
+                    "pulsecoach_low_readiness",
+                    {
+                        "user_id": user_id,
+                        "date": date,
+                        "readiness": readiness_value,
+                        "reason": recommendation.get("reason"),
+                    },
+                )
+            )
         return events, False
 
     if kind == "workout_complete":
-        return [(
-            "pulsecoach_session_completed",
-            {
-                "user_id": user_id,
-                "date": date,
-                "workout_id": payload.get("workout_id") or payload.get("workoutId"),
-                "deviation": payload.get("deviation"),
-            },
-        )], False
+        return [
+            (
+                "pulsecoach_session_completed",
+                {
+                    "user_id": user_id,
+                    "date": date,
+                    "workout_id": payload.get("workout_id") or payload.get("workoutId"),
+                    "deviation": payload.get("deviation"),
+                },
+            )
+        ], False
 
     if kind == "workout_missed":
         if should_defer_missed_event(row, payload, missed_session_grace_min):
             return [], True
-        return [(
-            "pulsecoach_session_missed",
-            {
-                "user_id": user_id,
-                "date": date,
-                "planned_workout_id": payload.get("planned_workout_id") or payload.get("plannedWorkoutId"),
-            },
-        )], False
+        return [
+            (
+                "pulsecoach_session_missed",
+                {
+                    "user_id": user_id,
+                    "date": date,
+                    "planned_workout_id": payload.get("planned_workout_id")
+                    or payload.get("plannedWorkoutId"),
+                },
+            )
+        ], False
 
     return [], False
 
 
-def fire_event(event_type: str, event_data: Mapping[str, Any], supervisor_token: str) -> bool:
+def fire_event(
+    event_type: str, event_data: Mapping[str, Any], supervisor_token: str
+) -> bool:
     """Fire one event via the Home Assistant Supervisor API."""
     if not supervisor_token:
         LOGGER.warning("No SUPERVISOR_TOKEN; skipping %s", event_type)
@@ -304,7 +325,9 @@ def fetch_rows(cursor: datetime) -> Sequence[Mapping[str, Any]]:
 
 def process_once(cursor_file: str | None = None) -> ProcessStats:
     """Process one audit batch and advance the cursor."""
-    cursor_path = cursor_file or os.environ.get("HA_ACTIONS_CURSOR_FILE", DEFAULT_CURSOR_FILE)
+    cursor_path = cursor_file or os.environ.get(
+        "HA_ACTIONS_CURSOR_FILE", DEFAULT_CURSOR_FILE
+    )
     cursor = read_cursor(cursor_path)
     events_enabled = env_bool("HA_EVENTS_ENABLED", True)
     low_readiness_threshold = env_int("LOW_READINESS_THRESHOLD", 50)
@@ -354,7 +377,9 @@ def run_forever() -> None:
     """Run the long-lived poll loop."""
     poll_seconds = max(1, env_int("HA_ACTIONS_POLL_SECONDS", 60))
     cursor_file = os.environ.get("HA_ACTIONS_CURSOR_FILE", DEFAULT_CURSOR_FILE)
-    LOGGER.info("Starting HA actions loop; poll=%ss cursor=%s", poll_seconds, cursor_file)
+    LOGGER.info(
+        "Starting HA actions loop; poll=%ss cursor=%s", poll_seconds, cursor_file
+    )
 
     next_summary_at = time.monotonic()
     totals = ProcessStats(processed=0, fired=0, errors=0)

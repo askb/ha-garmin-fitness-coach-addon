@@ -36,7 +36,9 @@ except ImportError:
     sys.exit(1)
 
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres@127.0.0.1:5432/pulsecoach")
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL", "postgresql://postgres@127.0.0.1:5432/pulsecoach"
+)
 GARMIN_EMAIL = os.environ.get("GARMIN_EMAIL", "")
 GARMIN_PASSWORD = os.environ.get("GARMIN_PASSWORD", "")
 TOKEN_DIR = os.environ.get("GARMIN_TOKEN_DIR", "/data/garmin-tokens")
@@ -45,6 +47,8 @@ USER_ID = os.environ.get("GARMIN_USER_ID", "seed-user-001")
 GARMIN_MAX_RETRY_ATTEMPTS = 5
 GARMIN_RETRY_BASE_DELAY_SECONDS = 1.0
 GARMIN_RETRY_MAX_DELAY_SECONDS = 60.0
+
+
 def _env_float(name: str, default: float) -> float:
     """Parse a float environment variable, falling back to default if unset
     or non-numeric, so a bad value cannot crash the sync at import time."""
@@ -71,7 +75,9 @@ _tz_name = os.environ.get("USER_TIMEZONE", "UTC")
 try:
     USER_TZ = ZoneInfo(_tz_name)
 except (KeyError, ValueError):
-    print(f"WARNING: Invalid timezone '{_tz_name}', falling back to UTC", file=sys.stderr)
+    print(
+        f"WARNING: Invalid timezone '{_tz_name}', falling back to UTC", file=sys.stderr
+    )
     USER_TZ = ZoneInfo("UTC")
 
 
@@ -207,6 +213,7 @@ def _write_last_sync() -> None:
 def _write_sync_status(phase, detail="", progress=0):
     """Write sync progress to a shared status file for the auth server."""
     import json as _json
+
     _ensure_secure_dir(TOKEN_DIR)
     status = {
         "syncing": True,
@@ -225,6 +232,7 @@ def _write_sync_status(phase, detail="", progress=0):
 def _clear_sync_status():
     """Clear sync status file when sync completes."""
     import json as _json
+
     status = {
         "syncing": False,
         "phase": "idle",
@@ -495,7 +503,9 @@ def sync_daily_stats(client: Any, db: Any, date_str: str) -> bool:
         # Debug: log stress field names so we can verify data extraction
         stress_val = None
         if stress:
-            stress_val = stress.get("avgStressLevel") or stress.get("averageStressLevel")
+            stress_val = stress.get("avgStressLevel") or stress.get(
+                "averageStressLevel"
+            )
         if not stress_val and stats:
             stress_val = stats.get("averageStressLevel")
         if stress_val:
@@ -515,10 +525,9 @@ def sync_daily_stats(client: Any, db: Any, date_str: str) -> bool:
         # Extract respiration rate
         respiration_val = None
         if respiration_data:
-            respiration_val = (
-                respiration_data.get("avgWakingRespirationValue")
-                or respiration_data.get("avgSleepRespirationValue")
-            )
+            respiration_val = respiration_data.get(
+                "avgWakingRespirationValue"
+            ) or respiration_data.get("avgSleepRespirationValue")
         if respiration_val is None and stats:
             respiration_val = stats.get("respirationAvg")
 
@@ -580,7 +589,8 @@ def sync_daily_stats(client: Any, db: Any, date_str: str) -> bool:
             END $$;
         """)
 
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO daily_metric (
                 user_id, date, steps, calories, resting_hr, max_hr,
                 total_sleep_minutes, deep_sleep_minutes, rem_sleep_minutes,
@@ -620,41 +630,45 @@ def sync_daily_stats(client: Any, db: Any, date_str: str) -> bool:
                 body_fat_pct = COALESCE(EXCLUDED.body_fat_pct, daily_metric.body_fat_pct),
                 synced_at = EXCLUDED.synced_at,
                 data_quality = EXCLUDED.data_quality
-        """, (
-            USER_ID,
-            date_str,
-            stats.get("totalSteps"),
-            stats.get("totalKilocalories"),
-            stats.get("restingHeartRate"),
-            stats.get("maxHeartRate"),
-            _safe_sleep_minutes(sleep_dto, "sleepTimeSeconds"),
-            _safe_sleep_minutes(sleep_dto, "deepSleepSeconds"),
-            _safe_sleep_minutes(sleep_dto, "remSleepSeconds"),
-            _safe_sleep_minutes(sleep_dto, "lightSleepSeconds"),
-            _safe_sleep_minutes(sleep_dto, "awakeSleepSeconds"),
-            sleep_dto.get("sleepScores", {}).get("overall", {}).get("value"),
-            hrv.get("hrvSummary", {}).get("weeklyAvg") if hrv else None,
+        """,
             (
-                stress.get("avgStressLevel")
-                or stress.get("averageStressLevel")
-                or stats.get("averageStressLevel")
-            ) if stress else stats.get("averageStressLevel"),
-            stats.get("bodyBatteryChargedValue"),
-            stats.get("bodyBatteryDrainedValue"),
-            stats.get("floorsAscended"),
-            stats.get("intensityMinutesGoal"),
-            _extract_sleep_time(sleep_dto, "sleepStartTimestampLocal"),
-            _extract_sleep_time(sleep_dto, "sleepEndTimestampLocal"),
-            sleep_dto.get("sleepNeedInMinutes"),
-            _compute_sleep_debt(sleep_dto),
-            spo2_val,
-            respiration_val,
-            skin_temp_val,
-            weight_kg,
-            body_fat_pct,
-            datetime.now(timezone.utc).isoformat(),
-            data_quality,
-        ))
+                USER_ID,
+                date_str,
+                stats.get("totalSteps"),
+                stats.get("totalKilocalories"),
+                stats.get("restingHeartRate"),
+                stats.get("maxHeartRate"),
+                _safe_sleep_minutes(sleep_dto, "sleepTimeSeconds"),
+                _safe_sleep_minutes(sleep_dto, "deepSleepSeconds"),
+                _safe_sleep_minutes(sleep_dto, "remSleepSeconds"),
+                _safe_sleep_minutes(sleep_dto, "lightSleepSeconds"),
+                _safe_sleep_minutes(sleep_dto, "awakeSleepSeconds"),
+                sleep_dto.get("sleepScores", {}).get("overall", {}).get("value"),
+                hrv.get("hrvSummary", {}).get("weeklyAvg") if hrv else None,
+                (
+                    stress.get("avgStressLevel")
+                    or stress.get("averageStressLevel")
+                    or stats.get("averageStressLevel")
+                )
+                if stress
+                else stats.get("averageStressLevel"),
+                stats.get("bodyBatteryChargedValue"),
+                stats.get("bodyBatteryDrainedValue"),
+                stats.get("floorsAscended"),
+                stats.get("intensityMinutesGoal"),
+                _extract_sleep_time(sleep_dto, "sleepStartTimestampLocal"),
+                _extract_sleep_time(sleep_dto, "sleepEndTimestampLocal"),
+                sleep_dto.get("sleepNeedInMinutes"),
+                _compute_sleep_debt(sleep_dto),
+                spo2_val,
+                respiration_val,
+                skin_temp_val,
+                weight_kg,
+                body_fat_pct,
+                datetime.now(timezone.utc).isoformat(),
+                data_quality,
+            ),
+        )
         db.commit()
         print(f"  Synced daily stats for {date_str}")
         return True
@@ -674,14 +688,17 @@ def backfill_skin_temp(client: Any, db: Any) -> None:
 
     cur = db.cursor()
     try:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT date FROM daily_metric
             WHERE user_id = %s
               AND skin_temp IS NULL
               AND total_sleep_minutes IS NOT NULL
               AND date >= CURRENT_DATE - INTERVAL '90 days'
             ORDER BY date DESC
-        """, (USER_ID,))
+        """,
+            (USER_ID,),
+        )
         backfill_dates = [row[0] for row in cur.fetchall()]
     except Exception as e:
         db.rollback()
@@ -704,7 +721,9 @@ def backfill_skin_temp(client: Any, db: Any) -> None:
             )
             all_synced = sync_daily_stats(client, db, date_str) and all_synced
         if not all_synced:
-            print("  Skin temp backfill incomplete; marker not written", file=sys.stderr)
+            print(
+                "  Skin temp backfill incomplete; marker not written", file=sys.stderr
+            )
             return
 
     try:
@@ -764,28 +783,28 @@ def _upsert_activity(cur, act: dict, act_id: str) -> None:
     """
     hr_zones = None
     if act.get("hrTimeInZone_1") is not None:
-        hr_zones = json.dumps({
-            "zone1": round((act.get("hrTimeInZone_1", 0) or 0) / 60, 1),
-            "zone2": round((act.get("hrTimeInZone_2", 0) or 0) / 60, 1),
-            "zone3": round((act.get("hrTimeInZone_3", 0) or 0) / 60, 1),
-            "zone4": round((act.get("hrTimeInZone_4", 0) or 0) / 60, 1),
-            "zone5": round((act.get("hrTimeInZone_5", 0) or 0) / 60, 1),
-        })
+        hr_zones = json.dumps(
+            {
+                "zone1": round((act.get("hrTimeInZone_1", 0) or 0) / 60, 1),
+                "zone2": round((act.get("hrTimeInZone_2", 0) or 0) / 60, 1),
+                "zone3": round((act.get("hrTimeInZone_3", 0) or 0) / 60, 1),
+                "zone4": round((act.get("hrTimeInZone_4", 0) or 0) / 60, 1),
+                "zone5": round((act.get("hrTimeInZone_5", 0) or 0) / 60, 1),
+            }
+        )
 
     avg_hr = act.get("averageHR")
     duration_min = (act.get("duration", 0) or 0) / 60
     trimp = None
     if avg_hr and duration_min > 0:
         hr_ratio = avg_hr / 200.0
-        trimp = round(duration_min * hr_ratio * 0.64 * (1.92 ** hr_ratio), 1)
+        trimp = round(duration_min * hr_ratio * 0.64 * (1.92**hr_ratio), 1)
 
-    avg_cadence = (
-        act.get("averageRunningCadenceInStepsPerMinute")
-        or act.get("averageBikingCadenceInRevPerMinute")
+    avg_cadence = act.get("averageRunningCadenceInStepsPerMinute") or act.get(
+        "averageBikingCadenceInRevPerMinute"
     )
-    max_cadence = (
-        act.get("maxRunningCadenceInStepsPerMinute")
-        or act.get("maxBikingCadenceInRevPerMinute")
+    max_cadence = act.get("maxRunningCadenceInStepsPerMinute") or act.get(
+        "maxBikingCadenceInRevPerMinute"
     )
 
     activity_type = act.get("activityType") or {}
@@ -795,17 +814,18 @@ def _upsert_activity(cur, act: dict, act_id: str) -> None:
     # Running dynamics (present on running activity summaries; None otherwise).
     # Columns already exist in the Drizzle schema but were never populated.
     running_dynamics = (
-        act.get("avgGroundContactTime"),       # ms
-        act.get("avgGroundContactBalance"),     # % (L/R)
-        act.get("avgVerticalOscillation"),      # cm
-        act.get("avgVerticalRatio"),            # %
-        act.get("avgStrideLength"),             # cm
-        act.get("avgRespirationRate"),          # brpm
-        act.get("elevationGain"),               # m
-        act.get("elevationLoss"),               # m
+        act.get("avgGroundContactTime"),  # ms
+        act.get("avgGroundContactBalance"),  # % (L/R)
+        act.get("avgVerticalOscillation"),  # cm
+        act.get("avgVerticalRatio"),  # %
+        act.get("avgStrideLength"),  # cm
+        act.get("avgRespirationRate"),  # brpm
+        act.get("elevationGain"),  # m
+        act.get("elevationLoss"),  # m
     )
 
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO activity (
             user_id, garmin_activity_id, sport_type, sub_type,
             started_at, duration_minutes, distance_meters,
@@ -838,32 +858,34 @@ def _upsert_activity(cur, act: dict, act_id: str) -> None:
             elevation_loss = COALESCE(EXCLUDED.elevation_loss, activity.elevation_loss),
             synced_at = EXCLUDED.synced_at,
             raw_garmin_data = EXCLUDED.raw_garmin_data
-    """, (
-        USER_ID,
-        act_id,
-        activity_type.get("typeKey", "other"),
-        activity_type.get("typeId", ""),
-        _normalize_started_at(act),
-        duration_min,
-        act.get("distance"),
-        avg_hr,
-        act.get("maxHR"),
-        act.get("calories"),
-        act.get("averageSpeed"),
-        act.get("aerobicTrainingEffect"),
-        act.get("anaerobicTrainingEffect"),
-        hr_zones,
-        trimp,
-        act.get("activityTrainingLoad"),
-        act.get("averagePower"),
-        act.get("normPower"),
-        act.get("maxPower"),
-        avg_cadence,
-        max_cadence,
-        *running_dynamics,
-        datetime.now(timezone.utc).isoformat(),
-        json.dumps(act),
-    ))
+    """,
+        (
+            USER_ID,
+            act_id,
+            activity_type.get("typeKey", "other"),
+            activity_type.get("typeId", ""),
+            _normalize_started_at(act),
+            duration_min,
+            act.get("distance"),
+            avg_hr,
+            act.get("maxHR"),
+            act.get("calories"),
+            act.get("averageSpeed"),
+            act.get("aerobicTrainingEffect"),
+            act.get("anaerobicTrainingEffect"),
+            hr_zones,
+            trimp,
+            act.get("activityTrainingLoad"),
+            act.get("averagePower"),
+            act.get("normPower"),
+            act.get("maxPower"),
+            avg_cadence,
+            max_cadence,
+            *running_dynamics,
+            datetime.now(timezone.utc).isoformat(),
+            json.dumps(act),
+        ),
+    )
 
 
 def sync_activities(client, db, days=7):
@@ -908,8 +930,11 @@ def sync_activities(client, db, days=7):
             # Defensive: garminconnect occasionally wraps responses as
             # [[{...}, {...}]] (single-element list of a list). Unwrap so the
             # iteration below doesn't blow up silently on AttributeError.
-            if isinstance(activities, list) and len(activities) == 1 and \
-                    isinstance(activities[0], list):
+            if (
+                isinstance(activities, list)
+                and len(activities) == 1
+                and isinstance(activities[0], list)
+            ):
                 activities = activities[0]
             if not isinstance(activities, list):
                 print(
@@ -927,15 +952,12 @@ def sync_activities(client, db, days=7):
                     batch_skipped += 1
                     skipped += 1
                     print(
-                        f"  Skipping non-dict activity entry: "
-                        f"{type(act).__name__}",
+                        f"  Skipping non-dict activity entry: {type(act).__name__}",
                         file=sys.stderr,
                     )
                     continue
                 act_id_raw = act.get("activityId")
-                act_id = (
-                    str(act_id_raw) if act_id_raw not in (None, "") else ""
-                )
+                act_id = str(act_id_raw) if act_id_raw not in (None, "") else ""
                 if not act_id:
                     batch_skipped += 1
                     skipped += 1
@@ -1010,7 +1032,8 @@ def backfill_activity_started_at_utc(db):
     """
     marker = os.path.join(TOKEN_DIR, ".activity_started_at_utc_backfill_done")
     if os.path.exists(marker) and not os.environ.get(
-            "PULSECOACH_REBACKFILL_STARTED_AT"):
+        "PULSECOACH_REBACKFILL_STARTED_AT"
+    ):
         return
 
     cur = db.cursor()
@@ -1056,13 +1079,16 @@ def backfill_from_raw_json(db):
     """Extract hr_zone_minutes, strain_score, trimp_score from stored raw_garmin_data."""
     cur = db.cursor()
     try:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT id, raw_garmin_data, avg_hr, duration_minutes
             FROM activity
             WHERE user_id = %s
               AND raw_garmin_data IS NOT NULL
               AND (hr_zone_minutes IS NULL OR strain_score IS NULL)
-        """, (USER_ID,))
+        """,
+            (USER_ID,),
+        )
         rows = cur.fetchall()
         if not rows:
             return
@@ -1071,14 +1097,21 @@ def backfill_from_raw_json(db):
         # Pre-fetch latest resting HR to avoid N+1 query in activity loop
         cached_resting_hr = 60  # fallback
         try:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT resting_hr FROM daily_metric
                 WHERE user_id = %s AND resting_hr IS NOT NULL
                 ORDER BY date DESC LIMIT 1
-            """, (USER_ID,))
+            """,
+                (USER_ID,),
+            )
             rhr_row = cur.fetchone()
             if rhr_row:
-                cached_resting_hr = rhr_row[0] if isinstance(rhr_row, tuple) else rhr_row.get("resting_hr")
+                cached_resting_hr = (
+                    rhr_row[0]
+                    if isinstance(rhr_row, tuple)
+                    else rhr_row.get("resting_hr")
+                )
         except Exception:
             pass
 
@@ -1089,13 +1122,15 @@ def backfill_from_raw_json(db):
             hr_zones = None
             z1 = act.get("hrTimeInZone_1")
             if z1 is not None:
-                hr_zones = json.dumps({
-                    "zone1": round((act.get("hrTimeInZone_1", 0) or 0) / 60, 1),
-                    "zone2": round((act.get("hrTimeInZone_2", 0) or 0) / 60, 1),
-                    "zone3": round((act.get("hrTimeInZone_3", 0) or 0) / 60, 1),
-                    "zone4": round((act.get("hrTimeInZone_4", 0) or 0) / 60, 1),
-                    "zone5": round((act.get("hrTimeInZone_5", 0) or 0) / 60, 1),
-                })
+                hr_zones = json.dumps(
+                    {
+                        "zone1": round((act.get("hrTimeInZone_1", 0) or 0) / 60, 1),
+                        "zone2": round((act.get("hrTimeInZone_2", 0) or 0) / 60, 1),
+                        "zone3": round((act.get("hrTimeInZone_3", 0) or 0) / 60, 1),
+                        "zone4": round((act.get("hrTimeInZone_4", 0) or 0) / 60, 1),
+                        "zone5": round((act.get("hrTimeInZone_5", 0) or 0) / 60, 1),
+                    }
+                )
 
             # Garmin training load
             strain = act.get("activityTrainingLoad")
@@ -1111,13 +1146,16 @@ def backfill_from_raw_json(db):
                 trimp = round(duration_min * delta_ratio * math.exp(k * delta_ratio), 1)
 
             if hr_zones or strain or trimp:
-                cur.execute("""
+                cur.execute(
+                    """
                     UPDATE activity SET
                         hr_zone_minutes = COALESCE(%s, hr_zone_minutes),
                         strain_score = COALESCE(%s, strain_score),
                         trimp_score = COALESCE(%s, trimp_score)
                     WHERE id = %s
-                """, (hr_zones, strain, trimp, row_id))
+                """,
+                    (hr_zones, strain, trimp, row_id),
+                )
                 updated += 1
 
         db.commit()
@@ -1138,13 +1176,16 @@ def backfill_stress_and_sleep(client, db):
 
     cur = db.cursor()
     try:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT date FROM daily_metric
             WHERE user_id = %s
               AND (stress_score IS NULL OR sleep_start_time IS NULL)
             ORDER BY date DESC
             LIMIT 365
-        """, (USER_ID,))
+        """,
+            (USER_ID,),
+        )
         dates = [row[0] for row in cur.fetchall()]
         if not dates:
             Path(MARKER).touch()
@@ -1171,7 +1212,9 @@ def backfill_stress_and_sleep(client, db):
 
                 stress_val = None
                 if stress:
-                    stress_val = stress.get("avgStressLevel") or stress.get("averageStressLevel")
+                    stress_val = stress.get("avgStressLevel") or stress.get(
+                        "averageStressLevel"
+                    )
                 if not stress_val and stats:
                     stress_val = stats.get("averageStressLevel")
 
@@ -1180,7 +1223,8 @@ def backfill_stress_and_sleep(client, db):
                 sleep_need = sleep_dto.get("sleepNeedInMinutes")
                 sleep_debt = _compute_sleep_debt(sleep_dto)
 
-                cur.execute("""
+                cur.execute(
+                    """
                     UPDATE daily_metric SET
                         stress_score = COALESCE(%s, stress_score),
                         sleep_start_time = COALESCE(%s, sleep_start_time),
@@ -1188,8 +1232,17 @@ def backfill_stress_and_sleep(client, db):
                         sleep_need_minutes = COALESCE(%s, sleep_need_minutes),
                         sleep_debt_minutes = COALESCE(%s, sleep_debt_minutes)
                     WHERE user_id = %s AND date = %s
-                """, (stress_val, sleep_start, sleep_end, sleep_need, sleep_debt,
-                      USER_ID, date_str))
+                """,
+                    (
+                        stress_val,
+                        sleep_start,
+                        sleep_end,
+                        sleep_need,
+                        sleep_debt,
+                        USER_ID,
+                        date_str,
+                    ),
+                )
                 if stress_val or sleep_start:
                     filled += 1
             except Exception:
@@ -1229,7 +1282,7 @@ def sync_vo2max(client, db, days=7):
         # historical dates outside the current sync window.
         db.commit()
 
-        cutoff = (_user_today() - timedelta(days=days))
+        cutoff = _user_today() - timedelta(days=days)
         today = _user_today()
 
         # --- Primary: Garmin's official VO2max from max-metrics API ---
@@ -1271,14 +1324,16 @@ def sync_vo2max(client, db, days=7):
                 entries = metrics if isinstance(metrics, list) else [metrics]
                 inserted_for_date = 0
                 for entry in entries:
-                    vo2 = entry.get("generic", {}).get("vo2MaxPreciseValue") \
-                        or entry.get("generic", {}).get("vo2MaxValue")
+                    vo2 = entry.get("generic", {}).get(
+                        "vo2MaxPreciseValue"
+                    ) or entry.get("generic", {}).get("vo2MaxValue")
                     sport = "general"
 
                     if not vo2:
                         # Try cycling-specific
-                        vo2 = entry.get("cycling", {}).get("vo2MaxPreciseValue") \
-                            or entry.get("cycling", {}).get("vo2MaxValue")
+                        vo2 = entry.get("cycling", {}).get(
+                            "vo2MaxPreciseValue"
+                        ) or entry.get("cycling", {}).get("vo2MaxValue")
                         if vo2:
                             sport = "cycling"
 
@@ -1290,14 +1345,17 @@ def sync_vo2max(client, db, days=7):
                         continue
 
                     metric_date = entry.get("calendarDate", date_str)
-                    cur.execute("""
+                    cur.execute(
+                        """
                         INSERT INTO vo2max_estimate (
                             user_id, date, sport, value, source
                         ) VALUES (%s, %s, %s, %s, %s)
                         ON CONFLICT (user_id, date, sport) DO UPDATE SET
                             value = EXCLUDED.value,
                             source = EXCLUDED.source
-                    """, (USER_ID, metric_date, sport, round(vo2, 1), "garmin_official"))
+                    """,
+                        (USER_ID, metric_date, sport, round(vo2, 1), "garmin_official"),
+                    )
                     garmin_count += 1
                     inserted_for_date += 1
 
@@ -1341,7 +1399,8 @@ def sync_vo2max(client, db, days=7):
         cur2 = db.cursor()
         try:
             # Find dates in the sync window that have no garmin_official record
-            cur2.execute("""
+            cur2.execute(
+                """
                 SELECT dm.date, dm.resting_hr
                 FROM daily_metric dm
                 WHERE dm.user_id = %s AND dm.date >= %s
@@ -1354,7 +1413,9 @@ def sync_vo2max(client, db, days=7):
                         AND ve.source = 'garmin_official'
                   )
                 ORDER BY dm.date DESC
-            """, (USER_ID, cutoff.isoformat()))
+            """,
+                (USER_ID, cutoff.isoformat()),
+            )
 
             # Use fetchmany() batching to handle large sync windows gracefully
             missing_dates: list[tuple] = []
@@ -1398,19 +1459,24 @@ def sync_vo2max(client, db, days=7):
                 else:
                     uth_factor = 11.5
 
-                print(f"  Uth fallback: age={user_age}, HRmax={age_predicted_max_hr:.0f}, factor={uth_factor}")
+                print(
+                    f"  Uth fallback: age={user_age}, HRmax={age_predicted_max_hr:.0f}, factor={uth_factor}"
+                )
 
                 for d_date, resting_hr in missing_dates:
                     vo2 = uth_factor * (age_predicted_max_hr / resting_hr)
                     if vo2 < 20 or vo2 > 90:
                         continue
-                    cur2.execute("""
+                    cur2.execute(
+                        """
                         INSERT INTO vo2max_estimate (
                             user_id, date, sport, value, source
                         ) VALUES (%s, %s, %s, %s, %s)
                         ON CONFLICT (user_id, date, sport) DO UPDATE SET
                             value = EXCLUDED.value, source = EXCLUDED.source
-                    """, (USER_ID, d_date, "general", round(vo2, 1), "uth_method"))
+                    """,
+                        (USER_ID, d_date, "general", round(vo2, 1), "uth_method"),
+                    )
                     uth_count += 1
                 db.commit()
 
@@ -1461,11 +1527,13 @@ def sync_training_readiness(client, db, days=7):
         for days_ago in range(days):
             date_str = (today - timedelta(days=days_ago)).isoformat()
             try:
-                data = _first_dict(_garmin_api_call(
-                    f"get_training_readiness for {date_str}",
-                    client.get_training_readiness,
-                    date_str,
-                ))
+                data = _first_dict(
+                    _garmin_api_call(
+                        f"get_training_readiness for {date_str}",
+                        client.get_training_readiness,
+                        date_str,
+                    )
+                )
                 if not data:
                     continue
 
@@ -1496,8 +1564,13 @@ def sync_training_readiness(client, db, days=7):
                 # Extract contributing factors (Garmin's 6-factor breakdown)
                 factors = {}
                 for key in [
-                    "sleepScore", "recoveryTime", "hrvStatus", "acuteLoad",
-                    "stressHistory", "bodyBattery", "sleepHistory",
+                    "sleepScore",
+                    "recoveryTime",
+                    "hrvStatus",
+                    "acuteLoad",
+                    "stressHistory",
+                    "bodyBattery",
+                    "sleepHistory",
                 ]:
                     val = data.get(key)
                     if val is not None:
@@ -1517,26 +1590,33 @@ def sync_training_readiness(client, db, days=7):
                     else None
                 )
 
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT INTO daily_metric (user_id, date)
                     VALUES (%s, %s)
                     ON CONFLICT (user_id, date) DO NOTHING
-                """, (USER_ID, date_str))
+                """,
+                    (USER_ID, date_str),
+                )
 
-                cur.execute("""
+                cur.execute(
+                    """
                     UPDATE daily_metric SET
                         garmin_training_readiness = %s,
                         garmin_training_readiness_level = %s,
                         garmin_readiness_factors = %s,
                         garmin_recovery_hours = COALESCE(%s, garmin_recovery_hours)
                     WHERE user_id = %s AND date = %s
-                """, (
-                    round(score),
-                    level.lower() if isinstance(level, str) else str(level),
-                    json.dumps(factors) if factors else None,
-                    recovery_hours,
-                    USER_ID, date_str,
-                ))
+                """,
+                    (
+                        round(score),
+                        level.lower() if isinstance(level, str) else str(level),
+                        json.dumps(factors) if factors else None,
+                        recovery_hours,
+                        USER_ID,
+                        date_str,
+                    ),
+                )
                 synced += 1
             except Exception as e:
                 print(f"  Training readiness unavailable for {date_str}: {e}")
@@ -1561,11 +1641,13 @@ def sync_training_status(client, db, days=7):
         for days_ago in range(days):
             date_str = (today - timedelta(days=days_ago)).isoformat()
             try:
-                data = _first_dict(_garmin_api_call(
-                    f"get_training_status for {date_str}",
-                    client.get_training_status,
-                    date_str,
-                ))
+                data = _first_dict(
+                    _garmin_api_call(
+                        f"get_training_status for {date_str}",
+                        client.get_training_status,
+                        date_str,
+                    )
+                )
                 if not data:
                     continue
 
@@ -1609,19 +1691,27 @@ def sync_training_status(client, db, days=7):
                 )
                 load_focus = (
                     inner_status.get("trainingLoadFocus")
-                    or (load_dto.get("trainingLoadFocus")
-                        if isinstance(load_dto, dict) else None)
+                    or (
+                        load_dto.get("trainingLoadFocus")
+                        if isinstance(load_dto, dict)
+                        else None
+                    )
                     or data.get("trainingLoadFocus")
                     or data.get("loadFocus")
                 )
 
                 # Load distribution lives on the load-balance DTO when present.
                 load_dist = {}
-                load_source = load_dto if isinstance(load_dto, dict) and load_dto else data
+                load_source = (
+                    load_dto if isinstance(load_dto, dict) and load_dto else data
+                )
                 for key in [
-                    "lowAerobicTrainingLoad", "highAerobicTrainingLoad",
-                    "anaerobicTrainingLoad", "lowAerobicTrainingLoadPercentage",
-                    "highAerobicTrainingLoadPercentage", "anaerobicTrainingLoadPercentage",
+                    "lowAerobicTrainingLoad",
+                    "highAerobicTrainingLoad",
+                    "anaerobicTrainingLoad",
+                    "lowAerobicTrainingLoadPercentage",
+                    "highAerobicTrainingLoadPercentage",
+                    "anaerobicTrainingLoadPercentage",
                 ]:
                     val = load_source.get(key)
                     if val is not None:
@@ -1634,8 +1724,7 @@ def sync_training_status(client, db, days=7):
                     recovery_min = data.get("recoveryTimeInMinutes")
                 recovery_hrs = (
                     round(recovery_min / 60.0, 1)
-                    if isinstance(recovery_min, (int, float))
-                    and recovery_min >= 0
+                    if isinstance(recovery_min, (int, float)) and recovery_min >= 0
                     else None
                 )
 
@@ -1647,24 +1736,31 @@ def sync_training_status(client, db, days=7):
                 ):
                     continue
 
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT INTO daily_metric (user_id, date)
                     VALUES (%s, %s)
                     ON CONFLICT (user_id, date) DO NOTHING
-                """, (USER_ID, date_str))
+                """,
+                    (USER_ID, date_str),
+                )
 
-                cur.execute("""
+                cur.execute(
+                    """
                     UPDATE daily_metric SET
                         garmin_training_status = COALESCE(%s, garmin_training_status),
                         garmin_load_focus = COALESCE(%s, garmin_load_focus),
                         garmin_recovery_hours = COALESCE(%s, garmin_recovery_hours)
                     WHERE user_id = %s AND date = %s
-                """, (
-                    str(status).upper() if status else None,
-                    json.dumps(load_dist) if load_dist else None,
-                    recovery_hrs,
-                    USER_ID, date_str,
-                ))
+                """,
+                    (
+                        str(status).upper() if status else None,
+                        json.dumps(load_dist) if load_dist else None,
+                        recovery_hrs,
+                        USER_ID,
+                        date_str,
+                    ),
+                )
                 synced += 1
             except Exception as e:
                 print(f"  Training status unavailable for {date_str}: {e}")
@@ -1688,7 +1784,9 @@ def main():
         _clear_sync_status()
         return
 
-    print(f"Starting Garmin sync at {datetime.now(timezone.utc).isoformat()} (timezone: {USER_TZ})")
+    print(
+        f"Starting Garmin sync at {datetime.now(timezone.utc).isoformat()} (timezone: {USER_TZ})"
+    )
     _write_sync_status("starting", "Authenticating with Garmin...")
     client = get_client()
     if client is None:
@@ -1713,8 +1811,9 @@ def main():
     today = _user_today()
     for days_ago in range(sync_days):
         date_str = (today - timedelta(days=days_ago)).isoformat()
-        _write_sync_status("daily_stats", f"Syncing {date_str}",
-                           int((days_ago / sync_days) * 50))
+        _write_sync_status(
+            "daily_stats", f"Syncing {date_str}", int((days_ago / sync_days) * 50)
+        )
         sync_daily_stats(client, db, date_str)
         if (
             initial_backfill
@@ -1841,9 +1940,7 @@ def main():
             # status file doesn't deadlock subsequent runs.
             try:
                 with open(status_file, "w") as f:
-                    json.dump(
-                        {"running": False, "error": str(exc)}, f
-                    )
+                    json.dump({"running": False, "error": str(exc)}, f)
             except OSError:
                 pass
             print(f"Warning: failed to chain metrics-compute: {exc}")

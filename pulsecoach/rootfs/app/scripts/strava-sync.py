@@ -10,7 +10,6 @@ by strava_activity_id to coexist with Garmin-sourced activities.
 
 import json
 import os
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,7 +19,9 @@ import psycopg2
 import requests
 
 # ── Configuration ────────────────────────────────────────────────────────────
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres@127.0.0.1:5432/pulsecoach")
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL", "postgresql://postgres@127.0.0.1:5432/pulsecoach"
+)
 TOKEN_DIR = Path("/data/strava-tokens")
 TOKEN_FILE = TOKEN_DIR / "strava_tokens.json"
 STRAVA_API_BASE = "https://www.strava.com/api/v3"
@@ -59,12 +60,16 @@ def _save_tokens(tokens):
 
 def refresh_access_token(client_id, client_secret, refresh_token):
     """Exchange refresh token for a new access token."""
-    resp = requests.post(STRAVA_TOKEN_URL, data={
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token,
-    }, timeout=30)
+    resp = requests.post(
+        STRAVA_TOKEN_URL,
+        data={
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        },
+        timeout=30,
+    )
     resp.raise_for_status()
     data = resp.json()
     tokens = {
@@ -117,12 +122,18 @@ def fetch_activities(access_token, after_epoch=None, per_page=100):
 def _map_sport_type(strava_type):
     """Map Strava activity type to normalized sport type."""
     mapping = {
-        "Run": "running", "Trail Run": "trail_running",
-        "Walk": "walking", "Hike": "hiking",
-        "Ride": "cycling", "VirtualRide": "cycling",
-        "Swim": "swimming", "Yoga": "yoga",
-        "WeightTraining": "strength", "Workout": "other",
-        "Rowing": "rowing", "Elliptical": "elliptical",
+        "Run": "running",
+        "Trail Run": "trail_running",
+        "Walk": "walking",
+        "Hike": "hiking",
+        "Ride": "cycling",
+        "VirtualRide": "cycling",
+        "Swim": "swimming",
+        "Yoga": "yoga",
+        "WeightTraining": "strength",
+        "Workout": "other",
+        "Rowing": "rowing",
+        "Elliptical": "elliptical",
     }
     return mapping.get(strava_type, "other")
 
@@ -177,7 +188,8 @@ def migrate_legacy_strava_user_id(db: Any) -> None:
 
     cur = db.cursor()
     try:
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE activity
             SET user_id = %s
             WHERE user_id = %s
@@ -185,7 +197,9 @@ def migrate_legacy_strava_user_id(db: Any) -> None:
                 source_platform = 'strava'
                 OR strava_activity_id IS NOT NULL
               )
-        """, (USER_ID, LEGACY_USER_ID))
+        """,
+            (USER_ID, LEGACY_USER_ID),
+        )
         migrated = getattr(cur, "rowcount", 0)
         if not isinstance(migrated, int):
             migrated = 0
@@ -224,7 +238,8 @@ def sync_activities(db, activities):
 
         try:
             cur.execute("SAVEPOINT strava_activity_upsert")
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO activity (
                     user_id, strava_activity_id, sport_type,
                     started_at, duration_minutes, distance_meters,
@@ -245,14 +260,25 @@ def sync_activities(db, activities):
                     avg_power = EXCLUDED.avg_power,
                     avg_cadence = EXCLUDED.avg_cadence,
                     synced_at = EXCLUDED.synced_at
-            """, (
-                USER_ID, strava_id, sport,
-                started_at, duration_min, distance_m,
-                avg_hr, max_hr, calories,
-                avg_pace, trimp,
-                act.get("average_watts"), act.get("average_cadence"),
-                "strava", datetime.now(timezone.utc).isoformat(),
-            ))
+            """,
+                (
+                    USER_ID,
+                    strava_id,
+                    sport,
+                    started_at,
+                    duration_min,
+                    distance_m,
+                    avg_hr,
+                    max_hr,
+                    calories,
+                    avg_pace,
+                    trimp,
+                    act.get("average_watts"),
+                    act.get("average_cadence"),
+                    "strava",
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
             cur.execute("RELEASE SAVEPOINT strava_activity_upsert")
             synced += 1
         except Exception as e:
