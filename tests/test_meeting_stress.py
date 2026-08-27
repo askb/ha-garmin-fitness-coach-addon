@@ -398,12 +398,16 @@ def test_exercise_spans_pads_and_merges():
     # TZ is forced because CI runs in UTC, where the two are indistinguishable.
     import time
 
+    previous = os.environ.get("TZ")
     os.environ["TZ"] = "Asia/Kolkata"
     time.tzset()
     try:
         naive = ms.exercise_spans([(hike.replace(tzinfo=None), 10)])
     finally:
-        os.environ.pop("TZ", None)
+        if previous is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = previous
         time.tzset()
     assert naive[0][0] == int(hike.timestamp()), naive
 

@@ -19,7 +19,6 @@
 from __future__ import annotations
 
 import argparse
-import bisect
 import csv
 import json
 import bisect
@@ -158,7 +157,13 @@ def fetch_exercise_spans(user_id: str = USER_ID) -> list[Span]:
             )
             return exercise_spans(cur.fetchall())
     except Exception as exc:  # noqa: BLE001 - any DB failure degrades the same way
-        print(f"Could not read activities ({exc}) — no exercise filtering.", file=sys.stderr)
+        # Only the exception type: psycopg2 echoes the whole DSN back for a
+        # malformed connection string, and DATABASE_URL can carry a password.
+        print(
+            f"Could not read activities ({type(exc).__name__}) — "
+            "no exercise filtering.",
+            file=sys.stderr,
+        )
         return []
 
 
