@@ -7,6 +7,7 @@ Run: python -m pytest tests/test_meeting_stress.py   (or: python tests/test_meet
 """
 
 import importlib.util
+import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -536,6 +537,79 @@ def test_fetch_exercise_spans_queries_the_user(monkeypatch):
             int(DAY.replace(hour=9).timestamp()) + (30 + ms.EXERCISE_COOLDOWN_MIN) * 60,
         )
     ], spans
+
+
+def test_duplicate_events_do_not_vote_twice():
+    """A meeting present twice in an events file must count once.
+
+    gcal.fetch_events de-duplicates on iCalUID, but --events and the persisted
+    fallback have no such key, and a repeat inflates a person's sample count
+    into confidence the data does not support.
+    """
+    at = DAY.replace(hour=10)
+    series = _bump(_flat_series(DAY), at, 30, 8.0)
+    one = _meeting(at, 30, ["alice"], "standup")
+    deduped = ms.dedupe_events([one, dict(one), one])
+    assert len(deduped) == 1, deduped
+
+    # Same slot, different people is a genuinely different meeting.
+    other = _meeting(at, 30, ["bob"], "standup")
+    assert len(ms.dedupe_events([one, other])) == 2
+
+    # The key matches what scoring treats as identical, so the same window
+    # written two legal ways, or the same people in another order, is one
+    # meeting rather than two.
+    pair = _meeting(at, 30, ["alice", "bob"], "pairing")
+    zulu = dict(pair, start=pair["start"].replace("+00:00", "Z"))
+    reordered = dict(pair, attendees=["bob", "alice"])
+    assert len(ms.dedupe_events([pair, zulu])) == 1
+    assert len(ms.dedupe_events([pair, reordered])) == 1
+
+    # score_meetings drops falsy attendees, so a stray "" must not make a
+    # second copy look like a different meeting.
+    padded = dict(pair, attendees=["alice", "", "bob"])
+    assert len(ms.dedupe_events([pair, padded])) == 1
+
+    # The duplicate would otherwise be scored a second time.
+    assert len(ms.score_meetings([one, dict(one)], series)) == 2
+    assert len(ms.score_meetings(deduped, series)) == 1
+
+
+def test_main_dedupes_events_from_a_file(tmp_path, monkeypatch):
+    """The wiring, not just the helper: a duplicated --events file scores once."""
+    at = DAY.replace(hour=10)
+    one = _meeting(at, 30, ["alice"], "standup")
+    events_file = tmp_path / "events.json"
+    events_file.write_text(json.dumps([one, dict(one)]))
+
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "hr_2026-06-01.json").write_text(
+        json.dumps([[ts, bpm] for ts, bpm in _bump(_flat_series(DAY), at, 30, 8.0)])
+    )
+
+    # No linked calendar, no interactions file, no database.
+    monkeypatch.setattr(ms, "gcal_linked", lambda: False)
+    monkeypatch.setattr(ms, "load_interactions", lambda: [])
+    monkeypatch.setattr(ms, "fetch_exercise_spans", lambda *a, **kw: [])
+
+    out = tmp_path / "out"
+    out.mkdir()
+    rc = ms.main(
+        [
+            "--events",
+            str(events_file),
+            "--hr-cache",
+            str(cache),
+            "--outdir",
+            str(out),
+            "--no-color",
+        ]
+    )
+    assert rc == 0, rc
+    report = json.loads((out / "meeting_stress.json").read_text())
+    assert len(report["meetings"]) == 1, report["meetings"]
+    assert report["people"][0]["n"] == 1, report["people"]
 
 
 if __name__ == "__main__":

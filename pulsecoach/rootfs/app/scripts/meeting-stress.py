@@ -95,6 +95,38 @@ def _mean(xs: list[float]) -> float:
     return sum(xs) / len(xs)
 
 
+def dedupe_events(events: list[dict]) -> list[dict]:
+    """Drop repeats of the same meeting, keeping the first seen.
+
+    Events fetched from Google are already de-duplicated on ``iCalUID`` by
+    ``gcal.fetch_events``, which is the stronger key. That key is not available
+    on the paths that read events from a file (``--events`` and the persisted
+    fallback), where the only thing to match on is title and time. Left in,
+    every copy votes again and the regression reports a confidence it has not
+    earned: on the sibling Kridaka dataset 9 of 38 events were exact repeats
+    and the top-ranked person was entirely an artefact of them.
+    """
+    seen: set[tuple] = set()
+    out: list[dict] = []
+    for ev in events:
+        # The key mirrors the identity scoring uses: times through parse_ts,
+        # attendees sorted, and falsy attendees dropped the same way
+        # score_meetings drops them. Otherwise the same window written "...Z"
+        # and "...+00:00", the same people in another order, or one copy
+        # carrying a stray "" attendee, would each survive as a second vote.
+        key = (
+            ev.get("title"),
+            parse_ts(ev["start"]),
+            parse_ts(ev["end"]),
+            tuple(sorted(a for a in ev.get("attendees") or [] if a)),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(ev)
+    return out
+
+
 def exercise_spans(rows: list[tuple]) -> list[Span]:
     """Turn (started_at, duration_minutes) rows into padded exclusion windows.
 
@@ -751,6 +783,11 @@ def main(argv: list[str] | None = None) -> int:
                 events = json.load(f)
         else:
             ap.error("--events is required (or link Google Calendar / use --demo)")
+        # Google events arrive de-duplicated on iCalUID; the file paths above
+        # have no such key and no such guarantee. Interactions are merged after
+        # this: each carries its own id, and two logs of the same person are a
+        # deliberate act rather than one meeting counted twice.
+        events = dedupe_events(events)
         events += load_interactions()
         if args.fetch:
             dates = sorted({parse_ts(e["start"]) for e in events})
