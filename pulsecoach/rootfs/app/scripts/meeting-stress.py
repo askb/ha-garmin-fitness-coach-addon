@@ -22,6 +22,7 @@ import argparse
 import bisect
 import csv
 import json
+import bisect
 import logging
 import math
 import os
@@ -42,8 +43,18 @@ MIN_BASELINE_SAMPLES = 5  # need this many HR points to trust a baseline
 DEFAULT_LAMBDA = 1.0  # ridge penalty
 DEFAULT_MAX_ATTENDEES = 8  # bigger meetings (town-halls) are noise
 MIN_RANK_MEETINGS = 3  # below this, a person's rank is "thin data"
+# Heart rate does not drop the moment training stops. Measured on real data it
+# ran 6-9 bpm above a comparable resting window for at least 30 minutes after
+# the activity ended, so each activity's exclusion window is padded.
+EXERCISE_COOLDOWN_MIN = 15
+
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL", "postgresql://postgres@127.0.0.1:5432/pulsecoach"
+)
+USER_ID = os.environ.get("GARMIN_USER_ID", "seed-user-001")
 
 HrSeries = list[tuple[int, float]]  # (epoch_seconds, bpm), sorted by ts
+Span = tuple[int, int]  # (start_epoch, end_epoch), half-open
 
 
 # --------------------------------------------------------------------------- #
@@ -85,6 +96,86 @@ def _mean(xs: list[float]) -> float:
     return sum(xs) / len(xs)
 
 
+def exercise_spans(rows: list[tuple]) -> list[Span]:
+    """Turn (started_at, duration_minutes) rows into padded exclusion windows.
+
+    Kept free of database access so the rule can be tested directly. ``started_at``
+    is whatever psycopg2 hands back for a ``timestamptz`` column: an aware
+    ``datetime``. Rows missing either field are dropped rather than guessed at.
+    """
+    spans: list[Span] = []
+    for started_at, duration_minutes in rows:
+        if started_at is None or duration_minutes is None:
+            continue
+        if started_at.tzinfo is None:
+            # Defensive: a naive value would otherwise be read as local time.
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        start = int(started_at.timestamp())
+        end = start + int(float(duration_minutes) * 60) + EXERCISE_COOLDOWN_MIN * 60
+        if end > start:
+            spans.append((start, end))
+    spans.sort()
+    # Merge overlaps: a walk recorded inside a longer hike, or two devices
+    # logging the same session, would otherwise leave the shorter span last in
+    # sorted order and hide the longer one from the lookup in drop_spans.
+    merged: list[Span] = []
+    for start, end in spans:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def fetch_exercise_spans(user_id: str = USER_ID) -> list[Span]:
+    """Activity windows for `user_id`, or [] if the database is unreachable.
+
+    The board is worth more with a stale exclusion list than not at all, so a
+    missing driver or a down database degrades to "no exercise filtering" with
+    a warning rather than taking the whole report down.
+    """
+    try:
+        import psycopg2
+    except ImportError:
+        print(
+            "psycopg2 unavailable — meetings overlapping workouts will be scored "
+            "as if the heart rate were social.",
+            file=sys.stderr,
+        )
+        return []
+    try:
+        with psycopg2.connect(DATABASE_URL) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT started_at, duration_minutes
+                FROM activity
+                WHERE user_id = %s
+                  AND started_at IS NOT NULL
+                  AND duration_minutes IS NOT NULL
+                ORDER BY started_at ASC
+                """,
+                (user_id,),
+            )
+            return exercise_spans(cur.fetchall())
+    except Exception as exc:  # noqa: BLE001 - any DB failure degrades the same way
+        print(f"Could not read activities ({exc}) — no exercise filtering.", file=sys.stderr)
+        return []
+
+
+def drop_spans(series: HrSeries, spans: list[Span]) -> HrSeries:
+    """Heart rate with every sample inside an exclusion window removed."""
+    if not spans:
+        return series
+    keep: HrSeries = []
+    starts = [s for s, _ in spans]
+    for ts, bpm in series:
+        i = bisect.bisect_right(starts, ts) - 1
+        if i >= 0 and ts < spans[i][1]:
+            continue
+        keep.append((ts, bpm))
+    return keep
+
+
 def _pstdev(xs: list[float]) -> float:
     m = _mean(xs)
     return math.sqrt(sum((x - m) ** 2 for x in xs) / len(xs))
@@ -98,6 +189,7 @@ def score_meetings(
     series: HrSeries,
     max_attendees: int = DEFAULT_MAX_ATTENDEES,
     skipped: list[dict] | None = None,
+    exercise: list[Span] | None = None,
 ) -> list[dict]:
     """Score each usable meeting vs its local baseline. Returns rows with dbpm/z/elev.
 
@@ -139,8 +231,11 @@ def score_meetings(
         if not meeting:
             # No HR inside the meeting window — usually the window isn't synced
             # yet (e.g. an interaction logged for "right now"). Resolvable by a
-            # Garmin sync + re-run.
-            _skip(ev, attendees, "no_hr")
+            # Garmin sync + re-run. The exception is a meeting that overlapped a
+            # workout: its samples were removed on purpose, and telling the user
+            # to sync again would be wrong.
+            during = any(xs < e and s < xe for xs, xe in exercise or [])
+            _skip(ev, attendees, "during_exercise" if during else "no_hr")
             continue
         # baseline = surrounding window minus *every* meeting (incl. this one)
         base = _bpm_baseline(series, s - win, e + win, intervals)
@@ -294,7 +389,9 @@ def summarize_skipped(skipped: list[dict]) -> dict:
     window yet — resolvable by a sync + re-run. ``thin_baseline`` (too little
     surrounding quiet time, e.g. back-to-back meetings) and structural skips
     (solo / town-hall / all-day) are counted in ``by_reason`` but not surfaced
-    as "wait for sync", since waiting won't fix them.
+    as "wait for sync", since waiting won't fix them. ``during_exercise`` is
+    likewise counted in ``by_reason`` only: those samples were removed on
+    purpose because the user was training, so there is nothing to act on.
     """
     by_reason: dict[str, int] = {}
     for s in skipped:
@@ -669,8 +766,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
+    spans = [] if args.demo else fetch_exercise_spans()
+    if spans:
+        before = len(series)
+        series = drop_spans(series, spans)
+        print(
+            f"Excluded {before - len(series)} HR sample(s) inside "
+            f"{len(spans)} activity window(s)",
+            file=sys.stderr,
+        )
+
     skipped: list[dict] = []
-    meetings = score_meetings(events, series, args.max_attendees, skipped=skipped)
+    meetings = score_meetings(
+        events, series, args.max_attendees, skipped=skipped, exercise=spans
+    )
     summary = summarize_skipped(skipped)
     people = leaderboard(meetings, args.lam) if meetings else []
 
