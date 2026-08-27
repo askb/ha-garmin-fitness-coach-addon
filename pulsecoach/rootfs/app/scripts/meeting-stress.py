@@ -109,11 +109,15 @@ def dedupe_events(events: list[dict]) -> list[dict]:
     seen: set[tuple] = set()
     out: list[dict] = []
     for ev in events:
+        # Times go through parse_ts and attendees are sorted so the key matches
+        # what scoring actually treats as identical: the same window written
+        # "...Z" and "...+00:00", or the same people listed in another order,
+        # are one meeting.
         key = (
             ev.get("title"),
-            ev.get("start"),
-            ev.get("end"),
-            tuple(ev.get("attendees") or []),
+            parse_ts(ev["start"]),
+            parse_ts(ev["end"]),
+            tuple(sorted(ev.get("attendees") or [])),
         )
         if key in seen:
             continue

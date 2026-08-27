@@ -556,6 +556,15 @@ def test_duplicate_events_do_not_vote_twice():
     other = _meeting(at, 30, ["bob"], "standup")
     assert len(ms.dedupe_events([one, other])) == 2
 
+    # The key matches what scoring treats as identical, so the same window
+    # written two legal ways, or the same people in another order, is one
+    # meeting rather than two.
+    pair = _meeting(at, 30, ["alice", "bob"], "pairing")
+    zulu = dict(pair, start=pair["start"].replace("+00:00", "Z"))
+    reordered = dict(pair, attendees=["bob", "alice"])
+    assert len(ms.dedupe_events([pair, zulu])) == 1
+    assert len(ms.dedupe_events([pair, reordered])) == 1
+
     # The duplicate would otherwise be scored a second time.
     assert len(ms.score_meetings([one, dict(one)], series)) == 2
     assert len(ms.score_meetings(deduped, series)) == 1
