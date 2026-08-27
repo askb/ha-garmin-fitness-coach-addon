@@ -7,6 +7,7 @@ Run: python -m pytest tests/test_meeting_stress.py   (or: python tests/test_meet
 """
 
 import importlib.util
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -354,12 +355,194 @@ def test_fetch_hr_refreshes_volatile_days(tmp_path, monkeypatch):
     )
 
 
+
+
+# --------------------------------------------------------------------------- #
+# Exercise exclusion
+# --------------------------------------------------------------------------- #
+def _flat_series(day: datetime, hours: int = 12, bpm: float = 62.0, step: int = 2):
+    """A quiet 2-minute HR backbone, so any bump below is unambiguous."""
+    start = int(day.replace(hour=6).timestamp())
+    return [(start + k * 60, bpm) for k in range(0, hours * 60, step)]
+
+
+def _bump(series, start: datetime, minutes: int, delta: float):
+    """Raise HR by `delta` over a window, the way a workout or a meeting does."""
+    s, e = int(start.timestamp()), int((start + timedelta(minutes=minutes)).timestamp())
+    return [(ts, bpm + delta if s <= ts < e else bpm) for ts, bpm in series]
+
+
+def _meeting(start: datetime, minutes: int, attendees: list[str], title: str = "m"):
+    return {
+        "start": start.isoformat(),
+        "end": (start + timedelta(minutes=minutes)).isoformat(),
+        "title": title,
+        "attendees": attendees,
+    }
+
+
+def test_exercise_spans_pads_and_merges():
+    """Cooldown is added, and a workout nested in a longer one collapses into it."""
+    hike, walk = DAY.replace(hour=9), DAY.replace(hour=9, minute=20)
+    spans = ms.exercise_spans([(hike, 60), (walk, 10)])
+    assert len(spans) == 1, spans
+    start, end = spans[0]
+    assert start == int(hike.timestamp())
+    # 60 minutes of hiking + the cooldown pad, with the nested walk absorbed.
+    assert end == start + (60 + ms.EXERCISE_COOLDOWN_MIN) * 60, spans
+
+    # Rows with missing fields are dropped, not guessed at.
+    assert ms.exercise_spans([(None, 30), (hike, None)]) == []
+
+    # A naive timestamp is read as UTC rather than as the machine's local time.
+    # TZ is forced because CI runs in UTC, where the two are indistinguishable.
+    import time
+
+    previous = os.environ.get("TZ")
+    os.environ["TZ"] = "Asia/Kolkata"
+    time.tzset()
+    try:
+        naive = ms.exercise_spans([(hike.replace(tzinfo=None), 10)])
+    finally:
+        if previous is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = previous
+        time.tzset()
+    assert naive[0][0] == int(hike.timestamp()), naive
+
+
+def test_drop_spans_removes_only_covered_samples():
+    series = _flat_series(DAY)
+    span = (
+        int(DAY.replace(hour=9).timestamp()),
+        int(DAY.replace(hour=10).timestamp()),
+    )
+    kept = ms.drop_spans(series, span and [span])
+    assert kept, "samples outside the window survive"
+    assert not [ts for ts, _ in kept if span[0] <= ts < span[1]], "window emptied"
+    assert len(kept) == len(series) - 30, (len(kept), len(series))  # 60min / 2min
+    assert ms.drop_spans(series, []) is series, "no spans is a no-op"
+
+
+def test_workout_hr_is_not_scored_as_a_person():
+    """A meeting overlapping a workout must not credit the attendee with the lift.
+
+    This is the loud half of the bug: on real data it made a lunchtime walk the
+    top "stressor" on the board.
+    """
+    workout = DAY.replace(hour=9)
+    series = _bump(_flat_series(DAY), workout, 45, 40.0)  # training HR
+    # A second, genuinely calm meeting so `alice` is scorable either way and the
+    # comparison is about the workout window, not about having no data at all.
+    events = [
+        _meeting(workout.replace(minute=10), 30, ["alice"], "walk overlap"),
+        _meeting(DAY.replace(hour=14), 30, ["alice"], "calm"),
+    ]
+
+    skipped: list[dict] = []
+    contaminated = ms.score_meetings(events, series, skipped=skipped)
+    assert max(r["dbpm"] for r in contaminated) > 20, contaminated
+
+    spans = ms.exercise_spans([(workout, 45)])
+    clean_skipped: list[dict] = []
+    clean = ms.score_meetings(
+        events, ms.drop_spans(series, spans), skipped=clean_skipped, exercise=spans
+    )
+    titles = [r["title"] for r in clean]
+    assert "walk overlap" not in titles, clean
+    reasons = {s["title"]: s["reason"] for s in clean_skipped}
+    assert reasons.get("walk overlap") == "during_exercise", clean_skipped
+    assert ms.summarize_skipped(clean_skipped)["by_reason"]["during_exercise"] == 1
+    # ...and it is NOT reported as the actionable "sync your watch" bucket.
+    assert ms.summarize_skipped(clean_skipped)["no_hr"] == 0
+
+
+def test_workout_in_baseline_window_does_not_mask_stress():
+    """The quiet half of the bug: training near a meeting inflates its baseline.
+
+    A raised baseline makes an ordinary meeting look *calming*, which is how a
+    real stressful meetup scored -0.3 instead of +10.
+    """
+    workout = DAY.replace(hour=9)
+    meeting_at = DAY.replace(hour=10, minute=30)  # inside the +/-90min baseline
+    series = _flat_series(DAY)
+    series = _bump(series, workout, 45, 40.0)  # workout
+    series = _bump(series, meeting_at, 30, 8.0)  # genuinely elevated meeting
+    events = [_meeting(meeting_at, 30, ["alice"], "real stressor")]
+
+    masked = ms.score_meetings(events, series)
+    spans = ms.exercise_spans([(workout, 45)])
+    clean = ms.score_meetings(events, ms.drop_spans(series, spans), exercise=spans)
+
+    assert clean, "the meeting itself is still scorable"
+    assert clean[0]["dbpm"] > masked[0]["dbpm"] + 1.0, (masked, clean)
+    assert clean[0]["dbpm"] > 7.0, clean  # recovers close to the true +8
+    people = {p["attendee"]: p for p in ms.leaderboard(clean, lam=1.0)}
+    assert people["alice"]["naive"] > 7.0, people
+
+
+def test_fetch_exercise_spans_degrades_when_db_is_unreachable(monkeypatch):
+    """A down database must cost accuracy, not take the whole board down."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _no_psycopg2(name, *a, **kw):
+        if name == "psycopg2":
+            raise ImportError("no driver")
+        return real_import(name, *a, **kw)
+
+    monkeypatch.setattr(builtins, "__import__", _no_psycopg2)
+    assert ms.fetch_exercise_spans("someone") == []
+
+
+def test_fetch_exercise_spans_queries_the_user(monkeypatch):
+    """The rows really do come from `activity`, scoped to one user."""
+    seen = {}
+
+    class _Cur:
+        def execute(self, sql, params):
+            seen["sql"], seen["params"] = sql, params
+
+        def fetchall(self):
+            return [(DAY.replace(hour=9), 30)]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class _Conn:
+        def cursor(self):
+            return _Cur()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    fake = type("psycopg2", (), {"connect": staticmethod(lambda url: _Conn())})
+    monkeypatch.setitem(__import__("sys").modules, "psycopg2", fake)
+
+    spans = ms.fetch_exercise_spans("user-42")
+    assert seen["params"] == ("user-42",)
+    assert "FROM activity" in seen["sql"]
+    assert spans == [
+        (
+            int(DAY.replace(hour=9).timestamp()),
+            int(DAY.replace(hour=9).timestamp()) + (30 + ms.EXERCISE_COOLDOWN_MIN) * 60,
+        )
+    ], spans
+
+
 if __name__ == "__main__":
-    test_ridge_deconfounds_bystander()
-    test_solo_and_oversize_meetings_skipped()
-    test_gcal_item_mapping()
-    test_interactions_jsonl()
-    test_skipped_reports_no_hr_interactions()
-    test_thin_baseline_is_distinct_from_no_hr()
-    test_score_meetings_without_skipped_is_backward_compatible()
-    print("ok")
+    # Tests taking a pytest fixture (monkeypatch) can only run under pytest.
+    import inspect
+
+    for _name, _fn in sorted(globals().items()):
+        if _name.startswith("test_") and not inspect.signature(_fn).parameters:
+            _fn()
+    print("ok (run under pytest for the full suite)")
