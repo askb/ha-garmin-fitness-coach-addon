@@ -109,15 +109,16 @@ def dedupe_events(events: list[dict]) -> list[dict]:
     seen: set[tuple] = set()
     out: list[dict] = []
     for ev in events:
-        # Times go through parse_ts and attendees are sorted so the key matches
-        # what scoring actually treats as identical: the same window written
-        # "...Z" and "...+00:00", or the same people listed in another order,
-        # are one meeting.
+        # The key mirrors the identity scoring uses: times through parse_ts,
+        # attendees sorted, and falsy attendees dropped the same way
+        # score_meetings drops them. Otherwise the same window written "...Z"
+        # and "...+00:00", the same people in another order, or one copy
+        # carrying a stray "" attendee, would each survive as a second vote.
         key = (
             ev.get("title"),
             parse_ts(ev["start"]),
             parse_ts(ev["end"]),
-            tuple(sorted(ev.get("attendees") or [])),
+            tuple(sorted(a for a in ev.get("attendees") or [] if a)),
         )
         if key in seen:
             continue

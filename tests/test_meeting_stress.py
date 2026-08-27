@@ -565,6 +565,11 @@ def test_duplicate_events_do_not_vote_twice():
     assert len(ms.dedupe_events([pair, zulu])) == 1
     assert len(ms.dedupe_events([pair, reordered])) == 1
 
+    # score_meetings drops falsy attendees, so a stray "" must not make a
+    # second copy look like a different meeting.
+    padded = dict(pair, attendees=["alice", "", "bob"])
+    assert len(ms.dedupe_events([pair, padded])) == 1
+
     # The duplicate would otherwise be scored a second time.
     assert len(ms.score_meetings([one, dict(one)], series)) == 2
     assert len(ms.score_meetings(deduped, series)) == 1
