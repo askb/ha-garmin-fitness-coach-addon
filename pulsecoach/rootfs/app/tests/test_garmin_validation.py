@@ -9,9 +9,6 @@ Uses golden fixtures representing real Garmin Connect API responses.
 
 import sys
 import os
-import json
-import pytest
-from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 

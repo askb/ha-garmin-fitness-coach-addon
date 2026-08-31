@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Shared pytest fixtures for pulsecoach tests."""
 
-import json
 import os
 import sqlite3
 from unittest.mock import MagicMock, patch
