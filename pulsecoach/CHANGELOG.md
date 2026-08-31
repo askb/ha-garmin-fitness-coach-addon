@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-08-31
+
+### Fixed
+
+- **Garmin login failing with `'Garmin' object has no attribute 'garth'`.**
+  The auth server uses the garth-based API (`client.garth.*`,
+  `garth.sso.resume_login`), which `garminconnect` removed outright in its
+  0.3.0 native-OAuth rewrite. Nothing pinned the version, so a fresh image
+  build silently picked up the incompatible release and every login
+  attempt returned 401. Now pinned to `garminconnect==0.2.40` /
+  `garth==0.6.3`, the last garth-based pair. Fixes #282.
+- **Stress Board double-counted events present in more than one source.**
+  The same meeting arriving from both the calendar feed and the interaction
+  log voted twice, inflating its stress contribution.
+- **Stress Board counted workouts as interactions.** Exercise entries were
+  being folded into the interaction score, which measures social load.
+
+### Added
+
+- **Per-user Garmin auth, tokens and sync.** Token storage, the MFA store
+  and the sync path are now scoped by user id, with containment checks that
+  refuse to read or write credentials through a symlinked directory. This is
+  the foundation for multi-tenant use; single-user installs are unaffected
+  (the empty key is used).
+- Screenshots now sync to `docs/` automatically on release.
+
+### Changed
+
+- **`aarch64` images build on native ARM runners instead of QEMU.** An
+  emulated build could not finish inside the 120-minute job budget from a
+  cold layer cache, and GitHub evicts caches after 7 days -- which is why
+  no release shipped between 0.26.0 and this one, and why the fix for #282
+  sat unreleased for six weeks. The native build takes about 3 minutes.
+- Action pins now carry exact version comments so code scanning can verify
+  each SHA against its tag.
+- Mechanical `ruff` cleanup and removal of several swallowed exceptions.
+- 12 GitHub Action dependency updates.
+
 ## [0.26.0] - 2026-07-12
 
 ### Added
