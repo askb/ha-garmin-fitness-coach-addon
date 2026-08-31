@@ -55,14 +55,15 @@ jobs:
 
   build-push:
     name: 'Build & Push (${{ matrix.arch }})'
-    runs-on: ubuntu-latest
+    # Native ARM runners, not QEMU -- see the note in build.yml. A cold
+    # emulated aarch64 build cannot finish inside 120 minutes, which is why
+    # no release has shipped since v0.26.0.
+    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     needs: validate
     permissions:
       contents: read
       packages: write
-    # aarch64 builds run under QEMU emulation and are far slower than the
-    # native amd64 build, so give them a much larger timeout budget.
-    timeout-minutes: ${{ matrix.arch == 'aarch64' && 120 || 30 }}
+    timeout-minutes: 30
     strategy:
       matrix:
         include:
@@ -80,9 +81,6 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
-
-      - name: 'Set up QEMU'
-        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3  # v4.1.0
 
       - name: 'Set up Docker Buildx'
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
