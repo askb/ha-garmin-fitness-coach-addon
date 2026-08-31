@@ -2,10 +2,7 @@
 
 import sys
 import os
-import json
-import pytest
-from unittest.mock import MagicMock, patch, call
-from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
 
 # Add scripts dir to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))

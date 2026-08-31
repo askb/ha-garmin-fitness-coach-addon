@@ -1013,7 +1013,7 @@ class TestTimezone:
         We also verify it shifts correctly for a non-UTC timezone by
         temporarily patching USER_TZ.
         """
-        from datetime import date, datetime, timezone as tz
+        from datetime import datetime, timezone as tz
         from zoneinfo import ZoneInfo
         from unittest.mock import patch
 

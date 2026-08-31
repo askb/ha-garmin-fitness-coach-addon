@@ -5,11 +5,10 @@
 import importlib
 import json
 import os
-import sqlite3
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
